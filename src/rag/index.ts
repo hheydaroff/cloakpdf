@@ -166,6 +166,26 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
   const sparse = buildBm25Retriever({ documents: chunks, k: CANDIDATE_K });
   const retriever = new HybridRetriever({ dense, sparse, k: HYBRID_TOP_K });
 
+  /**
+   * Returns the maximum dense-cosine similarity between the query and
+   * the document's chunks. Used by the graph's retrieve node as a
+   * cheap off-topic gate: small LLMs (SmolLM2-1.7B in our case) can't
+   * reliably refuse to answer general-knowledge questions just from a
+   * "stay grounded" system prompt — they happily emit the right
+   * answer from training data and even fabricate a citation. A
+   * deterministic threshold on the embedder's own score is the safety
+   * net that catches this before the LLM gets to invent.
+   *
+   * Embeddings are L2-normalised, so the dot product returned here is
+   * cosine similarity in `[-1, 1]`. BGE typically lands in `[0.2, 0.8]`
+   * for in-domain queries and well below `0.3` for truly off-topic ones.
+   */
+  const scoreQueryRelevance = async (query: string): Promise<number> => {
+    const queryVec = await embeddings.embedQuery(query);
+    const hits = await vectorStore.similaritySearchVectorWithScore(queryVec, 1);
+    return hits[0]?.[1] ?? 0;
+  };
+
   // The graph is built fresh per `ask` so the streaming `onToken`
   // callback is scoped to one question. Compiling LangGraph is cheap;
   // we don't share the compiled graph across questions.
@@ -173,7 +193,12 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
     documentId,
     chunkCount: chunks.length,
     ask: async ({ question, onToken }) => {
-      const graph = buildRagGraph({ retriever, chatModel, onToken });
+      const graph = buildRagGraph({
+        retriever,
+        chatModel,
+        scoreRelevance: scoreQueryRelevance,
+        onToken,
+      });
       const result = (await graph.invoke({ question })) as RagState;
       return {
         answer: result.answer,

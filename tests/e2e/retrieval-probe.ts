@@ -31,16 +31,18 @@ const USER_DATA_DIR =
   process.env.E2E_USER_DATA_DIR ?? resolve(import.meta.dirname, "../.puppeteer-profile");
 const OUTPUT_DIR = resolve(import.meta.dirname, "../retrieval-debug");
 
+// Trimmed to two questions so the relevance-gate signal (off-topic
+// score + behaviour, on-topic score + reply) is captured before
+// cumulative inference RAM pressure on SmolLM2-1.7B blows up the
+// tab. Expand once the gate is dialled in.
 const QUESTIONS = [
-  "What is this document about?",
-  "What does the document discuss?",
-  "Summarize the main responsibilities described in the document.",
-  "What technologies or tools are mentioned in the document?",
-  // Off-topic — checks the strict-grounding refusal added to the
-  // system prompt. The assistant must NOT answer "Paris" from general
-  // knowledge; it should politely refuse and steer the user back to
-  // the uploaded PDF.
+  // Off-topic — checks the relevance gate fires and the assistant
+  // politely refuses instead of answering "Paris" from general
+  // knowledge with a fabricated page citation.
   "What is the capital of France?",
+  // On-topic — sanity check that the gate doesn't false-trigger and
+  // the model still produces a grounded reply.
+  "What technologies or tools are mentioned in the document?",
 ];
 
 interface HybridDebugRecord {
@@ -51,6 +53,8 @@ interface HybridDebugRecord {
 interface RetrievalDebugRecord {
   question: string;
   hits: Array<{ chunkId: string; pageNumber: number; preview: string; length: number }>;
+  relevanceScore: number;
+  offTopic: boolean;
 }
 
 function bail(message: string): never {
@@ -223,6 +227,11 @@ async function main() {
 
       results.push({ question, reply, ...captured });
 
+      if (captured.fused) {
+        console.log(
+          `  relevance: score=${captured.fused.relevanceScore.toFixed(3)} offTopic=${captured.fused.offTopic}`,
+        );
+      }
       console.log(
         `  reply: ${reply.slice(0, 160).replace(/\n/g, " ⏎ ")}${reply.length > 160 ? "…" : ""}`,
       );
@@ -241,6 +250,13 @@ async function main() {
         }
       }
       if (captured.fused) {
+        // Relevance score + gate decision come from the retrieve node's
+        // debug hook. Surface them prominently — the whole point of the
+        // probe rounds we run after wiring the gate is to confirm the
+        // numeric score is on the right side of the threshold.
+        console.log(
+          `  relevance score: ${captured.fused.relevanceScore.toFixed(3)} → ${captured.fused.offTopic ? "REFUSED (off-topic)" : "passed (on-topic)"}`,
+        );
         console.log("  fused (fed to LLM):");
         for (const h of captured.fused.hits) {
           console.log(

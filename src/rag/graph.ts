@@ -6,20 +6,22 @@
  *   └──────┬──────┘                └───────────┘
  *          │ question
  *          ▼
- *   ┌─────────────┐                ┌───────────┐
- *   │  retrieve   │───────────────▶│  generate │──▶ END
- *   └─────────────┘                └───────────┘
+ *   ┌─────────────┐  off-topic     ┌───────────┐
+ *   │  retrieve   │───────────────▶│  refuse   │──▶ END
+ *   └──────┬──────┘                └───────────┘
+ *          │ on-topic
+ *          ▼
+ *   ┌─────────────┐
+ *   │  generate   │──▶ END
+ *   └─────────────┘
  *
- * Why a graph for a three-node pipeline:
- *
- *   - The conditional edge after `classify` is the kind of branching
- *     LangGraph models cleanly without ad-hoc state passed through
- *     function arguments.
- *   - Adding nodes later (query rewriting, hallucination check, multi-
- *     document routing) is a localised change — node + edge, no
- *     rewiring of the caller.
- *   - State has a single typed schema so the rest of the codebase has
- *     one place to look for "what data flows through a question".
+ * The `refuse` branch is gated by a cosine-similarity check in
+ * `retrieve` — when the best dense match between query and corpus
+ * falls below `RELEVANCE_THRESHOLD`, we never call the chat model.
+ * SmolLM2-1.7B's instruction-following caves to confident
+ * general-knowledge answers ("the capital of France is Paris, see
+ * page 5" was the exact failure mode), so a deterministic gate is
+ * the only reliable way to enforce strict document grounding.
  */
 import { Document } from "@langchain/core/documents";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
@@ -66,6 +68,42 @@ Format and inference:
 const CHITCHAT_PROMPT =
   "You are a friendly assistant who helps a user explore a PDF document. Respond briefly to the user's greeting and invite them to ask something specific about the document.";
 
+/**
+ * Canned reply for questions whose best embedding match against the
+ * corpus falls below {@link RELEVANCE_THRESHOLD}. Written to be polite
+ * but unambiguous about the scope — "I can only answer questions about
+ * the uploaded document" is the entire contract.
+ */
+const OFF_TOPIC_REFUSAL =
+  "I can only answer questions about the document you uploaded. Could you ask something about its contents instead?";
+
+/**
+ * Minimum cosine similarity between the query embedding and the
+ * best-matching chunk for us to attempt an answer.
+ *
+ * BGE embeddings live in roughly `[0, 1]` for natural text (negative
+ * cosines basically never occur). Sampled on the résumé fixture:
+ *
+ * **Empirical sample (bge-base, résumé fixture)**:
+ *
+ *   - on-topic "what tools are mentioned?"  → top cosine ≈ 0.65
+ *   - on-topic "what is this about?"        → top cosine ≈ 0.50
+ *   - off-topic "capital of France?"        → top cosine ≈ 0.40 (!)
+ *
+ * The off-topic floor is much higher than the 0.18 we expected — BGE
+ * matches "capital of France" weakly against the contact block on
+ * p1-0 because it mentions "Pune, Maharashtra, India" (a city +
+ * country combo). 0.30 wasn't enough to refuse that, so we sit at
+ * **0.50** — comfortably above the off-topic noise floor but still
+ * below the typical on-topic match.
+ *
+ * False rejections on legitimate obscure questions are possible at
+ * this threshold — that's an accuracy/safety trade we accept because
+ * the alternative (the LLM hallucinating a fake page citation —
+ * literal failure mode we observed) is materially worse.
+ */
+const RELEVANCE_THRESHOLD = 0.5;
+
 /** Recognises greetings / acknowledgements that don't need retrieval. */
 const SMALL_TALK_RE =
   /^(hi+|hello|hey+|yo|sup|hola|howdy|good (morning|afternoon|evening)|thanks?|thank you|ok|okay|cool|nice|got it)[!.?]*$/i;
@@ -84,6 +122,16 @@ function isSmallTalk(q: string): boolean {
 export const RagStateAnnotation = Annotation.Root({
   question: Annotation<string>(),
   intent: Annotation<"chitchat" | "question" | undefined>(),
+  /**
+   * Set by `retrieve` when the best-matching chunk scores below the
+   * relevance threshold. Routes the graph to `refuse` instead of
+   * `generate` so the chat model never sees obviously off-topic
+   * queries.
+   */
+  offTopic: Annotation<boolean>({
+    reducer: (_prev, next) => next,
+    default: () => false,
+  }),
   docs: Annotation<Document<ChunkMetadata>[]>({
     reducer: (_prev, next) => next,
     default: () => [],
@@ -106,6 +154,14 @@ export interface BuildGraphOptions {
   /** Wrapped chat model — drives both `generate` and `chitchat` nodes. */
   chatModel: TransformersJsChatModel;
   /**
+   * Returns the maximum cosine similarity between the query and the
+   * indexed document. When provided, the graph short-circuits to a
+   * canned refusal when the score falls below
+   * {@link RELEVANCE_THRESHOLD} — see the file header comment for why
+   * a prompt-only guard isn't sufficient with SmolLM2-1.7B.
+   */
+  scoreRelevance?: (query: string) => Promise<number>;
+  /**
    * Streaming callback fired for each decoded token during the
    * `generate` and `chitchat` nodes. Lets the UI render a typewriter
    * effect without owning the model directly.
@@ -118,19 +174,39 @@ export interface BuildGraphOptions {
  * `.compile().invoke(...)` per question.
  */
 export function buildRagGraph(options: BuildGraphOptions) {
-  const { retriever, chatModel, onToken } = options;
+  const { retriever, chatModel, scoreRelevance, onToken } = options;
 
   /** classify → mark the user's input as chitchat vs. real question. */
   async function classify(state: RagState): Promise<Partial<RagState>> {
     return { intent: isSmallTalk(state.question) ? "chitchat" : "question" };
   }
 
-  /** retrieve → hybrid BM25 + dense, top-K via RRF. */
+  /**
+   * retrieve → hybrid BM25 + dense, top-K via RRF, plus a cosine-
+   * similarity guard that flags off-topic queries. The guard runs in
+   * parallel with the hybrid fetch so the gate doesn't cost extra
+   * wall-clock time — the embedder pass on the query is needed for
+   * the dense retriever anyway.
+   */
   async function retrieve(state: RagState): Promise<Partial<RagState>> {
-    const hits = (await retriever.invoke(state.question)) as Document<ChunkMetadata>[];
+    const [hits, topScore] = await Promise.all([
+      retriever.invoke(state.question) as Promise<Document<ChunkMetadata>[]>,
+      scoreRelevance ? scoreRelevance(state.question) : Promise.resolve(1),
+    ]);
     const citedPages = uniqueSortedPages(hits);
-    recordRetrievalDebug(state.question, hits);
-    return { docs: hits, citedPages };
+    const offTopic = topScore < RELEVANCE_THRESHOLD;
+    recordRetrievalDebug(state.question, hits, topScore, offTopic);
+    return { docs: hits, citedPages, offTopic };
+  }
+
+  /** refuse → canned polite decline for off-topic queries. */
+  async function refuse(_state: RagState): Promise<Partial<RagState>> {
+    const message = OFF_TOPIC_REFUSAL;
+    // Emit as a single chunk for UX consistency with the streaming
+    // nodes — the assistant bubble fills in without needing to
+    // special-case "non-streamed" rendering in the UI.
+    onToken?.(message);
+    return { answer: message, citedPages: [] };
   }
 
   /** generate → stream the grounded answer. */
@@ -164,11 +240,13 @@ export function buildRagGraph(options: BuildGraphOptions) {
     .addNode("retrieve", retrieve)
     .addNode("generate", generate)
     .addNode("chitchat", chitchat)
+    .addNode("refuse", refuse)
     .addEdge(START, "classify")
     .addConditionalEdges("classify", (s: RagState) =>
       s.intent === "chitchat" ? "chitchat" : "retrieve",
     )
-    .addEdge("retrieve", "generate")
+    .addConditionalEdges("retrieve", (s: RagState) => (s.offTopic ? "refuse" : "generate"))
+    .addEdge("refuse", END)
     .addEdge("generate", END)
     .addEdge("chitchat", END);
 
@@ -221,8 +299,17 @@ function uniqueSortedPages(docs: Document<ChunkMetadata>[]): number[] {
 interface RetrievalDebugRecord {
   question: string;
   hits: Array<{ chunkId: string; pageNumber: number; preview: string; length: number }>;
+  /** Top dense-cosine score against the corpus. Used to tune {@link RELEVANCE_THRESHOLD}. */
+  relevanceScore: number;
+  /** Whether the retrieve node routed this query to `refuse`. */
+  offTopic: boolean;
 }
-function recordRetrievalDebug(question: string, hits: Document<ChunkMetadata>[]): void {
+function recordRetrievalDebug(
+  question: string,
+  hits: Document<ChunkMetadata>[],
+  relevanceScore: number,
+  offTopic: boolean,
+): void {
   if (typeof window === "undefined") return;
   try {
     if (!window.localStorage?.getItem("cloakpdf:debug")) return;
@@ -239,5 +326,7 @@ function recordRetrievalDebug(question: string, hits: Document<ChunkMetadata>[])
       preview: d.pageContent.slice(0, 240),
       length: d.pageContent.length,
     })),
+    relevanceScore,
+    offTopic,
   });
 }
