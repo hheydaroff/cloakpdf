@@ -35,7 +35,7 @@ import {
   LayoutDashboard,
   LayoutGrid,
   Lock,
-  MessageCircleQuestion,
+  MessageSquare,
   Paperclip,
   PenTool,
   Repeat2,
@@ -350,7 +350,7 @@ export const tools: Tool[] = [
     id: "ask-pdf",
     title: "Ask your PDF (AI)",
     description: "Ask questions and get answers extracted from the PDF — runs entirely on-device",
-    icon: MessageCircleQuestion,
+    icon: MessageSquare,
     category: "ai",
     // Surfaced as a "Beta" badge on the tool card. The AI tool ships
     // a functional end-to-end pipeline (chunking → hybrid retrieval

@@ -16,9 +16,9 @@ import {
   Laptop,
   MonitorSmartphone,
   Rocket,
+  LayoutGrid,
   Search,
   ShieldCheck,
-  Sparkles,
   UserRoundCheck,
   WifiOff,
   EyeOff,
@@ -355,7 +355,7 @@ function WhyCloakPdfSection() {
           description="Every tool adapts fluidly across screen sizes — edit on the go, finalise at your desk."
         />
         <FeatureItem
-          icon={<Sparkles className="w-5 h-5" />}
+          icon={<LayoutGrid className="w-5 h-5" />}
           title={`${tools.length}+ PDF tools`}
           description="Merge, split, sign, redact, OCR, compress, convert — one workspace for every PDF chore."
         />
