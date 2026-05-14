@@ -1,25 +1,18 @@
 /**
- * Ask PDF — chat-style Q&A over the document text using a small,
- * on-device LLM with embedding-based RAG retrieval.
+ * Ask PDF — chat-style Q&A over a PDF, powered by a LangChain/LangGraph
+ * hybrid-RAG session running on-device.
  *
- * Per file (once):
+ * This component is a thin shell around `createRagSession`. Per file:
  *
- *   1. Hash the bytes (SHA-256) → use as cache key.
- *   2. If a cached vector store exists in IndexedDB, load it. Done.
- *   3. Otherwise, extract text per page (text layer; OCR fallback for
- *      scanned pages), chunk by sentence, embed every chunk with the
- *      MiniLM model, and persist the resulting vector store.
+ *   1. Wait for both AI models to be ready.
+ *   2. Build a `RagSession` — caches hit IndexedDB; cache misses run
+ *      text-layer extraction (+ OCR fallback), chunk, embed, persist.
+ *   3. Drive a typewriter chat: every question runs through the graph
+ *      (classify → retrieve → generate, or → chitchat → END).
  *
- * Per question:
- *
- *   1. Embed the question.
- *   2. Cosine top-K against the chunk vectors.
- *   3. Build a context block in page-number order.
- *   4. Stream the chat model's reply with the context + question.
- *
- * The model and pipeline shape are abstracted away — to swap either
- * the chat LLM or the embedder, edit its entry in {@link AI_MODELS};
- * this file stays put.
+ * Indexing happens *eagerly* the moment models are ready and a PDF is
+ * loaded — not lazily on the first question — so the user isn't left
+ * staring at a "Thinking…" spinner that's really doing extraction.
  */
 import { Loader2, ScanSearch, Send, Sparkles, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,17 +28,8 @@ import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useRagModels } from "../hooks/useRagModels.ts";
-import { type ChatMessage, runChat, runEmbed } from "../utils/ai-tasks.ts";
-import { chunkPages, extractPdfText } from "../utils/ocr-text.ts";
+import { createRagSession, type IndexingProgress, type RagSession } from "../rag/index.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
-import {
-  buildVectorStore,
-  cacheStore,
-  getCachedStore,
-  sha256Hex,
-  topK,
-  type VectorStore,
-} from "../utils/vector-store.ts";
 
 interface ChatTurn {
   id: string;
@@ -57,68 +41,27 @@ interface ChatTurn {
   streaming?: boolean;
 }
 
-/**
- * System prompt tuned for SmolLM2-360M. The earlier version included a
- * literal "reply exactly: ..." refusal phrase; the small model latched
- * onto it and refused almost every question. Keeping the prompt short
- * and positive ("answer based on the excerpts") gives noticeably better
- * grounded answers without sending the model into refusal mode.
- */
-const SYSTEM_PROMPT =
-  "You are a helpful assistant. Answer the user's question using the provided document excerpts. Be concise (1–3 sentences). When you can, cite the page number like (page 4). If the excerpts don't contain the answer, say so briefly.";
-
-/**
- * Number of chunks pulled per question. 6 was too many for SmolLM2's
- * effective context — the model would drown in text and either refuse
- * or summarise the entire excerpt block. 3 is the sweet spot: enough
- * signal for retrieval to matter, small enough to fit the model.
- */
-const TOP_K = 3;
-
-/**
- * Pattern matching short greetings / chit-chat that shouldn't trigger a
- * RAG query. Forcing retrieved chunks into the prompt for "hi" makes the
- * model answer the *chunks* (echoing back resume content, etc.) instead
- * of the user. We match on the trimmed, lowercased input.
- */
-const SMALL_TALK_RE =
-  /^(hi+|hello|hey+|yo|sup|hola|howdy|good (morning|afternoon|evening)|thanks?|thank you|ok|okay|cool|nice|got it)[!.?]*$/i;
-
-function isSmallTalk(q: string): boolean {
-  const trimmed = q.trim().toLowerCase();
-  if (trimmed.length <= 2) return true;
-  return SMALL_TALK_RE.test(trimmed);
-}
-
-/** Indexing-phase progress reported to the UI. */
-type IndexProgress =
-  | { kind: "extract"; phase: "text-layer" | "ocr"; current: number; total: number }
-  | { kind: "embed"; current: number; total: number };
-
 export default function AskPdf() {
   const [question, setQuestion] = useState("");
   const [turns, setTurns] = useState<ChatTurn[]>([]);
-  const [indexing, setIndexing] = useState<IndexProgress | null>(null);
+  const [indexing, setIndexing] = useState<IndexingProgress | null>(null);
   const [scannedHint, setScannedHint] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
   const rag = useRagModels();
+
+  const sessionRef = useRef<RagSession | null>(null);
 
   const pdf = usePdfFile({
     onReset: () => {
       setTurns([]);
       setScannedHint(false);
       setIndexing(null);
-      storeRef.current = null;
+      setSessionReady(false);
+      sessionRef.current = null;
     },
   });
   const task = useAsyncProcess();
-
-  /**
-   * Cached vector store for the currently-loaded PDF. Cleared when
-   * the user swaps files. We rebuild from IndexedDB on the first
-   * question after a file load.
-   */
-  const storeRef = useRef<VectorStore | null>(null);
 
   // Auto-scroll the conversation to the latest message. The trigger
   // collapses "number of turns" and "current-turn length" into one
@@ -134,103 +77,45 @@ export default function AskPdf() {
   const dialogOpen =
     rag.status === "awaiting-consent" || rag.status === "downloading" || rag.status === "error";
 
-  /** `true` while we're building the vector store for the loaded PDF. */
+  /** `true` while we're building the RAG session for the loaded PDF. */
   const isIndexing = indexing !== null;
-  /** `true` once the embed pipeline has produced a store we can query. */
-  const isIndexed = storeRef.current !== null;
 
   /**
-   * Build (or load from cache) the vector store for `file`. Idempotent
-   * — subsequent questions on the same file hit `storeRef` and skip.
-   */
-  const ensureStore = useCallback(
-    async (file: File, embedPipe: object): Promise<VectorStore | null> => {
-      if (storeRef.current) return storeRef.current;
-
-      const bytes = await file.arrayBuffer();
-      const documentId = await sha256Hex(bytes);
-
-      const cached = await getCachedStore(documentId);
-      if (cached) {
-        storeRef.current = cached;
-        return cached;
-      }
-
-      setIndexing({ kind: "extract", phase: "text-layer", current: 0, total: 1 });
-      const pages = await extractPdfText(file, {
-        onProgress: (info) => {
-          setIndexing({
-            kind: "extract",
-            phase: info.phase,
-            current: info.current,
-            total: info.total,
-          });
-        },
-      });
-
-      const hasAnyText = pages.some((p) => p.text.trim().length > 0);
-      if (!hasAnyText) {
-        setScannedHint(true);
-        setIndexing(null);
-        return null;
-      }
-
-      const chunks = chunkPages(pages, 700, 100);
-      if (chunks.length === 0) {
-        setScannedHint(true);
-        setIndexing(null);
-        return null;
-      }
-
-      // Batch the embedder to keep the UI responsive on large PDFs.
-      // 32-chunk batches are a reasonable middle ground between
-      // throughput and per-step latency for MiniLM in WASM.
-      const BATCH = 32;
-      setIndexing({ kind: "embed", current: 0, total: chunks.length });
-      const vectors: Float32Array[] = [];
-      for (let i = 0; i < chunks.length; i += BATCH) {
-        const slice = chunks.slice(i, i + BATCH);
-        const batchVecs = await runEmbed(
-          embedPipe,
-          slice.map((c) => c.text),
-        );
-        vectors.push(...batchVecs);
-        setIndexing({
-          kind: "embed",
-          current: Math.min(i + BATCH, chunks.length),
-          total: chunks.length,
-        });
-      }
-
-      const store = buildVectorStore(documentId, chunks, vectors);
-      storeRef.current = store;
-      void cacheStore(store);
-      setIndexing(null);
-      return store;
-    },
-    [],
-  );
-
-  /**
-   * Auto-index the PDF as soon as the models are loaded — don't wait
-   * for the user's first question. Re-runs only when the file changes
-   * or the runtime transitions to "ready"; idempotent because
-   * `ensureStore` short-circuits once `storeRef.current` is set.
+   * Build the RAG session as soon as the PDF is loaded *and* both
+   * models are ready. Idempotent — re-renders short-circuit on
+   * `sessionRef.current`.
    */
   useEffect(() => {
     if (!pdf.file) return;
     if (rag.status !== "ready") return;
-    if (storeRef.current || indexing || scannedHint) return;
+    if (sessionRef.current || isIndexing || scannedHint) return;
     const file = pdf.file;
     void task.run(async () => {
-      const embedPipe = await rag.embed.ensureReady();
-      await ensureStore(file, embedPipe);
+      try {
+        const { chat, embed } = await rag.ensureReady();
+        const session = await createRagSession({
+          chatPipe: chat,
+          embedPipe: embed,
+          file,
+          onIndexProgress: setIndexing,
+        });
+        sessionRef.current = session;
+        setSessionReady(true);
+        setIndexing(null);
+      } catch (e) {
+        setIndexing(null);
+        if (e instanceof Error && /no usable text/i.test(e.message)) {
+          setScannedHint(true);
+          return;
+        }
+        throw e;
+      }
     }, "Failed to index the PDF. Please try again.");
-  }, [pdf.file, rag.status, rag.embed, indexing, scannedHint, ensureStore, task]);
+  }, [pdf.file, rag.status, rag, task, isIndexing, scannedHint]);
 
   const handleAsk = useCallback(async () => {
-    if (!pdf.file) return;
-    const file = pdf.file;
+    if (!pdf.file || !sessionRef.current) return;
+    const session = sessionRef.current;
     const q = question.trim();
     if (!q) return;
 
@@ -244,89 +129,28 @@ export default function AskPdf() {
     setQuestion("");
 
     await task.run(async () => {
-      let pipes: Awaited<ReturnType<typeof rag.ensureReady>>;
-      try {
-        pipes = await rag.ensureReady();
-      } catch (e) {
-        if (e instanceof Error && e.message === "cancelled") {
-          setTurns((prev) => prev.filter((t) => t.id !== userId && t.id !== assistantId));
-          return;
-        }
-        throw e;
-      }
-
-      // Bypass RAG for greetings — there's nothing the document can
-      // contribute to "hi", and forcing retrieved chunks into the
-      // prompt makes the model answer the chunks instead of the user.
-      if (isSmallTalk(q)) {
-        const reply = await runChat(
-          pipes.chat,
-          [
-            {
-              role: "system",
-              content:
-                "You are a friendly assistant who answers questions about a PDF. Respond briefly to the user's greeting and invite them to ask something specific about the document.",
-            },
-            { role: "user", content: q },
-          ],
-          {
-            maxNewTokens: 120,
-            onToken: (delta) => {
-              setTurns((prev) =>
-                prev.map((t) => (t.id === assistantId ? { ...t, content: t.content + delta } : t)),
-              );
-            },
-          },
-        );
-        setTurns((prev) =>
-          prev.map((t) => (t.id === assistantId ? { ...t, content: reply, streaming: false } : t)),
-        );
-        return;
-      }
-
-      const store = await ensureStore(file, pipes.embed);
-      if (!store) {
-        setTurns((prev) => prev.filter((t) => t.id !== userId && t.id !== assistantId));
-        return;
-      }
-
-      const [queryVec] = await runEmbed(pipes.embed, [q]);
-      const hits = topK(store, queryVec, TOP_K);
-      if (hits.length === 0) {
-        throw new Error("Couldn't find any relevant chunks for that question.");
-      }
-
-      // Order context by page number so the prompt reads top-to-bottom.
-      const ordered = [...hits].sort((a, b) => a.chunk.pageNumber - b.chunk.pageNumber);
-      const citedPages = [...new Set(ordered.map((h) => h.chunk.pageNumber))];
-      const contextBlock = ordered
-        .map((h) => `[Page ${h.chunk.pageNumber}]\n${h.chunk.text.trim()}`)
-        .join("\n\n");
-
-      const messages: ChatMessage[] = [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `Context (from the PDF):\n${contextBlock}\n\nQuestion: ${q}`,
-        },
-      ];
-
-      const reply = await runChat(pipes.chat, messages, {
-        maxNewTokens: 512,
+      const result = await session.ask({
+        question: q,
         onToken: (delta) => {
           setTurns((prev) =>
             prev.map((t) => (t.id === assistantId ? { ...t, content: t.content + delta } : t)),
           );
         },
       });
-
       setTurns((prev) =>
         prev.map((t) =>
-          t.id === assistantId ? { ...t, content: reply, citedPages, streaming: false } : t,
+          t.id === assistantId
+            ? {
+                ...t,
+                content: result.answer,
+                citedPages: result.intent === "question" ? result.citedPages : undefined,
+                streaming: false,
+              }
+            : t,
         ),
       );
     }, "Failed to answer question. Please try again.");
-  }, [pdf.file, question, rag, task, ensureStore]);
+  }, [pdf.file, question, task]);
 
   // On task error, mark any streaming assistant turn as failed.
   useEffect(() => {
@@ -372,8 +196,6 @@ export default function AskPdf() {
             </InfoCallout>
           ) : (
             <>
-              {turns.length === 0 && isIndexed && <ChatEmptyState />}
-
               <ConversationView turns={turns} scrollAnchorRef={scrollAnchorRef} />
 
               {indexing && <IndexProgressBar progress={indexing} />}
@@ -388,12 +210,21 @@ export default function AskPdf() {
                   onChange={setQuestion}
                   onKeyDown={onKeyDown}
                   onSubmit={handleAsk}
-                  disabled={task.processing || isIndexing || !isIndexed}
+                  disabled={task.processing || isIndexing || !sessionReady}
                   placeholder={
                     isIndexing
                       ? "Indexing your PDF…"
-                      : isIndexed
+                      : sessionReady
                         ? "Ask something about this PDF…"
+                        : "Preparing…"
+                  }
+                  busyLabel={
+                    isIndexing
+                      ? indexing?.kind === "embed"
+                        ? "Indexing…"
+                        : "Reading PDF…"
+                      : task.processing
+                        ? "Thinking…"
                         : "Preparing…"
                   }
                 />
@@ -423,7 +254,7 @@ export default function AskPdf() {
 
 // ── Sub-components ────────────────────────────────────────────────
 
-function IndexProgressBar({ progress }: { progress: IndexProgress }) {
+function IndexProgressBar({ progress }: { progress: IndexingProgress }) {
   const label =
     progress.kind === "extract"
       ? progress.phase === "ocr"
@@ -454,20 +285,22 @@ function ConversationView({
 function Bubble({ turn }: { turn: ChatTurn }) {
   const isUser = turn.role === "user";
   return (
-    <div className={`flex items-end gap-2 ${isUser ? "justify-end" : "justify-start"}`}>
-      {!isUser && (
-        <span
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400"
-          aria-hidden="true"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-        </span>
-      )}
-      <div
-        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
+      <span
+        className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center mt-0.5 ${
           isUser
-            ? "bg-primary-600 text-white rounded-br-md"
-            : "bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border text-slate-800 dark:text-dark-text rounded-bl-md"
+            ? "bg-primary-600 text-white"
+            : "bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400"
+        }`}
+        aria-hidden="true"
+      >
+        {isUser ? <User className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
+      </span>
+      <div
+        className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+          isUser
+            ? "bg-primary-600 text-white rounded-tr-md"
+            : "bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border text-slate-800 dark:text-dark-text rounded-tl-md"
         }`}
       >
         {turn.streaming && !turn.content ? (
@@ -487,42 +320,12 @@ function Bubble({ turn }: { turn: ChatTurn }) {
           </p>
         )}
         {!isUser && turn.citedPages && turn.citedPages.length > 0 && !turn.streaming && (
-          <p
-            className={`mt-2 pt-2 border-t text-xs ${"border-slate-100 dark:border-dark-border/60 text-slate-400 dark:text-dark-text-muted"}`}
-          >
+          <p className="mt-2 pt-2 border-t border-slate-100 dark:border-dark-border/60 text-xs text-slate-400 dark:text-dark-text-muted">
             Context from {turn.citedPages.length === 1 ? "page" : "pages"}{" "}
             {turn.citedPages.join(", ")}
           </p>
         )}
       </div>
-      {isUser && (
-        <span
-          className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center bg-primary-600 text-white"
-          aria-hidden="true"
-        >
-          <User className="w-3.5 h-3.5" />
-        </span>
-      )}
-    </div>
-  );
-}
-
-function ChatEmptyState() {
-  return (
-    <div className="rounded-2xl border border-dashed border-slate-200 dark:border-dark-border bg-slate-50/50 dark:bg-dark-surface-alt/30 p-5 text-center">
-      <span
-        className="inline-flex w-9 h-9 rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 items-center justify-center mb-2"
-        aria-hidden="true"
-      >
-        <Sparkles className="w-4 h-4" />
-      </span>
-      <p className="text-sm font-medium text-slate-800 dark:text-dark-text">
-        Your PDF is indexed — ask away
-      </p>
-      <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1 leading-relaxed">
-        Try things like “summarise page 3”, “what does the report conclude?”, or “list all the dates
-        mentioned”. Answers cite the pages they came from.
-      </p>
     </div>
   );
 }
@@ -534,6 +337,7 @@ function Composer({
   onSubmit,
   disabled,
   placeholder,
+  busyLabel,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -541,6 +345,7 @@ function Composer({
   onSubmit: () => void;
   disabled: boolean;
   placeholder?: string;
+  busyLabel?: string;
 }) {
   return (
     <div className="sticky bottom-2 bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-3">
@@ -574,7 +379,7 @@ function Composer({
           {disabled ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              Thinking…
+              {busyLabel ?? "Thinking…"}
             </>
           ) : (
             <>

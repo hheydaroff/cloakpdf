@@ -16,8 +16,8 @@
  *     two pipelines once both are loaded. Rejects on cancel/error.
  *   - `cancel()` — dismisses both consent dialogs in lockstep.
  */
-import { useCallback, useMemo } from "react";
-import type { AiProgress } from "../utils/ai-runtime.ts";
+import { useCallback, useEffect, useMemo } from "react";
+import { type AiProgress, disposeAllModels, registerPagehideCleanup } from "../utils/ai-runtime.ts";
 import { type AiModelStatus, useAiModel, type UseAiModelReturn } from "./useAiModel.ts";
 
 export interface UseRagModelsReturn {
@@ -41,6 +41,12 @@ export interface UseRagModelsReturn {
   retry: () => void;
   /** Cancel both consent / downloads. */
   cancel: () => void;
+  /**
+   * Release both pipelines from memory. The browser's CacheStorage
+   * keeps the bytes so re-loading is fast. Use this when the user is
+   * done with AI and wants to free the ~300 MB of pipeline RAM.
+   */
+  dispose: () => Promise<void>;
 }
 
 /**
@@ -58,6 +64,29 @@ function rollupStatus(a: AiModelStatus, b: AiModelStatus): AiModelStatus {
 }
 
 export function useRagModels(): UseRagModelsReturn {
+  // Belt-and-braces: register a `pagehide` listener once per page so
+  // pipelines are disposed when the tab truly closes (not bfcache).
+  // Idempotent — calling more than once is a no-op.
+  useEffect(() => {
+    registerPagehideCleanup();
+  }, []);
+
+  // Navigation-away cleanup: when the consumer (Ask PDF today) unmounts,
+  // free both pipelines from memory. The browser keeps the downloaded
+  // weights in CacheStorage so re-opening Ask PDF later re-initialises
+  // from disk in a few seconds rather than re-downloading.
+  //
+  // Trade-off: every navigation back to Ask PDF pays a ~few-second
+  // warm-up. The alternative (keep pipelines resident until tab close)
+  // pinned ~300 MB of RAM whether or not the user planned to use AI
+  // again in this session. Explicit per-product decision: prefer freed
+  // memory on navigation; the warm-up is acceptable.
+  useEffect(() => {
+    return () => {
+      void disposeAllModels();
+    };
+  }, []);
+
   const chat = useAiModel("chat");
   const embed = useAiModel("embed");
 
@@ -99,5 +128,16 @@ export function useRagModels(): UseRagModelsReturn {
     embed.cancel();
   }, [chat, embed]);
 
-  return { chat, embed, status, progress, error, ensureReady, confirm, retry, cancel };
+  /**
+   * Manually release both pipelines. Useful when the user explicitly
+   * wants to free RAM (e.g. via a "Free model memory" button). The
+   * registry layer drops in-memory refs + calls `pipeline.dispose()`
+   * so the ONNX runtime can release its sessions; CacheStorage on
+   * disk is left intact so re-downloading is unnecessary.
+   */
+  const dispose = useCallback(async () => {
+    await disposeAllModels();
+  }, []);
+
+  return { chat, embed, status, progress, error, ensureReady, confirm, retry, cancel, dispose };
 }

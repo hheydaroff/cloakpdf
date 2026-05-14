@@ -144,6 +144,49 @@ export function getResolvedPipeline(modelId: AiModelId): AiPipeline | null {
 }
 
 /**
+ * Iterate every loaded pipeline and call {@link unloadModel} on it.
+ *
+ * Memory hygiene: the browser reclaims the tab's JS heap and WASM
+ * memory automatically when the user closes the tab, so this isn't
+ * strictly required for "close the app" cleanup. We call it from
+ * `pagehide` anyway as defense-in-depth, and expose it for the
+ * "Free model memory" affordance in the UI — useful when the user has
+ * finished using AI but wants to keep the rest of the app running
+ * without ~300 MB of pipelines resident.
+ */
+export async function disposeAllModels(): Promise<void> {
+  // Cover both fully-loaded pipelines AND in-flight downloads. The
+  // download itself isn't abortable (Transformers.js doesn't expose
+  // one), but dropping our promise reference + cache entry means the
+  // resolved pipeline — if it eventually arrives — won't sit in memory
+  // without a consumer.
+  const ids = new Set<AiModelId>([..._resolvedPipelines.keys(), ..._pipelineCache.keys()]);
+  await Promise.all([...ids].map((id) => unloadModel(id)));
+}
+
+/**
+ * Best-effort `pagehide` handler that releases pipelines when the tab
+ * is going away for real (`event.persisted === false`). For bfcache
+ * navigations (`persisted === true`) the JS is frozen and we leave the
+ * pipelines in place so the user comes back to a warm app.
+ *
+ * Idempotent: calling more than once just no-ops on subsequent calls.
+ */
+let _pagehideRegistered = false;
+export function registerPagehideCleanup(): void {
+  if (_pagehideRegistered || typeof window === "undefined") return;
+  _pagehideRegistered = true;
+  window.addEventListener(
+    "pagehide",
+    (event) => {
+      if (event.persisted) return;
+      void disposeAllModels();
+    },
+    { passive: true },
+  );
+}
+
+/**
  * Lazily import Transformers.js. The first call carries the cost of
  * pulling the WASM runtime; subsequent calls are essentially free.
  */
