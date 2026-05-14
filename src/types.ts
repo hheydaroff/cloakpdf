@@ -51,6 +51,13 @@ export interface Tool {
   description: string;
   icon: ComponentType<{ className?: string }>;
   category?: string;
+  /**
+   * When `true`, the tool card renders a small "Beta" badge next to
+   * the title. Use it for tools that are functional but still
+   * iterating on quality / UX — sets expectations without hiding
+   * the feature.
+   */
+  beta?: boolean;
 }
 
 /** Position of page numbers on the page. */

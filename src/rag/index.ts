@@ -194,6 +194,29 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
   const retriever = new HybridRetriever({ dense, sparse, k: HYBRID_TOP_K });
 
   /**
+   * "Document anchor" chunk(s) — always merged into the retrieve
+   * result so the LLM has the document's header block in context
+   * regardless of what the user asked.
+   *
+   * **Why**: identity questions like "whose résumé is this?" or
+   * "what's the title of the report?" route through hybrid retrieval
+   * but BGE/BM25 score them weakly against the title chunk (the
+   * chunk says "Sumit Sahoo / Enterprise Architect", the query says
+   * "whose résumé"). The title chunk lands at rank 7+ and falls off
+   * the top-K, so the LLM has to guess from work-experience snippets
+   * — producing "this seems to be about Solution Architects" instead
+   * of "this is Sumit Sahoo's résumé".
+   *
+   * Anchoring the first chunk of the document fixes the failure
+   * mode at near-zero cost: at most one extra chunk of context per
+   * question, deduplicated against the fused top-K so we never send
+   * the same chunk twice. The chunks array is already in document
+   * order (page → ordinal) so `chunks[0]` is reliably the first
+   * thing the user wrote.
+   */
+  const anchorChunks: Document<ChunkMetadata>[] = chunks.length > 0 ? [chunks[0]] : [];
+
+  /**
    * Returns the maximum dense-cosine similarity between the query and
    * the document's chunks. Used by the graph's retrieve node as a
    * cheap off-topic gate: small LLMs (SmolLM2-1.7B in our case) can't
@@ -224,6 +247,7 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
         retriever,
         chatModel,
         scoreRelevance: scoreQueryRelevance,
+        anchorChunks,
         onToken,
       });
       const result = (await graph.invoke({ question })) as RagState;

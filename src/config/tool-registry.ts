@@ -352,6 +352,12 @@ export const tools: Tool[] = [
     description: "Ask questions and get answers extracted from the PDF — runs entirely on-device",
     icon: MessageCircleQuestion,
     category: "ai",
+    // Surfaced as a "Beta" badge on the tool card. The AI tool ships
+    // a functional end-to-end pipeline (chunking → hybrid retrieval
+    // → relevance gate → small chat model) but answer quality is
+    // bounded by SmolLM2-1.7B's ceiling and we're still iterating
+    // on prompt + retrieval tuning. Badge sets expectations.
+    beta: true,
   },
 ];
 

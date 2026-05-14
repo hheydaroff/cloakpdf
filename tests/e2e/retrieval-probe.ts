@@ -40,6 +40,12 @@ const QUESTIONS = [
   // politely refuses instead of answering "Paris" from general
   // knowledge with a fabricated page citation.
   "What is the capital of France?",
+  // Identity question — exercises the document-anchor merge in
+  // retrieve. The title chunk is always included in context, so the
+  // assistant should name the person verbatim from the header
+  // ("This is Sumit Sahoo's résumé") rather than generalising
+  // ("the author of this document").
+  "Whose resume is this?",
   // On-topic — sanity check that the gate doesn't false-trigger and
   // the model still produces a grounded reply.
   "What technologies or tools are mentioned in the document?",

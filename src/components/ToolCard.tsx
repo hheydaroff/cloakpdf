@@ -46,8 +46,18 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
           <Icon className="w-5 h-5" />
         </span>
 
-        <h3 className="text-card-title font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-0.5">
+        <h3 className="text-card-title font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-0.5 inline-flex items-center gap-2 flex-wrap">
           {tool.title}
+          {tool.beta && (
+            // Small uppercase pill, surfaces as part of the title for
+            // screen readers (the text "Beta" reads naturally after
+            // the tool name). No `aria-label` here — a plain `<span>`
+            // doesn't carry one, and the visible text is already
+            // descriptive.
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-xxs font-semibold tracking-wide uppercase bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-800">
+              Beta
+            </span>
+          )}
         </h3>
         <p className="text-card-desc leading-normal text-slate-500 dark:text-dark-text-muted">
           {tool.description}

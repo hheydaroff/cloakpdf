@@ -1,27 +1,85 @@
 /**
  * LangGraph state machine for the Ask PDF chat loop.
  *
- *   ┌─────────────┐    chitchat    ┌───────────┐
- *   │  classify   │───────────────▶│  chitchat │──▶ END
- *   └──────┬──────┘                └───────────┘
- *          │ question
- *          ▼
- *   ┌─────────────┐  off-topic     ┌───────────┐
- *   │  retrieve   │───────────────▶│  refuse   │──▶ END
- *   └──────┬──────┘                └───────────┘
- *          │ on-topic
- *          ▼
- *   ┌─────────────┐
- *   │  generate   │──▶ END
- *   └─────────────┘
+ *                   ┌──────────────┐
+ *                   │    START     │
+ *                   └──────┬───────┘
+ *                          │
+ *                          ▼
+ *                   ┌──────────────┐
+ *                   │   classify   │  reads:  state.question
+ *                   └──────┬───────┘  writes: state.intent
+ *                          │
+ *           ┌──────────────┴──────────────┐
+ *  intent == chitchat               intent == question
+ *  (small-talk regex)               (everything else)
+ *           │                              │
+ *           ▼                              ▼
+ *   ┌──────────────┐               ┌──────────────┐
+ *   │   chitchat   │               │   retrieve   │  reads:  state.question
+ *   └──────┬───────┘               └──────┬───────┘  writes: state.docs,
+ *          │                              │                 state.citedPages,
+ *          │                              │                 state.offTopic
+ *          │                              │
+ *          │                ┌─────────────┴─────────────┐
+ *          │           offTopic == true            offTopic == false
+ *          │           (top cosine <                (top cosine ≥
+ *          │            RELEVANCE_THRESHOLD)         RELEVANCE_THRESHOLD)
+ *          │                │                              │
+ *          │                ▼                              ▼
+ *          │         ┌──────────────┐               ┌──────────────┐
+ *          │         │    refuse    │               │   generate   │  reads:  state.docs
+ *          │         └──────┬───────┘               └──────┬───────┘          state.question
+ *          │                │                              │           writes: state.answer
+ *          ▼                ▼                              ▼
+ *                   ┌──────────────┐
+ *                   │     END      │
+ *                   └──────────────┘
  *
- * The `refuse` branch is gated by a cosine-similarity check in
- * `retrieve` — when the best dense match between query and corpus
- * falls below `RELEVANCE_THRESHOLD`, we never call the chat model.
- * SmolLM2-1.7B's instruction-following caves to confident
- * general-knowledge answers ("the capital of France is Paris, see
- * page 5" was the exact failure mode), so a deterministic gate is
- * the only reliable way to enforce strict document grounding.
+ * **Why a graph for what feels like a 3-step pipeline:**
+ *
+ *   - The two branch points (chitchat-vs-question, off-topic-vs-on-
+ *     topic) compose cleanly as conditional edges. The alternative
+ *     — `if/else` inside one giant `ask` function — buries the
+ *     control flow in imperative code and makes adding a fourth
+ *     branch (e.g. a future "low-confidence ⇒ ask user to clarify"
+ *     node) much harder.
+ *
+ *   - State has a single typed schema (`RagState`). Every node
+ *     reads/writes a tagged subset, so when a new node is added the
+ *     surface area to think about is the state diff, not "what does
+ *     this function take and return".
+ *
+ *   - LangGraph's compiled graph is the durable artifact other parts
+ *     of LangChain (callbacks, tracing, streaming) hook into. Rolling
+ *     our own state machine would re-implement that infrastructure.
+ *
+ * **Why two gates instead of just trusting the system prompt:**
+ *
+ *   1. `classify` (SMALL_TALK_RE) routes greetings to `chitchat` so
+ *      we don't burn an embedder pass + retrieval round-trip on
+ *      "hi" / "thanks" / "ok".
+ *   2. `retrieve` runs the cosine-similarity gate (top dense match
+ *      vs RELEVANCE_THRESHOLD) and tags the state as `offTopic`
+ *      when no chunk is a plausible answer. The `refuse` node then
+ *      returns a canned message without ever calling the chat model.
+ *      Background: SmolLM2-1.7B's instruction-following caves to
+ *      confident general-knowledge answers — "the capital of France
+ *      is Paris (page 5 of your document)" was the literal failure
+ *      mode we observed. A prompt-only "do not use general
+ *      knowledge" rule wasn't enough; a deterministic gate is.
+ *
+ * **Why a document anchor on retrieve:**
+ *
+ *   Identity / overview questions ("whose résumé is this?",
+ *   "what's the title?") often score poorly against the title chunk
+ *   under BGE — the title says "Sumit Sahoo / Enterprise Architect",
+ *   the query says "whose résumé", and the encoder doesn't bridge
+ *   them strongly enough for the chunk to land in the top-K. The
+ *   answer is structurally always in the title block, so we merge
+ *   `anchorChunks` (the doc's first chunk) into every retrieve
+ *   result, deduplicated by chunkId. Cost: at most one extra chunk
+ *   in context.
  */
 import { Document } from "@langchain/core/documents";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
@@ -63,6 +121,7 @@ Strict grounding rules:
 
 Format and inference:
 - When asked what the document is or what it's about, identify the document type from its structure. A name followed by a contact block, work experience, and skills sections is a résumé / CV. An executive summary, numbered sections, and a conclusion is a report. Line items with prices and a total is an invoice. State the type plainly ("This is a résumé for …", "This is a financial report on …") and then add one or two sentences of detail.
+- When asked "whose", "who is this for", or "who wrote this": the answer is the person or entity named in the document's title / contact block / header. Read it off the excerpts verbatim — do not generalise ("the author") when a specific name is present.
 - Match the format to the question: prose for overview questions, a brief list when the user asks for items, tools, names, or dates.`;
 
 const CHITCHAT_PROMPT =
@@ -168,6 +227,15 @@ export interface BuildGraphOptions {
    */
   scoreRelevance?: (query: string) => Promise<number>;
   /**
+   * "Anchor" chunks merged into every retrieve result, deduplicated
+   * against the hybrid hits by `chunkId`. Typically the document's
+   * first chunk — the place where titles, names, and other
+   * structural identifiers live. Lets the LLM answer "whose résumé
+   * is this?" / "what's the document title?" reliably without
+   * relying on the embedder to bridge "whose" → a name.
+   */
+  anchorChunks?: Document<ChunkMetadata>[];
+  /**
    * Streaming callback fired for each decoded token during the
    * `generate` and `chitchat` nodes. Lets the UI render a typewriter
    * effect without owning the model directly.
@@ -180,7 +248,7 @@ export interface BuildGraphOptions {
  * `.compile().invoke(...)` per question.
  */
 export function buildRagGraph(options: BuildGraphOptions) {
-  const { retriever, chatModel, scoreRelevance, onToken } = options;
+  const { retriever, chatModel, scoreRelevance, anchorChunks, onToken } = options;
 
   /** classify → mark the user's input as chitchat vs. real question. */
   async function classify(state: RagState): Promise<Partial<RagState>> {
@@ -189,16 +257,37 @@ export function buildRagGraph(options: BuildGraphOptions) {
 
   /**
    * retrieve → hybrid BM25 + dense, top-K via RRF, plus a cosine-
-   * similarity guard that flags off-topic queries. The guard runs in
-   * parallel with the hybrid fetch so the gate doesn't cost extra
-   * wall-clock time — the embedder pass on the query is needed for
-   * the dense retriever anyway.
+   * similarity guard that flags off-topic queries.
+   *
+   * Three things happen here, in parallel where possible:
+   *
+   *   1. **Hybrid retrieval.** BM25 and dense each return up to
+   *      CANDIDATE_K candidates; RRF fuses them to the top
+   *      HYBRID_TOP_K. See `retrievers/hybrid.ts`.
+   *
+   *   2. **Relevance gate.** We embed the query and compute its top
+   *      cosine against the corpus. When the best match falls below
+   *      RELEVANCE_THRESHOLD the query is almost certainly off-topic
+   *      (general-knowledge question, malformed input, etc.). We
+   *      tag the state as `offTopic` so the conditional edge below
+   *      routes to `refuse`. The dense pass already happened inside
+   *      the hybrid retriever, so this is essentially free CPU.
+   *
+   *   3. **Anchor merge.** The document's title chunk gets merged
+   *      into the result set if it isn't already there. See the
+   *      file-header rationale.
+   *
+   * Errors in `scoreRelevance` (e.g. embedder crash) degrade
+   * gracefully — we treat the score as 1 (very on-topic) so the
+   * user still gets an attempted answer rather than a silent
+   * refusal.
    */
   async function retrieve(state: RagState): Promise<Partial<RagState>> {
-    const [hits, topScore] = await Promise.all([
+    const [hitsRaw, topScore] = await Promise.all([
       retriever.invoke(state.question) as Promise<Document<ChunkMetadata>[]>,
-      scoreRelevance ? scoreRelevance(state.question) : Promise.resolve(1),
+      scoreRelevance ? scoreRelevance(state.question).catch(() => 1) : Promise.resolve(1),
     ]);
+    const hits = mergeAnchorChunks(hitsRaw, anchorChunks ?? []);
     const citedPages = uniqueSortedPages(hits);
     const offTopic = topScore < RELEVANCE_THRESHOLD;
     recordRetrievalDebug(state.question, hits, topScore, offTopic);
@@ -294,6 +383,31 @@ function uniqueSortedPages(docs: Document<ChunkMetadata>[]): number[] {
   const set = new Set<number>();
   for (const d of docs) set.add(d.metadata.pageNumber);
   return [...set].sort((a, b) => a - b);
+}
+
+/**
+ * Append any anchor chunk that isn't already present in `hits`,
+ * deduplicating by `chunkId`. Anchors land at the *end* of the list
+ * so the fused top-K stays at the front for the LLM to read first,
+ * but the document header is always somewhere in scope. The
+ * `generate` node sorts by `pageNumber` before composing the prompt,
+ * so visual ordering ends up document-order regardless of where the
+ * anchor enters this list.
+ */
+function mergeAnchorChunks(
+  hits: Document<ChunkMetadata>[],
+  anchors: Document<ChunkMetadata>[],
+): Document<ChunkMetadata>[] {
+  if (anchors.length === 0) return hits;
+  const seen = new Set(hits.map((h) => h.metadata.chunkId));
+  const merged = [...hits];
+  for (const a of anchors) {
+    if (!seen.has(a.metadata.chunkId)) {
+      merged.push(a);
+      seen.add(a.metadata.chunkId);
+    }
+  }
+  return merged;
 }
 
 /**
