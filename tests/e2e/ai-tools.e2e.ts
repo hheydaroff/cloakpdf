@@ -133,8 +133,25 @@ async function main() {
     }
 
     // Upload the fixture. The drop zone renders an <input type="file">.
+    // 30 s timeout accommodates the initial chunk download for the
+    // tool route (react-markdown, remark-gfm, the rag bundle) on a
+    // cold cache + slow disk — the previous 10 s was tight enough to
+    // false-fail on the first run after a `pnpm add`.
     console.log("→ Uploading fixture PDF…");
-    const fileInput = await page.waitForSelector('input[type="file"]', { timeout: 10_000 });
+    const fileInput = await page
+      .waitForSelector('input[type="file"]', { timeout: 30_000 })
+      .catch(async () => {
+        const dump = await page.evaluate(() => ({
+          url: location.href,
+          bodyText: (document.body.textContent ?? "").slice(0, 500),
+          tagCounts: {
+            buttons: document.querySelectorAll("button").length,
+            inputs: document.querySelectorAll("input").length,
+            cards: document.querySelectorAll("[data-bubble], [role='dialog'], main").length,
+          },
+        }));
+        bail(`File input not found. Page state: ${JSON.stringify(dump, null, 2)}`);
+      });
     if (!fileInput) bail("File input not found on the page.");
     await (fileInput as { uploadFile: (...p: string[]) => Promise<void> }).uploadFile(FIXTURE_PATH);
 
