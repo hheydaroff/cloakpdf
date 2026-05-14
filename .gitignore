@@ -25,3 +25,8 @@ dist-ssr
 
 # Claude Code local state
 .claude/scheduled_tasks.lock
+
+# Test fixtures — PDFs dropped into tests/fixtures/ for the e2e and
+# fixture-aware integration tests. Kept out of version control because
+# they're throwaway documents the contributor supplies themselves.
+tests/fixtures/*.pdf

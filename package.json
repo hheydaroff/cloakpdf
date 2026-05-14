@@ -8,9 +8,13 @@
     "build": "tsc && vp build",
     "preview": "vp preview",
     "prepare": "vp config",
+    "test": "vp test run tests/unit",
+    "test:watch": "vp test watch tests/unit",
+    "test:e2e": "node --experimental-strip-types tests/e2e/ai-tools.e2e.ts",
     "generate-icons": "pwa-assets-generator --preset minimal-2023 public/icons/logo.svg && mv public/icons/apple-touch-icon-180x180.png public/icons/apple-touch-icon.png"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@pdfme/pdf-lib": "^6.1.2",
     "jszip": "^3.10.1",
     "lucide-react": "^1.14.0",
@@ -35,7 +39,8 @@
     "typescript": "^6.0.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.21",
     "vite-plugin-pwa": "^1.3.0",
-    "vite-plus": "^0.1.21"
+    "vite-plus": "^0.1.21",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.21"
   },
   "packageManager": "pnpm@10.32.1",
   "pnpm": {

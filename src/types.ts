@@ -156,4 +156,7 @@ export type ToolId =
   | "split-pdf"
   | "extract-images"
   | "compare-pdf"
-  | "digital-signature";
+  | "digital-signature"
+  | "detect-pii"
+  | "summarize-pdf"
+  | "ask-pdf";

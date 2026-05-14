@@ -1,0 +1,335 @@
+/**
+ * Thin wrapper around @huggingface/transformers' `pipeline()` factory.
+ *
+ * Centralised so the rest of the app:
+ *
+ *   - imports Transformers.js lazily (heavy WASM + onnxruntime payload).
+ *   - sees the same env configuration everywhere (no local models, browser
+ *     cache enabled, WebGPU when available with WASM as the fallback).
+ *   - receives a single coalesced progress signal (overall loaded / total
+ *     bytes plus the file currently downloading) instead of the raw
+ *     per-event payloads that Transformers.js emits.
+ *   - re-uses a single pipeline instance per model — once a pipeline is
+ *     loaded it stays in memory until the page unloads.
+ */
+import { AI_MODELS, type AiModelId, type ChatModelId } from "./ai-models.ts";
+
+/**
+ * Public type for a loaded pipeline instance. Transformers.js exposes
+ * one concrete class per task (e.g. `TokenClassificationPipeline`) and
+ * the unions are awkward to spell out; every call site immediately
+ * casts to a task-specific callable signature, so a single opaque
+ * handle is enough at this boundary.
+ */
+export type AiPipeline = object;
+
+/** Coalesced progress snapshot delivered to the UI. */
+export interface AiProgress {
+  /** Bytes downloaded so far across every file in the model. */
+  loaded: number;
+  /**
+   * Total bytes for files we've seen so far. May grow as Transformers.js
+   * discovers additional files mid-download — keep that in mind when
+   * computing a percent.
+   */
+  total: number;
+  /** Name of the file currently being downloaded. */
+  file: string;
+  /** Status string suitable for showing under the progress bar. */
+  status: string;
+}
+
+let _transformers: typeof import("@huggingface/transformers") | null = null;
+const _pipelineCache = new Map<AiModelId, Promise<AiPipeline>>();
+/**
+ * Synchronously-resolvable handle to a pipeline that has finished
+ * loading. Lets {@link getResolvedPipeline} hand the same in-memory
+ * instance to a freshly mounted hook without going through a Promise —
+ * which is what fixes the "I already downloaded this, why am I being
+ * asked again?" UX bug on remount.
+ */
+const _resolvedPipelines = new Map<AiModelId, AiPipeline>();
+
+/**
+ * `localStorage` key used to remember that a model has loaded successfully
+ * at least once in this browser. The `isModelMarkedReady` flag isn't proof
+ * the bytes are still in CacheStorage (the browser can evict under storage
+ * pressure), but it's a cheap way to skip the consent dialog on return
+ * visits when the cache is overwhelmingly likely to be warm.
+ */
+const READY_FLAG_PREFIX = "cloakpdf:ai-model-ready:";
+
+function safeLocalStorage(): Storage | null {
+  try {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  } catch {
+    // Some embed contexts (private windows, sandboxed iframes) throw on access.
+    return null;
+  }
+}
+
+/**
+ * `localStorage` key for the user's preferred chat-model tier. Stored
+ * once the user picks between the small and large Qwen variants in the
+ * Ask PDF tool. Treat unknown / missing values as "no preference yet —
+ * show the picker."
+ */
+const CHAT_MODEL_PREF_KEY = "cloakpdf:chat-model-preference";
+
+/**
+ * Read the user's saved chat-model preference, or `null` if the
+ * stored value isn't a known tier. Legacy values (e.g. the now-removed
+ * `"chat-small"`) deliberately fall through to `null` so we don't try
+ * to load a model that no longer exists in the registry.
+ */
+export function getChatModelPreference(): ChatModelId | null {
+  const raw = safeLocalStorage()?.getItem(CHAT_MODEL_PREF_KEY);
+  return raw === "chat-large" ? raw : null;
+}
+
+/** Persist the chat-model preference. Best-effort — failures are silent. */
+export function setChatModelPreference(modelId: ChatModelId): void {
+  try {
+    safeLocalStorage()?.setItem(CHAT_MODEL_PREF_KEY, modelId);
+  } catch {
+    // ignore (storage full / blocked)
+  }
+}
+
+/**
+ * Forget the chat-model preference so the picker reappears next time.
+ * Used by the "Change model" affordance in Ask PDF.
+ */
+export function clearChatModelPreference(): void {
+  try {
+    safeLocalStorage()?.removeItem(CHAT_MODEL_PREF_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * `true` when a previous session already finished downloading this model.
+ * Tools use this to skip the consent dialog and load the pipeline
+ * directly when the cache is (almost certainly) warm.
+ */
+export function isModelMarkedReady(modelId: AiModelId): boolean {
+  const storage = safeLocalStorage();
+  return storage?.getItem(READY_FLAG_PREFIX + modelId) === "1";
+}
+
+/** Persist the "downloaded once" flag. Best-effort — failures are silent. */
+function markModelReady(modelId: AiModelId): void {
+  const storage = safeLocalStorage();
+  try {
+    storage?.setItem(READY_FLAG_PREFIX + modelId, "1");
+  } catch {
+    // ignore (storage full / blocked)
+  }
+}
+
+/**
+ * Forget that a model has been downloaded — the consent dialog will
+ * reappear next time it's needed. Use this when the user explicitly asks
+ * to re-download from scratch after a corruption or partial download.
+ * Does not delete bytes from CacheStorage; only the in-memory pipeline
+ * and the localStorage hint.
+ */
+export function forgetModel(modelId: AiModelId): void {
+  const storage = safeLocalStorage();
+  try {
+    storage?.removeItem(READY_FLAG_PREFIX + modelId);
+  } catch {
+    // ignore
+  }
+  _pipelineCache.delete(modelId);
+  _resolvedPipelines.delete(modelId);
+}
+
+/**
+ * Synchronously return the in-memory pipeline for `modelId` if it
+ * finished loading earlier in this page session, else `null`. Used by
+ * {@link useAiModel} on mount to skip the consent flow when a previous
+ * mount already paid the load cost — `_pipelineCache` only stores the
+ * Promise, so this map lets us answer the "is it done?" question
+ * without awaiting.
+ */
+export function getResolvedPipeline(modelId: AiModelId): AiPipeline | null {
+  return _resolvedPipelines.get(modelId) ?? null;
+}
+
+/**
+ * Lazily import Transformers.js. The first call carries the cost of
+ * pulling the WASM runtime; subsequent calls are essentially free.
+ */
+async function getTransformers(): Promise<typeof import("@huggingface/transformers")> {
+  if (!_transformers) {
+    _transformers = await import("@huggingface/transformers");
+    // Force CDN fetches — we don't ship the models in our bundle.
+    _transformers.env.allowLocalModels = false;
+    // Persist downloads in the browser Cache API so repeat visits work
+    // offline and the service worker can intercept them.
+    _transformers.env.useBrowserCache = true;
+  }
+  return _transformers;
+}
+
+/** `true` when this page supports WebGPU and the navigator exposes it. */
+async function detectWebGpu(): Promise<boolean> {
+  if (typeof navigator === "undefined") return false;
+  const gpu = (navigator as Navigator & { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
+  if (!gpu) return false;
+  try {
+    const adapter = await gpu.requestAdapter();
+    return Boolean(adapter);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve (or reuse) a Transformers.js pipeline for the given model.
+ *
+ * Multiple concurrent callers asking for the same model share the same
+ * promise so we don't kick off two downloads in parallel.
+ *
+ * The progress callback aggregates per-file events into a single
+ * loaded/total pair across the whole model. We emit a `status: "ready"`
+ * snapshot at the very end so the UI can advance even when the last
+ * `progress` event from Transformers.js carries stale numbers.
+ */
+export async function loadPipeline(
+  modelId: AiModelId,
+  onProgress?: (p: AiProgress) => void,
+): Promise<AiPipeline> {
+  const existing = _pipelineCache.get(modelId);
+  if (existing) return existing;
+
+  const info = AI_MODELS[modelId];
+
+  const promise = (async () => {
+    const t = await getTransformers();
+    const useWebGpu = await detectWebGpu();
+
+    // Track per-file bytes so a model with N weight shards reports a
+    // single rolled-up progress to the UI.
+    const fileBytes = new Map<string, { loaded: number; total: number }>();
+    // Files marked "done". Subsequent stale "progress" events from
+    // Transformers.js are ignored — without this, late progress events
+    // can briefly drag the aggregated total backwards once a file has
+    // already been finalised.
+    const fileDone = new Set<string>();
+    let currentFile = "";
+
+    const progressCallback = (e: unknown) => {
+      const event = e as {
+        status?: string;
+        file?: string;
+        name?: string;
+        progress?: number;
+        loaded?: number;
+        total?: number;
+      };
+      if (!event || typeof event !== "object") return;
+      const file = event.file ?? event.name ?? "";
+
+      switch (event.status) {
+        case "initiate":
+          if (file && !fileBytes.has(file)) {
+            fileBytes.set(file, { loaded: 0, total: 0 });
+          }
+          currentFile = file || currentFile;
+          break;
+        case "download":
+          currentFile = file || currentFile;
+          break;
+        case "progress": {
+          if (!file || fileDone.has(file)) break;
+          fileBytes.set(file, {
+            loaded: Math.max(0, event.loaded ?? 0),
+            total: Math.max(0, event.total ?? 0),
+          });
+          currentFile = file;
+          break;
+        }
+        case "done": {
+          if (file) {
+            const prev = fileBytes.get(file);
+            // Mark this file as fully downloaded (loaded == total).
+            const total = prev?.total ?? event.total ?? 0;
+            fileBytes.set(file, { loaded: total, total });
+            fileDone.add(file);
+          }
+          break;
+        }
+        default:
+          return;
+      }
+
+      let loaded = 0;
+      let total = 0;
+      for (const v of fileBytes.values()) {
+        loaded += v.loaded;
+        total += v.total;
+      }
+
+      onProgress?.({
+        loaded,
+        total,
+        file: currentFile,
+        status: event.status === "done" ? "Verifying…" : "Downloading model",
+      });
+    };
+
+    try {
+      const pipe = await t.pipeline(info.task, info.repo, {
+        progress_callback: progressCallback,
+        ...(useWebGpu ? { device: "webgpu" } : {}),
+        ...info.pipelineOptions,
+      });
+
+      // Final "ready" tick so the UI can close the dialog confidently.
+      let total = 0;
+      let loaded = 0;
+      for (const v of fileBytes.values()) {
+        total += v.total;
+        loaded += v.loaded;
+      }
+      onProgress?.({
+        loaded: Math.max(loaded, total),
+        total,
+        file: currentFile,
+        status: "Ready",
+      });
+
+      // Persist a flag so future visits can skip the consent prompt when
+      // the model is (overwhelmingly likely to be) still in CacheStorage.
+      markModelReady(modelId);
+      // Make the in-memory pipeline synchronously discoverable on the
+      // next hook mount (see {@link getResolvedPipeline}).
+      _resolvedPipelines.set(modelId, pipe as AiPipeline);
+
+      return pipe as AiPipeline;
+    } catch (err) {
+      // On failure, drop the cached promise so the next attempt re-runs
+      // the whole pipeline factory rather than re-resolving the failed one.
+      _pipelineCache.delete(modelId);
+      throw err;
+    }
+  })();
+
+  _pipelineCache.set(modelId, promise);
+  return promise;
+}
+
+/**
+ * `true` when the pipeline for `modelId` is already resolved in this
+ * tab — i.e. a previous call to {@link loadPipeline} succeeded and the
+ * weights are in memory. We can't cheaply check whether the *browser
+ * cache* has the weights without kicking off a fetch, so this only
+ * detects the in-memory case; first-time loads still go through the
+ * full consent flow.
+ */
+export function isPipelineReady(modelId: AiModelId): boolean {
+  return _pipelineCache.has(modelId);
+}
