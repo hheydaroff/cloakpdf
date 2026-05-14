@@ -25,7 +25,12 @@ const DB_NAME = "cloakpdf-rag";
 //   v3: switched to bge-base-en-v1.5 (Xenova/bge-base-en-v1.5).
 //       768-dim — incompatible with v2's 384-dim packed vectors at the
 //       struct level, but we drop the store on every upgrade anyway.
-const DB_VERSION = 3;
+//   v4: collapseKerningRuns post-processor in `reconstructPageText`.
+//       PDFs with character-tracked headers ("C O N T A C T") now
+//       index as "CONTACT", which changes both the chunk text and the
+//       embedding. v3 caches still hold the un-collapsed text, so we
+//       drop them.
+const DB_VERSION = 4;
 const STORE_NAME = "index-cache";
 const MAX_CACHED = 10;
 

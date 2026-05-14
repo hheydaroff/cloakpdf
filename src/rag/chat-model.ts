@@ -29,11 +29,11 @@ import { type ChatMessage, runChat } from "../utils/ai-tasks.ts";
 export interface TransformersJsChatModelOptions extends BaseChatModelParams {
   /** Resolved Transformers.js `text-generation` pipeline. */
   pipeline: AiPipeline;
-  /** Per-call cap on tokens emitted. Default 512. */
+  /** Per-call cap on tokens emitted. Default 384. */
   maxNewTokens?: number;
-  /** Sampling temperature. Default 0.6. */
+  /** Sampling temperature. Default 0.3. */
   temperature?: number;
-  /** Nucleus sampling cutoff. Default 0.9. */
+  /** Nucleus sampling cutoff. Default 0.85. */
   topP?: number;
   /** Repetition penalty. Default 1.1. */
   repetitionPenalty?: number;
@@ -49,9 +49,16 @@ export class TransformersJsChatModel extends SimpleChatModel {
   constructor(options: TransformersJsChatModelOptions) {
     super(options);
     this.pipeline = options.pipeline;
-    this.maxNewTokens = options.maxNewTokens ?? 512;
-    this.temperature = options.temperature ?? 0.6;
-    this.topP = options.topP ?? 0.9;
+    // Defaults retuned for grounded extraction (2026-05): the previous
+    // 0.6 / 0.9 / 512 trio gave SmolLM2-1.7B too much rope on factual
+    // questions — it would correctly extract a phone number, then add
+    // three paragraphs of hedging and confabulated context. Lower
+    // temperature + nucleus cutoff make sampling more deterministic
+    // (the highest-probability tokens point at the grounded answer);
+    // the shorter token budget physically caps verbosity.
+    this.maxNewTokens = options.maxNewTokens ?? 384;
+    this.temperature = options.temperature ?? 0.5;
+    this.topP = options.topP ?? 0.85;
     this.repetitionPenalty = options.repetitionPenalty ?? 1.1;
   }
 

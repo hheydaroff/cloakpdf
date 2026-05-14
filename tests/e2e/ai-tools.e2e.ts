@@ -260,7 +260,16 @@ async function main() {
     console.log(
       `  ✓ composer enabled; progress recorded ${progressOutcome.states.length} distinct states (${progressOutcome.states.slice(0, 6).join(", ")}${progressOutcome.states.length > 6 ? "…" : ""})`,
     );
-    if (progressOutcome.states.length < 3) {
+    // The progress-advances assertion only makes sense on the cold
+    // path. On a warm cache (IndexedDB has the indexed vectors, model
+    // weights are in CacheStorage) the composer enables in well under
+    // a second and no progress dialog ever renders — zero distinct
+    // states is the correct outcome. We use the gate click as the
+    // cold-path signal: if we never clicked "Download model", the
+    // model was already cached, so we skip the React-batching check.
+    if (!gateClicked && !consentClicked) {
+      console.log("  · skipping progress-advances check (warm cache — no progress dialog)");
+    } else if (progressOutcome.states.length < 3) {
       bail(
         `Progress did not visibly advance — only ${progressOutcome.states.length} distinct state(s) observed: ${progressOutcome.states.join(", ")}. Indicates the React-batching regression has returned.`,
       );
@@ -393,6 +402,157 @@ async function main() {
       bail(`Warm-cache: assistant looped — same line ${warmWorst}× in the reply.`);
     }
     console.log("  ✓ warm-cache reply non-empty, no loop");
+
+    // ── Verbatim extraction check ───────────────────────────────────
+    // Real-world failure mode the user hit: "give me Sumit's phone"
+    // returned a fabricated number. The fix is the verbatim-extraction
+    // rule in the system prompt + the document anchor that always
+    // includes the contact block. We now assert the model returns the
+    // exact ground-truth phone string from page 1 of the fixture.
+    //
+    // Ground truth (from `tests/fixtures/sample.pdf`, page 1 contact
+    // block): "+91-7899800899". If the e2e fixture is ever swapped
+    // out, update these constants alongside the file.
+    const GROUND_TRUTH = {
+      phone: "+91-7899800899",
+      email: "sumitsahoo1988@gmail.com",
+      addressCity: "Pune",
+      addressState: "Maharashtra",
+      addressCountry: "India",
+    };
+    console.log("→ Asking an extraction question (phone)…");
+    const priorExtractBubbleCount = await page.evaluate(
+      () => document.querySelectorAll("[data-bubble]").length,
+    );
+    await page.focus("textarea");
+    await page.keyboard.type("Give me Sumit's phone number.");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(
+      (prev) => {
+        const bubbles = document.querySelectorAll("[data-bubble]");
+        if (bubbles.length < prev + 2) return false;
+        const lastBubble = bubbles[bubbles.length - 1];
+        if (lastBubble.getAttribute("data-streaming") === "true") return false;
+        return (lastBubble.textContent ?? "").trim().length > 0;
+      },
+      { timeout: 5 * 60 * 1000 },
+      priorExtractBubbleCount,
+    );
+    const phoneReply = await page.evaluate(() => {
+      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+    });
+    console.log("\n──────── phone extraction reply ────────");
+    console.log(phoneReply);
+    console.log("────────────────────────────────────────\n");
+    // Normalise the reply: strip whitespace and parentheses so a
+    // model that writes "(+91) 78998 00899" or "+91 7899800899" still
+    // passes if all the digits and the country-code prefix are there.
+    // We require the exact ground-truth string after light whitespace
+    // collapse — that's still strict enough to fail on hallucinated
+    // digits, which is the actual regression we're guarding against.
+    const phoneReplyDigits = phoneReply.replace(/\s+/g, " ");
+    if (!phoneReplyDigits.includes(GROUND_TRUTH.phone)) {
+      // Also try just the digit run, in case the model dropped the
+      // dash/punctuation. The verbatim rule prefers the exact form,
+      // but the digits being correct is the safety-critical part.
+      const digitsOnly = GROUND_TRUTH.phone.replace(/[^0-9]/g, "");
+      const replyDigitsOnly = phoneReply.replace(/[^0-9]/g, "");
+      if (!replyDigitsOnly.includes(digitsOnly)) {
+        bail(
+          `Phone extraction failed. Expected to find "${GROUND_TRUTH.phone}" (or digits ${digitsOnly}) in the reply. Got: ${phoneReply.slice(0, 240)}`,
+        );
+      }
+      console.log(
+        "  ⚠ phone digits present but exact format differed from ground truth — still acceptable",
+      );
+    } else {
+      console.log(`  ✓ phone reply contains exact ground truth "${GROUND_TRUTH.phone}"`);
+    }
+    // Also sanity-check that we did not regress the email extraction
+    // path. Email is structurally easier (no normalisation
+    // ambiguity) so we just look for the literal address.
+    console.log("→ Asking an extraction question (email)…");
+    const priorEmailBubbleCount = await page.evaluate(
+      () => document.querySelectorAll("[data-bubble]").length,
+    );
+    await page.focus("textarea");
+    await page.keyboard.type("What is the email address in this document?");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(
+      (prev) => {
+        const bubbles = document.querySelectorAll("[data-bubble]");
+        if (bubbles.length < prev + 2) return false;
+        const lastBubble = bubbles[bubbles.length - 1];
+        if (lastBubble.getAttribute("data-streaming") === "true") return false;
+        return (lastBubble.textContent ?? "").trim().length > 0;
+      },
+      { timeout: 5 * 60 * 1000 },
+      priorEmailBubbleCount,
+    );
+    const emailReply = await page.evaluate(() => {
+      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+    });
+    console.log("\n──────── email extraction reply ────────");
+    console.log(emailReply);
+    console.log("────────────────────────────────────────\n");
+    if (!emailReply.toLowerCase().includes(GROUND_TRUTH.email)) {
+      bail(
+        `Email extraction failed. Expected "${GROUND_TRUTH.email}" in the reply. Got: ${emailReply.slice(0, 240)}`,
+      );
+    }
+    console.log(`  ✓ email reply contains exact ground truth "${GROUND_TRUTH.email}"`);
+
+    // Address — multi-part value ("Pune, Maharashtra, India"). We
+    // require all three components to appear in the reply because the
+    // model might phrase the answer either as "Pune, Maharashtra,
+    // India" or "Pune in Maharashtra, India" or list them separately.
+    // What we are guarding against is the model dropping the country
+    // ("just Pune") or fabricating one ("Hyderabad" — which IS in the
+    // doc as a former workplace location, an easy confusion path).
+    console.log("→ Asking an extraction question (address)…");
+    const priorAddrBubbleCount = await page.evaluate(
+      () => document.querySelectorAll("[data-bubble]").length,
+    );
+    await page.focus("textarea");
+    await page.keyboard.type("Where is Sumit based? Give me the city, state, and country.");
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(
+      (prev) => {
+        const bubbles = document.querySelectorAll("[data-bubble]");
+        if (bubbles.length < prev + 2) return false;
+        const lastBubble = bubbles[bubbles.length - 1];
+        if (lastBubble.getAttribute("data-streaming") === "true") return false;
+        return (lastBubble.textContent ?? "").trim().length > 0;
+      },
+      { timeout: 5 * 60 * 1000 },
+      priorAddrBubbleCount,
+    );
+    const addressReply = await page.evaluate(() => {
+      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+    });
+    console.log("\n──────── address extraction reply ────────");
+    console.log(addressReply);
+    console.log("──────────────────────────────────────────\n");
+    const addrLower = addressReply.toLowerCase();
+    const missingAddrParts: string[] = [];
+    for (const part of [
+      GROUND_TRUTH.addressCity,
+      GROUND_TRUTH.addressState,
+      GROUND_TRUTH.addressCountry,
+    ]) {
+      if (!addrLower.includes(part.toLowerCase())) missingAddrParts.push(part);
+    }
+    if (missingAddrParts.length > 0) {
+      bail(
+        `Address extraction failed. Missing component(s): ${missingAddrParts.join(", ")}. Got: ${addressReply.slice(0, 240)}`,
+      );
+    }
+    console.log(
+      `  ✓ address reply contains all three ground-truth components (${GROUND_TRUTH.addressCity}, ${GROUND_TRUTH.addressState}, ${GROUND_TRUTH.addressCountry})`,
+    );
 
     // Smoke assertions tuned to the failure modes we've actually hit:
     //

@@ -177,7 +177,35 @@ function reconstructPageText(
     if (item.hasEOL) out.push("\n");
     lastY = y;
   }
-  return out.join("");
+  return collapseKerningRuns(out.join(""));
+}
+
+/**
+ * Collapse runs of letter-tracked headers like `"C O N T A C T"` or
+ * `"C O R E E X P E R T I S E"` back into `"CONTACT"` /
+ * `"CORE EXPERTISE"`. PDFs that use heavy character tracking position
+ * each glyph independently, so pdf.js's text-item stream emits each
+ * letter as its own `str` and our spacer logic puts spaces between
+ * them. The visible word is intact for a human reader, but small LLMs
+ * fail to recognise that `"C O N T A C T"` is a CONTACT header — they
+ * either skip the section entirely or read the letters as initials.
+ *
+ * Heuristic: a run of 3+ short uppercase tokens (1–3 chars each)
+ * separated by single spaces is a tracked-letters artifact. We
+ * concatenate consecutive 1–3-char uppercase tokens into a single
+ * word until the run breaks. Common multi-word headers like
+ * `"CORE EXPERTISE"` end up as `"COREEXPERTISE"` which we then split
+ * by inserting a space before the second header word if it follows a
+ * complete short uppercase run — handled by re-applying the regex
+ * iteratively. Words like `"AI"`, `"PDF"`, `"REST"` (legitimate short
+ * uppercase tokens) survive because they're isolated (no run).
+ */
+function collapseKerningRuns(text: string): string {
+  // Match a run of 3+ short uppercase tokens (1–3 chars) separated by
+  // single spaces. We require word boundaries on each side so we
+  // don't fuse acronyms that happen to sit next to one short token.
+  const RUN = /(?<![A-Za-z])([A-Z]{1,3}(?: [A-Z]{1,3}){2,})(?![A-Za-z])/g;
+  return text.replace(RUN, (run) => run.replace(/ /g, ""));
 }
 
 /**

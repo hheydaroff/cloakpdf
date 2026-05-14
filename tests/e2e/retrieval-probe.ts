@@ -70,6 +70,20 @@ const QUESTIONS = [
   // "the document doesn't mention Docker". A pass means it does NOT
   // hallucinate Docker into the answer.
   "What does the document say about Docker containers?",
+  // Verbatim identifier extraction — the contact block (phone /
+  // email) lives in the first chunk and rides into context via the
+  // document anchor. With the verbatim-extraction rule in the system
+  // prompt the model must quote the digits exactly, not invent or
+  // normalise them. Failure mode we are guarding against: SmolLM2-
+  // 1.7B making up a plausible-looking phone number when the
+  // embedder can't bridge "phone" → digits.
+  "Give me Sumit's phone number.",
+  // Verbatim identifier — email. Same rationale as the phone
+  // question. The expected behaviour is "<exact email from contact
+  // block>" or a polite "I couldn't find an email in this document"
+  // if the contact block didn't make it into context; never a
+  // fabricated address.
+  "What is the email address in this document?",
 ];
 
 interface HybridDebugRecord {

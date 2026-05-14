@@ -111,18 +111,22 @@ import type { TransformersJsChatModel } from "./chat-model.ts";
  *      confident hallucination. Stays at the end so the model has
  *      already considered the rest of the rules.
  */
-const SYSTEM_PROMPT = `You are an assistant whose ONLY job is to answer questions about the specific PDF the user has uploaded. The user message will include relevant excerpts pulled from that document.
+const SYSTEM_PROMPT = `You answer questions about a PDF. The user message contains the document header (title and contact block) followed by relevant excerpts.
 
-Strict grounding rules:
-- Answer ONLY from the supplied excerpts. Do not use general knowledge, training data, or facts from outside the document — even if you know them.
-- If the question can be answered from the excerpts, do so concisely (usually under 100 words) and cite page numbers like (page 4) when a specific fact comes from a specific page.
-- If the excerpts don't cover the question, reply with exactly one sentence saying so — for example, "I couldn't find that in this document."
-- If the question is unrelated to the document (general knowledge, opinions, math, coding help, the weather, who you are, etc.) politely decline in one sentence and invite the user to ask something about the uploaded PDF instead. Do NOT answer the off-topic question even partially.
+How to answer:
+- Read the header and excerpts. Most questions can be answered directly from them — scan for the relevant span and use it.
+- For specific values (phone numbers, emails, URLs, addresses, dates, prices, IDs, names): find the value in the header or excerpts and quote it EXACTLY, every character. Lead the reply with the value itself — no preamble, no hedging.
+- For "what is this document?" / "whose document is this?": identify the type from structure. A name + contact block + work experience sections = a résumé / CV. An executive summary + numbered sections = a report. Line items + total = an invoice. Name the person or entity from the header, not "the author".
+- For lists (tools, technologies, skills, dates): a short comma-separated list or short bullets is fine.
+- Keep answers tight: one sentence for a single fact, up to three for overviews. Cite (page N) only for facts visible on that page.
 
-Format and inference:
-- When asked what the document is or what it's about, identify the document type from its structure. A name followed by a contact block, work experience, and skills sections is a résumé / CV. An executive summary, numbered sections, and a conclusion is a report. Line items with prices and a total is an invoice. State the type plainly ("This is a résumé for …", "This is a financial report on …") and then add one or two sentences of detail.
-- When asked "whose", "who is this for", or "who wrote this": the answer is the person or entity named in the document's title / contact block / header. Read it off the excerpts verbatim — do not generalise ("the author") when a specific name is present.
-- Match the format to the question: prose for overview questions, a brief list when the user asks for items, tools, names, or dates.`;
+When the answer is not in the header or excerpts:
+- Reply with exactly one sentence: "I couldn't find that in this document." Do not guess. Do not invent values, names, or numbers.
+
+When the question is unrelated to the document:
+- Decline in one sentence and invite a question about the PDF. Do not answer the off-topic question even partially.
+
+Never use general knowledge. Never fabricate facts or citations. Treat the header as authoritative for identity, title, and contact information.`;
 
 const CHITCHAT_PROMPT =
   "You are a friendly assistant who helps a user explore a PDF document. Respond briefly to the user's greeting and invite them to ask something specific about the document.";
@@ -304,16 +308,46 @@ export function buildRagGraph(options: BuildGraphOptions) {
     return { answer: message, citedPages: [], intent: "off-topic" };
   }
 
-  /** generate → stream the grounded answer. */
+  /**
+   * generate → stream the grounded answer.
+   *
+   * Context layout: anchor chunks (the document header / contact block)
+   * are pulled out and presented FIRST under an explicit
+   * `[Document header — Page N]` label, with the rest of the
+   * retrieval hits following under `[Relevant excerpts]`. Two reasons
+   * to label them this way:
+   *
+   *   1. **Framing for overview questions.** Without the explicit
+   *      label the model treats every chunk equally and can frame the
+   *      document around whichever project chunk got fused in first —
+   *      we observed it summarising the résumé as "a Dell finance
+   *      reporting platform document" because a Dell project chunk
+   *      scored highly. Labelling the header tells the model "this is
+   *      what the document IS".
+   *   2. **Authority for extraction questions.** When the user asks
+   *      for a phone/email/address, the model should look at the
+   *      contact block first. Putting it under an explicit header
+   *      label makes that lookup an obvious move rather than a
+   *      heuristic the model has to discover.
+   */
   async function generate(state: RagState): Promise<Partial<RagState>> {
     if (state.docs.length === 0) {
       return { answer: "I could not find any relevant passages for that question." };
     }
-    // Order context by page number so the prompt reads top-to-bottom.
-    const ordered = [...state.docs].sort((a, b) => a.metadata.pageNumber - b.metadata.pageNumber);
-    const contextBlock = ordered
+    const anchorIds = new Set((anchorChunks ?? []).map((c) => c.metadata.chunkId));
+    const headers = state.docs.filter((d) => anchorIds.has(d.metadata.chunkId));
+    const others = state.docs.filter((d) => !anchorIds.has(d.metadata.chunkId));
+    const orderedOthers = [...others].sort((a, b) => a.metadata.pageNumber - b.metadata.pageNumber);
+    const headerBlock = headers
+      .map((d) => `[Document header — Page ${d.metadata.pageNumber}]\n${d.pageContent.trim()}`)
+      .join("\n\n");
+    const excerptsBlock = orderedOthers
       .map((d) => `[Page ${d.metadata.pageNumber}]\n${d.pageContent.trim()}`)
       .join("\n\n");
+    const contextBlock =
+      headerBlock && excerptsBlock
+        ? `${headerBlock}\n\n[Relevant excerpts]\n${excerptsBlock}`
+        : headerBlock || excerptsBlock;
     const answer = await streamReply(
       chatModel,
       SYSTEM_PROMPT,
