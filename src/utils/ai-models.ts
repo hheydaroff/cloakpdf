@@ -77,11 +77,25 @@ export const AI_MODELS: Record<AiModelId, AiModelInfo> = {
     // laptops, and tablets with ≥ 4 GB free; marginal on phones with
     // 6 GB total RAM.
     //
-    // **Why this and not Qwen2.5 1.5B?** Qwen's ONNX exports (both 0.5B
-    // and 1.5B at q4f16) produced pure token garbage in Transformers.js
-    // — a known issue with that family's browser quantizations. The
-    // SmolLM2 family is what we know runs cleanly via Transformers.js,
-    // so we stay in-family and just scale up from 360 M → 1.7 B.
+    // **History of swaps in this slot** (so future-us doesn't repeat
+    // them). Same résumé fixture and prompt in each test:
+    //
+    //   - Qwen 2.5 0.5B / 1.5B   → broken ONNX (pure token noise)
+    //   - Llama 3.2 1B           → severe extraction hallucinations
+    //                              ("Gemini developed by Facebook" etc.)
+    //   - Gemma 4 E2B            → same failure mode as Llama 1B —
+    //                              lists generic AI categories
+    //                              (Anthropic Claude, OpenAI GPT,
+    //                              Docker, Kubernetes) none of which
+    //                              appear in the chunks
+    //   - SmolLM2-360M           → fabricated identifiers under load
+    //   - SmolLM2-1.7B           → near-verbatim extraction (winner)
+    //
+    // The pattern that emerged across these tests: small instruct
+    // models from Google / Meta optimise for conversational fluency
+    // and fill in "plausible" answers from world knowledge. SmolLM2
+    // alone in the small-model space stays close to the supplied
+    // excerpts. Until that changes we hold the line at 1.7B.
     approxSizeBytes: 1024 * 1024 * 1024,
     approxPeakRamBytes: Math.round(2.5 * 1024 * 1024 * 1024),
     description:

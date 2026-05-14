@@ -3,7 +3,7 @@
  *
  * Two design points worth noting:
  *
- *   1. We splitwithin each page rather than across pages so a chunk
+ *   1. We split within each page rather than across pages so a chunk
  *      always belongs to one and only one source page — citations stay
  *      crisp. LangChain's `splitDocuments` would happily merge / split
  *      across documents otherwise.

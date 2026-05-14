@@ -121,7 +121,13 @@ function isSmallTalk(q: string): boolean {
  */
 export const RagStateAnnotation = Annotation.Root({
   question: Annotation<string>(),
-  intent: Annotation<"chitchat" | "question" | undefined>(),
+  /**
+   * Routing tag. `classify` sets this to `"chitchat"` or `"question"`;
+   * `retrieve` may then re-tag a `"question"` as `"off-topic"` when
+   * the dense-similarity gate fires. Surfaced on `AskResult` so the
+   * UI can hide citation chrome on refused turns.
+   */
+  intent: Annotation<"chitchat" | "question" | "off-topic" | undefined>(),
   /**
    * Set by `retrieve` when the best-matching chunk scores below the
    * relevance threshold. Routes the graph to `refuse` instead of
@@ -206,7 +212,7 @@ export function buildRagGraph(options: BuildGraphOptions) {
     // nodes — the assistant bubble fills in without needing to
     // special-case "non-streamed" rendering in the UI.
     onToken?.(message);
-    return { answer: message, citedPages: [] };
+    return { answer: message, citedPages: [], intent: "off-topic" };
   }
 
   /** generate → stream the grounded answer. */

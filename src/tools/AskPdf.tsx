@@ -16,6 +16,8 @@
  */
 import { Database, Loader2, ScanSearch, Send, Sparkles, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ActiveModelBar } from "../components/ActiveModelBar.tsx";
 import { AiConsentDialog } from "../components/AiConsentDialog.tsx";
 import { AiModelGate } from "../components/AiModelGate.tsx";
@@ -143,6 +145,9 @@ export default function AskPdf() {
             ? {
                 ...t,
                 content: result.answer,
+                // Citation footer only makes sense for grounded answers
+                // — chitchat and off-topic refusals don't reference
+                // document pages, so we drop the field entirely for them.
                 citedPages: result.intent === "question" ? result.citedPages : undefined,
                 streaming: false,
               }
@@ -202,26 +207,31 @@ export default function AskPdf() {
                 blurb="Two small models load together: a chat model and an embedder. Both run entirely in your browser; your PDFs are never uploaded."
               >
                 {/*
-                  Three mutually-exclusive states once the models are
-                  ready: indexing the PDF, then chatting. We render only
-                  one at a time so the user isn't looking at a frozen
-                  composer next to a tiny progress bar.
+                  Once models are ready we render one of two states.
+                  Indexing shows a dominant card; chatting shows a
+                  fixed-height panel with a scrollable conversation and
+                  a composer anchored at the bottom — the composer
+                  never shifts as turns accumulate because the scroll
+                  lives *inside* the panel, not on the page.
                 */}
                 {isIndexing ? (
                   <IndexingCard progress={indexing} />
                 ) : (
-                  <>
-                    <ConversationView turns={turns} scrollAnchorRef={scrollAnchorRef} />
-                    <Composer
-                      value={question}
-                      onChange={setQuestion}
-                      onKeyDown={onKeyDown}
-                      onSubmit={handleAsk}
-                      disabled={task.processing || !sessionReady}
-                      placeholder="Ask something about this PDF…"
-                      busyLabel={task.processing ? "Thinking…" : "Preparing…"}
-                    />
-                  </>
+                  <ChatPanel
+                    turns={turns}
+                    scrollAnchorRef={scrollAnchorRef}
+                    composer={
+                      <Composer
+                        value={question}
+                        onChange={setQuestion}
+                        onKeyDown={onKeyDown}
+                        onSubmit={handleAsk}
+                        disabled={task.processing || !sessionReady}
+                        placeholder="Ask something about this PDF…"
+                        busyLabel={task.processing ? "Thinking…" : "Preparing…"}
+                      />
+                    }
+                  />
                 )}
               </AiModelGate>
 
@@ -315,20 +325,160 @@ function describeIndexProgress(progress: IndexingProgress | null): {
   };
 }
 
-function ConversationView({
+/**
+ * Bounded chat panel: a flex column that fills available vertical
+ * space within sensible bounds, with the conversation scrolling
+ * *inside* the panel and the composer anchored at the bottom edge.
+ *
+ * Why a bounded panel instead of a sticky composer with page-level
+ * scroll:
+ *
+ *   - The composer never visually jumps when the user scrolls back to
+ *     re-read an earlier turn — page scroll stops at the panel's
+ *     edges.
+ *   - As more turns accumulate the panel never pushes other tool
+ *     chrome (FileInfoBar / ActiveModelBar) off-screen — they stay
+ *     pinned, which matches what users expect from a chat surface.
+ *   - The visual frame creates a clear "this is a conversation"
+ *     affordance vs. the plain document flow the page uses elsewhere.
+ *
+ * The height clamp `min(72svh, 720px)` gives the panel a generous
+ * footprint on tall screens without exceeding what fits comfortably
+ * on a 13" laptop. `min-h-[460px]` stops it collapsing on short
+ * windows where a sub-300 px scroll area would feel cramped.
+ */
+function ChatPanel({
   turns,
+  composer,
   scrollAnchorRef,
 }: {
   turns: ChatTurn[];
+  composer: React.ReactNode;
   scrollAnchorRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  if (turns.length === 0) return null;
   return (
-    <div className="space-y-3">
-      {turns.map((turn) => (
-        <Bubble key={turn.id} turn={turn} />
-      ))}
-      <div ref={scrollAnchorRef} />
+    <div className="flex flex-col h-[min(72svh,720px)] min-h-115 rounded-2xl border border-slate-200 dark:border-dark-border bg-slate-50/70 dark:bg-dark-bg/60 overflow-hidden">
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {turns.length === 0 ? (
+          <EmptyChatHint />
+        ) : (
+          <div className="space-y-3">
+            {turns.map((turn) => (
+              <Bubble key={turn.id} turn={turn} />
+            ))}
+            <div ref={scrollAnchorRef} />
+          </div>
+        )}
+      </div>
+      <div className="shrink-0 border-t border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface">
+        {composer}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Placeholder shown when there are no turns yet. Lives in the same
+ * scroll area the conversation will populate so the panel doesn't
+ * collapse to a hairline before the first question.
+ */
+function EmptyChatHint() {
+  return (
+    <div className="h-full flex flex-col items-center justify-center text-center px-6">
+      <span
+        aria-hidden="true"
+        className="w-10 h-10 rounded-full flex items-center justify-center bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 mb-3"
+      >
+        <Sparkles className="w-4 h-4" />
+      </span>
+      <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+        Ready to chat about this PDF
+      </p>
+      <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1 max-w-xs leading-relaxed">
+        Ask anything about the document&apos;s contents. Answers are generated on-device and stay
+        grounded in the uploaded file.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Markdown renderer for assistant turns. Wraps `react-markdown` with a
+ * minimal Tailwind component map so the rendered output inherits the
+ * bubble's typography instead of `react-markdown`'s default unstyled
+ * HTML. `remark-gfm` enables tables, task lists, strikethrough, and
+ * autolinks — features the prompt allows the model to use when the
+ * question warrants.
+ *
+ * **Safety**: `react-markdown` does NOT render raw HTML by default,
+ * so even if the chat model emits a `<script>` tag verbatim it lands
+ * as literal text in the DOM. We do not add `rehype-raw`. The model
+ * output is the only untrusted input on this path.
+ */
+function AssistantMarkdown({ content }: { content: string }) {
+  return (
+    <div className="text-sm leading-relaxed text-slate-800 dark:text-dark-text wrap-anywhere">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+          ul: ({ children }) => (
+            <ul className="list-disc list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ul>
+          ),
+          ol: ({ children }) => (
+            <ol className="list-decimal list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ol>
+          ),
+          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          h1: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
+          h2: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
+          h3: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
+          code: ({ children }) => (
+            <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-dark-bg text-xs font-mono">
+              {children}
+            </code>
+          ),
+          pre: ({ children }) => (
+            <pre className="my-2 p-3 rounded-lg bg-slate-100 dark:bg-dark-bg text-xs font-mono overflow-x-auto">
+              {children}
+            </pre>
+          ),
+          blockquote: ({ children }) => (
+            <blockquote className="border-l-2 border-slate-300 dark:border-dark-border pl-3 italic text-slate-600 dark:text-dark-text-muted my-2">
+              {children}
+            </blockquote>
+          ),
+          a: ({ children, href }) => (
+            <a
+              href={href}
+              className="text-primary-600 dark:text-primary-400 underline underline-offset-2"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {children}
+            </a>
+          ),
+          hr: () => <hr className="my-3 border-slate-200 dark:border-dark-border" />,
+          table: ({ children }) => (
+            <div className="my-2 overflow-x-auto">
+              <table className="text-xs border-collapse">{children}</table>
+            </div>
+          ),
+          th: ({ children }) => (
+            <th className="border border-slate-200 dark:border-dark-border px-2 py-1 font-semibold text-left">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="border border-slate-200 dark:border-dark-border px-2 py-1">
+              {children}
+            </td>
+          ),
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }
@@ -359,16 +509,25 @@ function Bubble({ turn }: { turn: ChatTurn }) {
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             Thinking…
           </span>
+        ) : isUser ? (
+          // User turns are plain text — we don't want their question
+          // rendered as markdown (a stray "#" or "*" should appear
+          // verbatim). Whitespace-pre-wrap keeps any line breaks
+          // the user typed with Shift+Enter.
+          <p className="whitespace-pre-wrap wrap-anywhere">{turn.content}</p>
         ) : (
-          <p className="whitespace-pre-wrap wrap-anywhere">
-            {turn.content}
-            {turn.streaming && (
-              <span
-                aria-hidden="true"
-                className="inline-block w-1.5 h-4 ml-0.5 -mb-0.5 align-middle bg-current opacity-60 animate-pulse"
-              />
-            )}
-          </p>
+          // Assistant turns are markdown — the prompt allows the model
+          // to use lists, headings, bold, and code spans when the
+          // question warrants. The caret lives outside the markdown
+          // so a partial token stream (e.g. an unfinished `**bold**`)
+          // doesn't disturb the streaming indicator.
+          <AssistantMarkdown content={turn.content} />
+        )}
+        {!isUser && turn.streaming && turn.content && (
+          <span
+            aria-hidden="true"
+            className="inline-block w-1.5 h-4 ml-0.5 -mb-0.5 align-middle bg-current opacity-60 animate-pulse"
+          />
         )}
         {!isUser && turn.citedPages && turn.citedPages.length > 0 && !turn.streaming && (
           <p className="mt-2 pt-2 border-t border-slate-100 dark:border-dark-border/60 text-xs text-slate-400 dark:text-dark-text-muted">
@@ -398,8 +557,13 @@ function Composer({
   placeholder?: string;
   busyLabel?: string;
 }) {
+  // The composer is rendered *inside* the `ChatPanel`'s flex column,
+  // anchored to the panel's bottom edge. It no longer needs `sticky`
+  // positioning, a border, or a card shadow — the panel provides all
+  // of those. We keep just the padding so the textarea has room to
+  // breathe.
   return (
-    <div className="sticky bottom-2 bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-3">
+    <div className="p-3">
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
