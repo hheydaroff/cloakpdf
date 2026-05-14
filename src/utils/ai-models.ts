@@ -59,22 +59,28 @@ export interface AiModelInfo {
 export const AI_MODELS: Record<AiModelId, AiModelInfo> = {
   chat: {
     id: "chat",
-    displayName: "Qwen2.5 (1.5B, instruct)",
-    repo: "onnx-community/Qwen2.5-1.5B-Instruct",
+    displayName: "SmolLM2 (1.7B, instruct)",
+    repo: "HuggingFaceTB/SmolLM2-1.7B-Instruct",
     task: "text-generation",
-    // q4f16 weights are ~0.9 GB on disk. Peak RAM during inference
-    // sits around 2.5–3 GB once the KV cache, embedding table, and
-    // ONNX runtime overhead are accounted for — comfortably under
-    // 4 GB so the tool still runs on tablets and mid-range laptops,
-    // marginal on phones with 6 GB total RAM.
-    approxSizeBytes: 900 * 1024 * 1024,
-    approxPeakRamBytes: 3 * 1024 * 1024 * 1024,
+    // q4f16 weights are ~1.0 GB on disk. Peak RAM during inference
+    // sits around 2.5 GB once the KV cache, embedding table, and ONNX
+    // runtime overhead are accounted for. Runs well on desktops,
+    // laptops, and tablets with ≥ 4 GB free; marginal on phones with
+    // 6 GB total RAM.
+    //
+    // **Why this and not Qwen2.5 1.5B?** Qwen's ONNX exports (both 0.5B
+    // and 1.5B at q4f16) produced pure token garbage in Transformers.js
+    // — a known issue with that family's browser quantizations. The
+    // SmolLM2 family is what we know runs cleanly via Transformers.js,
+    // so we stay in-family and just scale up from 360 M → 1.7 B.
+    approxSizeBytes: 1024 * 1024 * 1024,
+    approxPeakRamBytes: Math.round(2.5 * 1024 * 1024 * 1024),
     description:
-      "Alibaba's Qwen 2.5 1.5B instruct model — strong at answering questions grounded in supplied document excerpts, with markedly better reasoning than the 300–500 M tier we used before.",
+      "Hugging Face's flagship small chat model — same family as the 360 M we shipped first, with markedly better reasoning over supplied document excerpts.",
     bestFor:
       "Answering questions about a PDF on desktops, laptops, and tablets with ≥ 4 GB free RAM.",
     license: "Apache 2.0",
-    modelUrl: "https://huggingface.co/onnx-community/Qwen2.5-1.5B-Instruct",
+    modelUrl: "https://huggingface.co/HuggingFaceTB/SmolLM2-1.7B-Instruct",
     pipelineOptions: { dtype: "q4f16" },
   },
   embed: {

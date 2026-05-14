@@ -106,28 +106,25 @@ export async function runChat(
     );
   }
 
-  // Defaults tuned for Qwen2.5-1.5B-Instruct following the values the
-  // model authors recommend in the official `generation_config.json`:
+  // Defaults tuned for SmolLM2-1.7B-Instruct. The 1.7B is large enough
+  // that it doesn't suffer from the loop pathology of the 360M variant
+  // — we can drop the heavy crutches (no_repeat_ngram_size, hot
+  // repetition_penalty) that were specifically there to keep the small
+  // model from emitting 39-line numbered loops.
   //
-  //   - `temperature: 0.7`, `top_p: 0.8` — sampling settings published
-  //     in the model card. Conservative enough that the output stays
-  //     anchored to the supplied excerpts.
-  //   - `repetition_penalty: 1.05` — the model card's default. Higher
-  //     values (we previously used 1.3 to suppress SmolLM2-360M loops)
-  //     hurt fluency on a model that doesn't have the loop pathology.
-  //   - `max_new_tokens: 512` — room for a properly written answer
-  //     plus a brief structural rationale ("this looks like a résumé
-  //     because…"). The 256 cap was a damage-control measure for
-  //     small-model loops; not relevant here.
-  //   - No `no_repeat_ngram_size` — that 4-gram ban actively hurts
-  //     accuracy on tasks where the model legitimately needs to
-  //     repeat names or technical terms ("LangChain", "PAV cycles").
+  //   - `temperature: 0.6` — conservative; output stays anchored to
+  //     the supplied excerpts.
+  //   - `top_p: 0.9` — model-card recommended.
+  //   - `repetition_penalty: 1.1` — mild; SmolLM2-1.7B doesn't need
+  //     more.
+  //   - `max_new_tokens: 512` — room for a properly written answer.
+  //     The earlier 256 cap was damage-control for 360M loops.
   const result = await generator(messages, {
     max_new_tokens: options.maxNewTokens ?? 512,
     do_sample: options.doSample ?? true,
-    temperature: options.temperature ?? 0.7,
-    top_p: options.topP ?? 0.8,
-    repetition_penalty: options.repetitionPenalty ?? 1.05,
+    temperature: options.temperature ?? 0.6,
+    top_p: options.topP ?? 0.9,
+    repetition_penalty: options.repetitionPenalty ?? 1.1,
     ...(streamer ? { streamer } : {}),
   });
 

@@ -29,7 +29,7 @@ import type { ChunkMetadata } from "./chunking.ts";
 import type { TransformersJsChatModel } from "./chat-model.ts";
 
 /**
- * System prompt for Qwen2.5-1.5B-Instruct.
+ * System prompt for the on-device chat model (currently SmolLM2-1.7B).
  *
  * Three things this phrasing is specifically engineered for:
  *
@@ -54,9 +54,10 @@ import type { TransformersJsChatModel } from "./chat-model.ts";
 const SYSTEM_PROMPT = `You are answering questions about a PDF the user has uploaded. The user message will include relevant excerpts pulled from the document.
 
 Guidelines:
-- Base your answer on the supplied excerpts. You may use obvious structural cues (section headers, contact blocks, dates, repeated layouts) to infer what kind of document this is when asked.
-- Match the format to the question: a short prose answer for overview questions, a brief list when the user asks for items, tools, dates, or names.
-- Keep it concise — usually under 80 words.
+- Base your answer on the supplied excerpts.
+- When asked what the document is or what it's about, identify the document type from its structure. A name followed by a contact block, work experience, and skills sections is a résumé / CV. An executive summary, numbered sections, and a conclusion is a report. Line items with prices and a total is an invoice. State the type plainly ("This is a résumé for …", "This is a financial report on …") and then add one or two sentences of detail.
+- Match the format to the question: prose for overview questions, a brief list when the user asks for items, tools, names, or dates.
+- Keep it concise — usually under 100 words.
 - Cite page numbers like (page 4) when a specific fact comes from a specific page.
 - If the excerpts genuinely don't cover the question, say so in one sentence rather than guessing.`;
 
