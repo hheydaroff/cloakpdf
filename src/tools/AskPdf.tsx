@@ -342,10 +342,11 @@ function describeIndexProgress(progress: IndexingProgress | null): {
  *   - The visual frame creates a clear "this is a conversation"
  *     affordance vs. the plain document flow the page uses elsewhere.
  *
- * The height clamp `min(72svh, 720px)` gives the panel a generous
- * footprint on tall screens without exceeding what fits comfortably
- * on a 13" laptop. `min-h-[460px]` stops it collapsing on short
- * windows where a sub-300 px scroll area would feel cramped.
+ * Heights are responsive: on phones the panel caps at ~60 svh / 520 px
+ * so the composer (the primary interaction) stays above the fold even
+ * with the title block + file-info card stacked above. At `sm:` and up
+ * we relax to the original 72 svh / 720 px envelope where there's more
+ * viewport to spend on transcript history.
  */
 function ChatPanel({
   turns,
@@ -357,7 +358,7 @@ function ChatPanel({
   scrollAnchorRef: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
-    <div className="flex flex-col h-[min(72svh,720px)] min-h-115 rounded-2xl border border-slate-200 dark:border-dark-border bg-slate-50/70 dark:bg-dark-bg/60 overflow-hidden">
+    <div className="flex flex-col h-[min(58svh,520px)] min-h-80 sm:h-[min(72svh,720px)] sm:min-h-115 rounded-2xl border border-slate-200 dark:border-dark-border bg-slate-50/70 dark:bg-dark-bg/60 overflow-hidden">
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {turns.length === 0 ? (
           <EmptyChatHint />
@@ -383,8 +384,13 @@ function ChatPanel({
  * collapse to a hairline before the first question.
  */
 function EmptyChatHint() {
+  // On mobile the panel is short, so we top-anchor the hint (small
+  // top padding) — vertical-centring in a 520 px box leaves the hint
+  // floating in the middle of empty grey, which reads as "broken" on
+  // a phone. On `sm:` and up the panel is taller and centring looks
+  // intentional, so we flip back to `justify-center`.
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center px-6">
+    <div className="h-full flex flex-col items-center justify-start sm:justify-center text-center px-6 pt-10 sm:pt-0">
       <span
         aria-hidden="true"
         className="w-10 h-10 rounded-full flex items-center justify-center bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400 mb-3"
