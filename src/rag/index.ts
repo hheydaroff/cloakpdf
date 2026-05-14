@@ -146,8 +146,15 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
     // delegate the actual matmul to `Embeddings.embedDocuments`,
     // which handles batching internally, but report at the chunk
     // level so the user sees a moving bar.
+    //
+    // `BATCH = 16` is a deliberate tradeoff: 32 is marginally faster
+    // on throughput but a typical 4-page PDF chunks to ~30 pieces and
+    // would finish in a single batch — the user sees the bar stuck
+    // at 0 % for several seconds, then snap to 100 %. 16 gives at
+    // least two update points on small docs while keeping the per-
+    // batch overhead negligible.
     onIndexProgress?.({ kind: "embed", current: 0, total: chunks.length });
-    const BATCH = 32;
+    const BATCH = 16;
     const vectors: number[][] = [];
     for (let i = 0; i < chunks.length; i += BATCH) {
       const slice = chunks.slice(i, i + BATCH);
@@ -158,6 +165,12 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
         current: Math.min(i + BATCH, chunks.length),
         total: chunks.length,
       });
+      // Yield to a macrotask so React renders the progress update
+      // before the next batch's WASM forward pass starts. Without
+      // this the setState fires, the next batch synchronously
+      // continues, and the browser never gets a paint window — the
+      // bar visually freezes between updates.
+      await new Promise<void>((r) => setTimeout(r, 0));
     }
 
     vectorStore = new PackedVectorStore(embeddings);

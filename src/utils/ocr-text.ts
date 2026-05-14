@@ -99,6 +99,13 @@ export async function extractPdfText(
         page.cleanup();
       }
       options.onProgress?.({ phase: "text-layer", current: i, total: totalPages });
+      // Yield to a macrotask so React can flush the progress update
+      // before the next page's microtask-resolving await chain. Without
+      // this, pdf.js text-layer extraction (which often resolves in
+      // microtasks) and React's auto-batching collapse every page's
+      // progress event into a single render at the end — the bar
+      // appears to jump 0 → 100 % instead of advancing per page.
+      await new Promise<void>((r) => setTimeout(r, 0));
     }
 
     // ── Phase 2: OCR fallback ──────────────────────────────────
@@ -128,6 +135,11 @@ export async function extractPdfText(
             page.cleanup();
           }
           options.onProgress?.({ phase: "ocr", current: i + 1, total: ocrQueue.length });
+          // Same React-batching reason as the text-layer loop above;
+          // tesseract.recognize already yields plenty, but the
+          // post-callback setTimeout costs nothing and keeps the
+          // pattern uniform.
+          await new Promise<void>((r) => setTimeout(r, 0));
         }
       } finally {
         await worker.terminate();
