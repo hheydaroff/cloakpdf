@@ -64,6 +64,15 @@ export interface ChatGenerationOptions {
    */
   repetitionPenalty?: number;
   /**
+   * Bans the model from emitting any n-gram of this size that has
+   * already appeared in the output. Catches lexically-varied loops the
+   * repetition penalty misses (each surface form is technically
+   * distinct, so per-token penalties don't add up). 0 / undefined
+   * disables. Tune per-model in the adapter — see the comment on
+   * `TransformersJsChatModel`.
+   */
+  noRepeatNgramSize?: number;
+  /**
    * Fires for each decoded text fragment as the model generates. Use it
    * to stream tokens into a chat UI. The callback receives the *delta*
    * (only the newly generated piece), not the cumulative text.
@@ -125,6 +134,9 @@ export async function runChat(
     temperature: options.temperature ?? 0.6,
     top_p: options.topP ?? 0.9,
     repetition_penalty: options.repetitionPenalty ?? 1.1,
+    ...(options.noRepeatNgramSize && options.noRepeatNgramSize > 0
+      ? { no_repeat_ngram_size: options.noRepeatNgramSize }
+      : {}),
     ...(streamer ? { streamer } : {}),
   });
 

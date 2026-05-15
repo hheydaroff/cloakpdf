@@ -50,6 +50,34 @@ function bail(message: string): never {
   process.exit(1);
 }
 
+/**
+ * Returns the worst 4-gram repetition count in `text`, where a "4-gram"
+ * is four consecutive whitespace-separated words.
+ *
+ * Catches the SmolLM2-1.7B "lexical ramp" loop the line-level check
+ * misses: a single hallucinated paragraph in which each clause extends
+ * the previous one by a token ("Teachers' Development Network - Kenya
+ * - Africa - Asia - Europe - North America - South America …"). Each
+ * clause is technically a distinct line and a distinct surface form,
+ * so per-line dedup and `repetition_penalty` both let it through, but
+ * a fixed 4-gram window inside the rolling text repeats dozens of
+ * times. 4 is the smallest window that's specific enough to avoid
+ * common short phrases ("the document does not") tripping the alarm.
+ */
+function worstNgramRepeat(text: string, n = 4): number {
+  const words = text.toLowerCase().match(/\S+/g) ?? [];
+  if (words.length < n) return 0;
+  const counts = new Map<string, number>();
+  let worst = 0;
+  for (let i = 0; i <= words.length - n; i++) {
+    const gram = words.slice(i, i + n).join(" ");
+    const next = (counts.get(gram) ?? 0) + 1;
+    counts.set(gram, next);
+    if (next > worst) worst = next;
+  }
+  return worst;
+}
+
 if (!existsSync(FIXTURE_PATH)) {
   bail(
     `No sample PDF at ${FIXTURE_PATH}. See tests/fixtures/README.md — drop any short text-based PDF there as sample.pdf.`,
@@ -401,6 +429,10 @@ async function main() {
     if (warmWorst >= 5) {
       bail(`Warm-cache: assistant looped — same line ${warmWorst}× in the reply.`);
     }
+    const warmNgramWorst = worstNgramRepeat(warmReply);
+    if (warmNgramWorst >= 4) {
+      bail(`Warm-cache: assistant looped — same 4-word window ${warmNgramWorst}× in the reply.`);
+    }
     console.log("  ✓ warm-cache reply non-empty, no loop");
 
     // ── Verbatim extraction check ───────────────────────────────────
@@ -574,6 +606,10 @@ async function main() {
     const worstRepeat = counts.length === 0 ? 0 : Math.max(...counts);
     if (worstRepeat >= 5) {
       bail(`Assistant looped — same line repeated ${worstRepeat}× in the reply.`);
+    }
+    const ngramWorst = worstNgramRepeat(reply);
+    if (ngramWorst >= 4) {
+      bail(`Assistant looped — same 4-word window appeared ${ngramWorst}× in the reply.`);
     }
 
     console.log("✓ AI chat smoke test passed.");

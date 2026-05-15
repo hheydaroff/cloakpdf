@@ -13,8 +13,8 @@
  * waiting for the full response.
  */
 import {
-  SimpleChatModel,
   type BaseChatModelParams,
+  SimpleChatModel,
 } from "@langchain/core/language_models/chat_models";
 import {
   AIMessageChunk,
@@ -37,6 +37,8 @@ export interface TransformersJsChatModelOptions extends BaseChatModelParams {
   topP?: number;
   /** Repetition penalty. Default 1.1. */
   repetitionPenalty?: number;
+  /** Bans repeated n-grams of this size. 0 disables. Default 6. */
+  noRepeatNgramSize?: number;
 }
 
 export class TransformersJsChatModel extends SimpleChatModel {
@@ -45,6 +47,7 @@ export class TransformersJsChatModel extends SimpleChatModel {
   private temperature: number;
   private topP: number;
   private repetitionPenalty: number;
+  private noRepeatNgramSize: number;
 
   constructor(options: TransformersJsChatModelOptions) {
     super(options);
@@ -72,18 +75,26 @@ export class TransformersJsChatModel extends SimpleChatModel {
     //     restricted tool choices, restricted tool configurations,
     //     restricted tool implementations …") that the rep penalty
     //     can't catch because each surface form is distinct.
-    //   - 0.2 / 0.85 / 256 / 1.15 (current) → capping new tokens at
-    //     256 physically truncates both failure modes. A correct
-    //     list of the résumé's actual tools fits comfortably; a
-    //     fabricated 50-item list runs into the cap. The trade-off
-    //     is occasional mid-sentence truncation on legitimate long
-    //     overview answers — acceptable because the streaming UI
-    //     surfaces the partial answer immediately and the user can
-    //     ask a follow-up to continue.
+    //   - 0.2 / 0.85 / 256 / 1.15 (intermediate) → capping new tokens
+    //     at 256 truncates the worst of (a) and (b). A correct list
+    //     of the résumé's actual tools fits comfortably; a fabricated
+    //     50-item list runs into the cap.
+    //   - 0.2 / 0.85 / 256 / 1.15 + `no_repeat_ngram_size: 6`
+    //     (current) → e2e still caught a lexical "ramp" loop on the
+    //     overview question ("Teachers' Development Network - Kenya
+    //     - Africa - Asia - Europe - North America - South America
+    //     …") where each iteration extends the previous by one token
+    //     so the repetition penalty never fires. Re-add the n-gram
+    //     ban that the 360M variant carried, but at size 6 instead
+    //     of 4 — gentle enough that common short phrases ("the
+    //     document doesn't mention", "Sumit Sahoo is") can still
+    //     recur naturally, strict enough that an 8+ token prefix-
+    //     extension loop is broken immediately.
     this.maxNewTokens = options.maxNewTokens ?? 256;
     this.temperature = options.temperature ?? 0.2;
     this.topP = options.topP ?? 0.85;
     this.repetitionPenalty = options.repetitionPenalty ?? 1.15;
+    this.noRepeatNgramSize = options.noRepeatNgramSize ?? 6;
   }
 
   _llmType(): string {
@@ -101,6 +112,7 @@ export class TransformersJsChatModel extends SimpleChatModel {
       temperature: this.temperature,
       topP: this.topP,
       repetitionPenalty: this.repetitionPenalty,
+      noRepeatNgramSize: this.noRepeatNgramSize,
     });
   }
 
@@ -154,6 +166,7 @@ export class TransformersJsChatModel extends SimpleChatModel {
       temperature: this.temperature,
       topP: this.topP,
       repetitionPenalty: this.repetitionPenalty,
+      noRepeatNgramSize: this.noRepeatNgramSize,
       onToken: (delta) => push(delta),
     })
       .then(() => {
