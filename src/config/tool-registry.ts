@@ -360,16 +360,18 @@ export const tools: Tool[] = [
     beta: true,
     // Two models load together: SmolLM2-1.7B (~1 GB / ~2.5 GB peak
     // RAM) + EmbeddingGemma 300M (~197 MB / ~300 MB peak RAM). With
-    // OS + browser + tab overhead the practical floor is ~16 GB
-    // desktop / ~12 GB phones; lower-RAM devices may swap or crash
-    // the tab during inference. The mobile-tier override in
-    // ai-models.ts swaps SmolLM2 for the 360M variant on devices
-    // with ≤ 4 GB total RAM — so the 12 GB figure is the floor for
-    // a smooth experience on the full-tier models, not a hard cutoff.
-    requirements: {
-      desktop: "Best on devices with ≥ 16 GB RAM",
-      mobile: "Best on phones with ≥ 12 GB RAM",
-    },
+    // OS + browser + tab overhead the practical floor is ~16 GB on
+    // a desktop or laptop. The `desktopOnly` flag below hides the
+    // tool on mobile entirely — phone WebGPU drivers reliably lose
+    // the device mid-inference ("Failed to execute 'mapAsync' on
+    // 'GPUBuffer': [Device] is lost.") and iOS just runs out of
+    // memory and crashes the tab. We tried a 360 M mobile-tier
+    // override and a ≥ 12 GB RAM hint, but neither was enough to
+    // make the experience reliable — better to set the boundary
+    // honestly than to ship a feature that crashes the user's
+    // browser.
+    requirements: "Best on devices with ≥ 16 GB RAM",
+    desktopOnly: true,
   },
 ];
 

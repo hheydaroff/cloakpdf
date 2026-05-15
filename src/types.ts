@@ -59,23 +59,23 @@ export interface Tool {
    */
   beta?: boolean;
   /**
-   * Device-specific requirement notes shown beneath the description
-   * on the tool card and as a callout inside the tool. Use for tools
-   * whose footprint is meaningfully heavier than the rest of the
-   * suite (e.g. on-device AI tools that load 1 GB+ of weights into
-   * RAM) so users self-select before clicking through.
-   *
-   * Both strings are required when present — the consumer picks the
-   * one that matches the current device via `isMobileDevice()`. We
-   * never want to show *both* in the same place since they describe
-   * the same constraint at different floors.
+   * Requirement note shown beneath the description on the tool card
+   * and as a callout inside the tool. Use for tools whose footprint
+   * is meaningfully heavier than the rest of the suite (e.g. on-
+   * device AI tools that load 1 GB+ of weights into RAM) so users
+   * self-select before clicking through.
    */
-  requirements?: {
-    /** Shown on desktops / laptops / tablets in landscape. */
-    desktop: string;
-    /** Shown on phones (UA-string match in `isMobileDevice()`). */
-    mobile: string;
-  };
+  requirements?: string;
+  /**
+   * Hard-gate the tool to non-mobile devices. When `true` the home-
+   * screen card is hidden on mobile and direct-routing to the tool
+   * shows a friendly "desktop only" placeholder instead of mounting
+   * the tool. Reserved for tools that genuinely don't work on phone
+   * GPUs / RAM ceilings — e.g. the on-device AI tools, where
+   * WebGPU device-lost errors and OOM tab crashes are the dominant
+   * mobile experience.
+   */
+  desktopOnly?: boolean;
 }
 
 /** Position of page numbers on the page. */

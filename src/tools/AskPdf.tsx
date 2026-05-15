@@ -31,7 +31,6 @@ import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useRagModels } from "../hooks/useRagModels.ts";
 import { createRagSession, type IndexingProgress, type RagSession } from "../rag/index.ts";
-import { isMobileDevice } from "../utils/device-memory.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
 
 interface ChatTurn {
@@ -185,19 +184,14 @@ export default function AskPdf() {
   //     desktop reports the same value as an 8 GB one — we'd hide
   //     the hint on devices we can't actually verify.
   //   - Firefox / Safari don't ship the API at all (returns `null`).
-  //   - The mobile UA-string match is coarse.
+  //
   // The detected RAM line still lives in `AiModelDetailsDialog` for
   // users who want to inspect what we read; this surface just gives
-  // every user the recommendation up-front.
-  //
-  // Copy still adapts to phone vs desktop via the UA-string check so
-  // the recommended floor matches the device class.
+  // every user the recommendation up-front. Mobile users never reach
+  // this code — `App.tsx` short-circuits to a "desktop only" view
+  // when `tool.desktopOnly` and `isMobileDevice()` both hold.
   const askPdfTool = findTool("ask-pdf");
-  const ramRequirement = askPdfTool?.requirements
-    ? isMobileDevice()
-      ? askPdfTool.requirements.mobile
-      : askPdfTool.requirements.desktop
-    : null;
+  const ramRequirement = askPdfTool?.requirements ?? null;
   const showRamNote = ramRequirement !== null && rag.status !== "ready";
 
   return (

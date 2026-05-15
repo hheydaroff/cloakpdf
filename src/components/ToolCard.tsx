@@ -15,7 +15,6 @@ import { ArrowRight, MemoryStick } from "lucide-react";
 import { memo } from "react";
 import { useSpotlightGlow } from "../hooks/useSpotlightGlow.ts";
 import type { Tool, ToolId } from "../types.ts";
-import { isMobileDevice } from "../utils/device-memory.ts";
 
 const SPOTLIGHT_GLOW = "rgba(37,99,235,0.16)";
 
@@ -66,17 +65,11 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
 
         {tool.requirements && (
           // Subtle hint line — calmer than the description but still
-          // visible. Device-aware: phones see the mobile RAM floor,
-          // everything else sees the desktop floor. Same field drives
-          // the in-tool callout, so users see the *same* number on
-          // the card as inside the tool.
-          //
-          // Read at render time rather than via state. The UA string
-          // doesn't change mid-session, and `memo` re-runs this on
-          // every render anyway — no real cost.
+          // visible. Same field drives the in-tool callout, so users
+          // see the *same* number on the card as inside the tool.
           <p className="mt-0.5 inline-flex items-start gap-1.5 text-tag font-medium text-slate-400 dark:text-dark-text-muted leading-snug">
             <MemoryStick className="w-3 h-3 mt-0.5 shrink-0" aria-hidden="true" />
-            <span>{isMobileDevice() ? tool.requirements.mobile : tool.requirements.desktop}</span>
+            <span>{tool.requirements}</span>
           </p>
         )}
 

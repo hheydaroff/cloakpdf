@@ -9,14 +9,13 @@
  * use and cached in the browser's CacheStorage so repeat visits work
  * offline.
  *
- * Two flavours per id are possible — a default ("desktop-tier") in
- * `AI_MODELS` and an optional smaller variant in `MOBILE_OVERRIDES`.
- * Call sites should always go through {@link getModelInfo} rather than
- * read `AI_MODELS` directly so the right variant is picked for the
- * user's device.
+ * The Ask PDF tool is gated to non-mobile devices (see
+ * `tool.desktopOnly` in `tool-registry.ts`), so this registry only
+ * carries the desktop-tier models — no mobile-fallback variants.
+ * Call sites should go through {@link getModelInfo} rather than read
+ * `AI_MODELS` directly in case we add per-feature variants later.
  */
 import type { PipelineType } from "@huggingface/transformers";
-import { getDeviceMemoryGb, isMobileDevice } from "./device-memory.ts";
 
 /** Stable id used in code to reference a model. */
 export type AiModelId = "chat" | "embed";
@@ -184,57 +183,13 @@ export const AI_MODELS: Record<AiModelId, AiModelInfo> = {
 };
 
 /**
- * Smaller variants used on memory-constrained devices (phones / tablets
- * with ≤ 4 GB total RAM). Only the chat model gets a swap today — the
- * embedder is already ~33 MB so there's nothing meaningful to swap to.
- *
- * Why these specific overrides:
- *   - SmolLM2-360M shares the prompt template, tokenizer, and decoding
- *     conventions of the 1.7 B, so the SYSTEM_PROMPT and ai-tasks.ts
- *     defaults written for the desktop model port cleanly. The 360 M's
- *     loop pathology on long answers is largely tamed now that the
- *     retriever pre-trims context with bge-small + RRF.
- */
-const MOBILE_OVERRIDES: Partial<Record<AiModelId, AiModelInfo>> = {
-  chat: {
-    id: "chat",
-    displayName: "SmolLM2 (360M, instruct)",
-    repo: "HuggingFaceTB/SmolLM2-360M-Instruct",
-    task: "text-generation",
-    approxSizeBytes: 250 * 1024 * 1024,
-    approxPeakRamBytes: 800 * 1024 * 1024,
-    description:
-      "Hugging Face's pocket-sized chat model. Loaded automatically on phones and other low-RAM devices where the 1.7 B variant won't fit.",
-    bestFor: "Phones, tablets, and laptops with < 4 GB free RAM.",
-    license: "Apache 2.0",
-    modelUrl: "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct",
-    pipelineOptions: { dtype: "q4f16" },
-  },
-};
-
-/**
- * Pick the right model variant for the current device. Falls through
- * to `AI_MODELS[id]` whenever there's no smaller override or the
- * heuristics decide the device has the headroom for the default.
- *
- * Heuristics (cheapest first):
- *   1. `navigator.deviceMemory` is the cleanest signal. Chrome / Edge /
- *      Opera return a quantised GB number; 4 GB and below routes to the
- *      mobile-tier model. Desktops with 8+ GB stay on the default.
- *   2. When the browser doesn't expose `deviceMemory` (Firefox, Safari),
- *      the UA-string `isMobileDevice()` check kicks in — phones get the
- *      smaller model; laptops/desktops keep the default.
+ * Look up a model's metadata by id. Thin wrapper over {@link AI_MODELS}
+ * — kept as a function so future per-feature variant logic (e.g.
+ * device-specific dtype selection) has one place to land without
+ * touching every call site.
  */
 export function getModelInfo(id: AiModelId): AiModelInfo {
-  const fallback = MOBILE_OVERRIDES[id];
-  if (fallback && shouldUseMobileFallback()) return fallback;
   return AI_MODELS[id];
-}
-
-function shouldUseMobileFallback(): boolean {
-  const gb = getDeviceMemoryGb();
-  if (gb !== null) return gb <= 4;
-  return isMobileDevice();
 }
 
 /** Format a byte count as e.g. "≈ 28 MB" for the consent dialog. */

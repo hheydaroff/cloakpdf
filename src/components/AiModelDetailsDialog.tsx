@@ -25,7 +25,7 @@ import { MemoryStick, ShieldCheck, X } from "lucide-react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { type AiModelInfo, formatApproxSize } from "../utils/ai-models.ts";
-import { getDeviceMemoryGb, isMobileDevice } from "../utils/device-memory.ts";
+import { getDeviceMemoryGb } from "../utils/device-memory.ts";
 import { ModelCard } from "./ModelCard.tsx";
 
 interface AiModelDetailsDialogProps {
@@ -153,12 +153,13 @@ export function AiModelDetailsDialog({ open, onClose, models, roles }: AiModelDe
  *   - Firefox / Safari don't expose `navigator.deviceMemory` at all;
  *     the API returns `null` and we say so explicitly rather than
  *     guessing.
- *   - The mobile flag is a UA-string sniff — coarse but useful for
- *     the "phones tend to be tight on memory" framing.
+ *
+ * The dialog only renders on desktop — the Ask PDF tool is gated to
+ * non-mobile devices upstream (see `tool.desktopOnly` in
+ * `tool-registry.ts`), so we don't need a phone-specific branch here.
  */
 function DeviceMemoryLine({ totalBytes }: { totalBytes: number }) {
   const gb = getDeviceMemoryGb();
-  const mobile = isMobileDevice();
   const totalGb = totalBytes / (1024 * 1024 * 1024);
 
   // Use the same threshold as the in-tool RAM hint in AskPdf so the two
@@ -167,7 +168,7 @@ function DeviceMemoryLine({ totalBytes }: { totalBytes: number }) {
 
   let detected: string;
   if (gb === null) {
-    detected = mobile ? "Mobile browser (RAM not reported)" : "RAM not reported by your browser";
+    detected = "RAM not reported by your browser";
   } else if (gb >= 8) {
     // Chrome caps the reading at 8 GB for privacy — be explicit so
     // users with 16/32 GB machines don't think we mis-read them.
@@ -189,7 +190,7 @@ function DeviceMemoryLine({ totalBytes }: { totalBytes: number }) {
         <p className="font-medium">Detected on your device: {detected}</p>
         <p className="opacity-80 mt-0.5">
           These models load about {totalGb.toFixed(1)} GB into memory at the same time. We recommend
-          ≥ 16 GB of RAM on a desktop, ≥ 12 GB on a phone, for smooth performance.
+          at least 16 GB of RAM for smooth performance.
         </p>
       </div>
     </div>
