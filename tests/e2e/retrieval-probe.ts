@@ -59,8 +59,8 @@ const QUESTIONS = [
   // "resume" (any spelling) so future model swaps don't regress the
   // structural-inference rule silently.
   "What kind of document is this?",
-  // Extraction / list query — tests that bge-base + RRF surface the
-  // skills/tools chunks at sufficient ranks. Reply should include
+  // Extraction / list query — tests that the embedder + RRF surface
+  // the skills/tools chunks at sufficient ranks. Reply should include
   // verbatim tool names from `p1-1` and `p3-16` (LangGraph, VS Code,
   // etc.), not paraphrased categories.
   "What technologies or tools are mentioned in the document?",

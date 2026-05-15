@@ -1,7 +1,7 @@
 /**
  * Inline gate shown in place of an AI tool's controls until the model
- * is ready. Renders a model card + "Download model" CTA when the
- * pipeline hasn't been loaded yet; otherwise renders `children`.
+ * is ready. Renders a compact model summary + "Download model" CTA when
+ * the pipeline hasn't been loaded yet; otherwise renders `children`.
  *
  * Use this to ensure the user *opts in* to a model download before the
  * tool's main UI becomes interactive — the alternative (popping the
@@ -15,18 +15,39 @@
  * The progress, error, and confirmation UI continue to live in
  * {@link AiConsentDialog} (rendered by the tool) — the gate is just
  * the entry point.
+ *
+ * **Two-model support.** Ask PDF needs a chat LLM *and* an embedder.
+ * Pass both via `models`; the gate shows the aggregate footprint and
+ * a "View details" link that opens {@link AiModelDetailsDialog} for
+ * the full per-model breakdown. The CTA still drives `ai.ensureReady()`
+ * — the *primary* hook is expected to be the rollup (e.g. `rag.chat`)
+ * whose `ensureReady` kicks off both downloads (see useRagModels).
  */
 import { Cpu, Loader2 } from "lucide-react";
-import { useEffect, useRef, type ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { UseAiModelReturn } from "../hooks/useAiModel.ts";
+import { type AiModelInfo, formatApproxSize } from "../utils/ai-models.ts";
 import { isModelMarkedReady } from "../utils/ai-runtime.ts";
-import { formatFileSize } from "../utils/file-helpers.ts";
+import { AiModelDetailsDialog } from "./AiModelDetailsDialog.tsx";
 
 interface AiModelGateProps {
   ai: UseAiModelReturn;
+  /**
+   * Full model roster to surface in the details modal — typically
+   * `[chat.info, embed.info]` for a RAG tool. When omitted falls back
+   * to `[ai.info]` and the details link still works (single-model
+   * variant of the same modal).
+   */
+  models?: AiModelInfo[];
+  /**
+   * Optional role labels matching `models` by index, e.g.
+   * `["chat", "retrieval"]`. Surfaces *what* each model does in the
+   * details modal.
+   */
+  roles?: string[];
   /** Headline shown on the gate card. */
   title?: string;
-  /** Lead-in sentence before the model name. */
+  /** Lead-in sentence. Aggregate footprint and details link are appended. */
   blurb?: string;
   /** Tool controls — rendered once the model is ready. */
   children: ReactNode;
@@ -34,10 +55,14 @@ interface AiModelGateProps {
 
 export function AiModelGate({
   ai,
+  models,
+  roles,
   title = "Download AI model to continue",
-  blurb = "This tool runs on-device. The model file is downloaded once and cached in your browser; your PDFs are never uploaded.",
+  blurb = "Runs entirely in your browser; your PDFs are never uploaded.",
   children,
 }: AiModelGateProps) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   // Returning-visitor auto-load. Triggers exactly once per mount when
   // the localStorage hint says the model has been downloaded before.
   // First-time visitors stay on the gate card until they click Download.
@@ -63,48 +88,67 @@ export function AiModelGate({
   const loading =
     ai.status === "downloading" || ai.status === "loading" || ai.status === "awaiting-consent";
 
+  const modelList = models && models.length > 0 ? models : [ai.info];
+  const totalBytes = modelList.reduce((sum, m) => sum + m.approxSizeBytes, 0);
+  const summary =
+    modelList.length > 1
+      ? `${modelList.length} small models load together — about ${formatApproxSize(totalBytes)} total.`
+      : `${ai.info.displayName} (~${formatApproxSize(ai.info.approxSizeBytes)}).`;
+
   return (
-    <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-5">
-      <div className="flex items-start gap-3">
-        <span
-          aria-hidden="true"
-          className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400"
-        >
-          <Cpu className="w-4 h-4" />
-        </span>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-800 dark:text-dark-text">{title}</p>
-          <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1 leading-relaxed">
-            {blurb}{" "}
-            <span className="font-medium text-slate-700 dark:text-dark-text">
-              {ai.info.displayName}
-            </span>{" "}
-            (~{formatFileSize(ai.info.approxSizeBytes)}).
-          </p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => {
-          ai.ensureReady().catch(() => {
-            /* dialog shows the error */
-          });
-        }}
-        disabled={loading}
-        className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {loading ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading model…
-          </>
-        ) : (
-          <>
+    <>
+      <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-5">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400"
+          >
             <Cpu className="w-4 h-4" />
-            Download model
-          </>
-        )}
-      </button>
-    </div>
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-slate-800 dark:text-dark-text">{title}</p>
+            <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1 leading-relaxed">
+              {summary} {blurb}{" "}
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(true)}
+                className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium underline-offset-2 hover:underline"
+              >
+                View details
+              </button>
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            ai.ensureReady().catch(() => {
+              /* dialog shows the error */
+            });
+          }}
+          disabled={loading}
+          className="mt-4 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading model…
+            </>
+          ) : (
+            <>
+              <Cpu className="w-4 h-4" />
+              Download model
+            </>
+          )}
+        </button>
+      </div>
+
+      <AiModelDetailsDialog
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        models={modelList}
+        roles={roles}
+      />
+    </>
   );
 }

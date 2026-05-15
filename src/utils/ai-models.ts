@@ -108,24 +108,62 @@ export const AI_MODELS: Record<AiModelId, AiModelInfo> = {
   },
   embed: {
     id: "embed",
-    displayName: "bge-base-en-v1.5",
-    repo: "Xenova/bge-base-en-v1.5",
+    displayName: "EmbeddingGemma (300M)",
+    repo: "onnx-community/embeddinggemma-300m-ONNX",
     task: "feature-extraction",
-    // ~140 MB on disk (q8), ~450 MB peak RAM. 4× the size of
-    // bge-small but the 768-dim vectors give noticeably stronger
-    // semantic match — bge-small was ranking the right chunk at #4
-    // for the "what is this about?" query (the doc header chunk),
-    // landing past the fused top-K. bge-base is one of the strongest
-    // sub-200 MB embedders on MTEB and is what we'll feed every
-    // device until we add a mobile-specific override.
-    approxSizeBytes: 140 * 1024 * 1024,
-    approxPeakRamBytes: 450 * 1024 * 1024,
+    // ~309 MB on disk (int8 quantized weights), ~400 MB peak RAM.
+    // 2× the prior bge-base-en-v1.5 (~140 MB) on disk but the
+    // retrieval quality jump from EmbeddingGemma's asymmetric
+    // task-prefix training is meaningful, and runtime RAM is
+    // comparable thanks to int8 weights vs bge's fp16. 308M params
+    // vs bge-base's 109M.
+    //
+    // **Why we swapped from bge-base**:
+    //   - EmbeddingGemma is trained for asymmetric retrieval with
+    //     task-specific prompt prefixes ("title: none | text: ..."
+    //     for docs vs "task: search result | query: ..." for
+    //     queries). bge-base used the same prefix on both sides.
+    //   - Stronger on MTEB retrieval at this size class, and
+    //     multilingual out of the box (100+ langs) — covers non-
+    //     English PDFs without a model swap.
+    //   - Still 768-dim output (with Matryoshka truncation to 512 /
+    //     256 / 128 available; we currently use the full 768).
+    //
+    // **Why `dtype: "q8"` + `device: "wasm"`** (and not q4f16 +
+    // webgpu like the chat model, nor q4):
+    //
+    //   - q4f16: ships LayerNorm in fp16. onnxruntime-web's WebGPU
+    //     shader for that op fails to compile (`Invalid ShaderModule
+    //     "LayerNorm"`). Verified failing on Chrome / macOS.
+    //   - q4 (197 MB): uses `GatherBlockQuantized` for the embedding
+    //     table. onnxruntime-web's WASM backend doesn't implement
+    //     that op — pipeline init throws (`Could not find an
+    //     implementation for GatherBlockQuantized(1) … Gather_Q4`).
+    //     The `model_no_gather_q4` variant in the repo exists to
+    //     work around this but Transformers.js' `dtype` option
+    //     doesn't expose it; we'd have to override `model_file_name`
+    //     directly. Not worth the extra plumbing for 112 MB.
+    //   - q8 (this): int8-quantized weights with fp32 activations.
+    //     The most universally supported variant in onnxruntime-web
+    //     — works on both WebGPU and WASM with no exotic ops. Pays
+    //     ~112 MB in download size relative to q4.
+    //   - Pinning to WASM sidesteps any future GPU-shader risk on
+    //     the smaller of the two models. Embedding a few hundred
+    //     chunks per PDF + one query per turn isn't throughput-
+    //     bound; the chat model (SmolLM2-1.7B) gets exclusive use
+    //     of WebGPU where it actually matters.
+    //
+    // Prefix handling lives in `src/rag/embeddings.ts` — swapping
+    // back to a symmetric embedder (e.g. bge) means dropping that
+    // prefix layer.
+    approxSizeBytes: 309 * 1024 * 1024,
+    approxPeakRamBytes: 400 * 1024 * 1024,
     description:
-      "BAAI's mid-size sentence-embedding model. Turns PDF chunks and your question into 768-dim vectors so we can retrieve the right pages before asking the chat model — a clear step up over bge-small on PDFs with overlapping section topics.",
-    bestFor: "Semantic retrieval over English PDFs.",
-    license: "MIT",
-    modelUrl: "https://huggingface.co/Xenova/bge-base-en-v1.5",
-    pipelineOptions: { dtype: "q8" },
+      "Google's on-device embedding model from the Gemma family. Trained for asymmetric retrieval — applies task-specific prompts to PDF chunks vs your question, then matches them in a 768-dim vector space so the chat model gets the right pages. Multilingual (100+ langs).",
+    bestFor: "Semantic retrieval over PDFs in any of 100+ languages.",
+    license: "Gemma Terms of Use",
+    modelUrl: "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX",
+    pipelineOptions: { dtype: "q8", device: "wasm" },
   },
 };
 

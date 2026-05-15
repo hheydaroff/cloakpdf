@@ -7,7 +7,7 @@
  * Returns:
  *
  *   - `chat`   — `useAiModel` state for SmolLM2.
- *   - `embed`  — `useAiModel` state for MiniLM.
+ *   - `embed`  — `useAiModel` state for the embedding model.
  *   - `status` — coarse rollup ("idle" / "downloading" / "ready" /
  *     "error" / "awaiting-consent") so consumers don't have to combine
  *     the two state machines themselves.

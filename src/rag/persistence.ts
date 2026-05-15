@@ -30,7 +30,13 @@ const DB_NAME = "cloakpdf-rag";
 //       index as "CONTACT", which changes both the chunk text and the
 //       embedding. v3 caches still hold the un-collapsed text, so we
 //       drop them.
-const DB_VERSION = 4;
+//   v5: switched to EmbeddingGemma 300M (onnx-community/
+//       embeddinggemma-300m-ONNX). Still 768-dim so the packed-vector
+//       struct survives, but the embedding space is incompatible with
+//       bge-base's vectors AND the chunks are now prefixed
+//       ("title: none | text: ...") before embedding — so cached v4
+//       vectors are stale on every axis.
+const DB_VERSION = 5;
 const STORE_NAME = "index-cache";
 const MAX_CACHED = 10;
 

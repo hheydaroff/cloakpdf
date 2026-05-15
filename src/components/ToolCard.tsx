@@ -11,10 +11,11 @@
  * when unrelated state (e.g. the search query) changes.
  */
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, MemoryStick } from "lucide-react";
 import { memo } from "react";
 import { useSpotlightGlow } from "../hooks/useSpotlightGlow.ts";
 import type { Tool, ToolId } from "../types.ts";
+import { isMobileDevice } from "../utils/device-memory.ts";
 
 const SPOTLIGHT_GLOW = "rgba(37,99,235,0.16)";
 
@@ -62,6 +63,22 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
         <p className="text-card-desc leading-normal text-slate-500 dark:text-dark-text-muted">
           {tool.description}
         </p>
+
+        {tool.requirements && (
+          // Subtle hint line — calmer than the description but still
+          // visible. Device-aware: phones see the mobile RAM floor,
+          // everything else sees the desktop floor. Same field drives
+          // the in-tool callout, so users see the *same* number on
+          // the card as inside the tool.
+          //
+          // Read at render time rather than via state. The UA string
+          // doesn't change mid-session, and `memo` re-runs this on
+          // every render anyway — no real cost.
+          <p className="mt-0.5 inline-flex items-start gap-1.5 text-tag font-medium text-slate-400 dark:text-dark-text-muted leading-snug">
+            <MemoryStick className="w-3 h-3 mt-0.5 shrink-0" aria-hidden="true" />
+            <span>{isMobileDevice() ? tool.requirements.mobile : tool.requirements.desktop}</span>
+          </p>
+        )}
 
         <ArrowRight
           className="absolute bottom-1 right-1 sm:bottom-0 sm:right-0 w-4 h-4 text-slate-400 dark:text-dark-text-muted opacity-0 -translate-x-1 transition-[transform,opacity,color] duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-active:opacity-100 group-active:translate-x-0 group-active:text-primary-600 dark:group-active:text-primary-400"

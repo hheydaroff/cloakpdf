@@ -14,7 +14,7 @@
  * IndexedDB caching is keyed by SHA-256 of the PDF bytes — re-opening
  * the same file skips extraction, chunking, and embedding.
  */
-import { Document } from "@langchain/core/documents";
+import type { Document } from "@langchain/core/documents";
 import type { AiPipeline } from "../utils/ai-runtime.ts";
 import { TransformersJsChatModel } from "./chat-model.ts";
 import { type ChunkMetadata, chunkDocuments } from "./chunking.ts";
@@ -147,14 +147,16 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
     // which handles batching internally, but report at the chunk
     // level so the user sees a moving bar.
     //
-    // `BATCH = 16` is a deliberate tradeoff: 32 is marginally faster
-    // on throughput but a typical 4-page PDF chunks to ~30 pieces and
-    // would finish in a single batch — the user sees the bar stuck
-    // at 0 % for several seconds, then snap to 100 %. 16 gives at
-    // least two update points on small docs while keeping the per-
-    // batch overhead negligible.
+    // `BATCH = 4` is a deliberate tradeoff: bigger batches are
+    // marginally faster on throughput but a typical 4-page PDF
+    // chunks to ~10 pieces, which finishes in 1–2 batches under
+    // BATCH=16 — the user sees the bar stuck at 0 % for several
+    // seconds, then snap to 100 %. The WASM forward pass against
+    // EmbeddingGemma int8 takes seconds *per batch* regardless of
+    // size, so dropping to 4 trades a small throughput penalty for
+    // a visibly advancing progress bar across small-to-medium PDFs.
     onIndexProgress?.({ kind: "embed", current: 0, total: chunks.length });
-    const BATCH = 16;
+    const BATCH = 4;
     const vectors: number[][] = [];
     for (let i = 0; i < chunks.length; i += BATCH) {
       const slice = chunks.slice(i, i + BATCH);

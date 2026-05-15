@@ -4,30 +4,51 @@
  * The dialog cycles through three visual states driven by the `status`
  * prop from `useAiModel`:
  *
- *   - `awaiting-consent` — full model card with size, licence, model
- *     URL and a primary "Download model" CTA. User must explicitly
- *     opt in before any bytes are fetched.
+ *   - `awaiting-consent` — full model card(s) with size, licence, and
+ *     Hugging Face link plus a primary "Download model" CTA. User must
+ *     explicitly opt in before any bytes are fetched.
  *   - `downloading` — determinate progress bar, current file name,
  *     loaded/total byte counts. The dialog refuses to close on backdrop
  *     click while in this state so the user can't accidentally lose
  *     visibility of the download (Cancel button is the explicit exit).
  *   - `error` — error message with Retry / Cancel buttons.
  *
- * Styling mirrors `ConfirmDialog` — glass-blur backdrop, scale-in
- * card, app palette tokens.
+ * **Multi-model support.** Pass `secondaryInfo` (e.g. the embedder in a
+ * RAG tool) to render a second card in the consent body and a combined
+ * size estimate in the download body. The model cards themselves come
+ * from the shared {@link ModelCard} component used by
+ * {@link AiModelDetailsDialog}, so the two dialogs read as one system.
+ *
+ * **Visual pattern.** Mirrors `ToolPickerModal`'s translucent layout —
+ * one painting layer for backdrop + close-button, sheet rises in via
+ * `animate-slide-up-in`, `bg-white/85` for the see-through feel.
+ * Bottom-sheet on mobile / centered card on desktop.
  */
-import { AlertCircle, Cpu, ExternalLink, Loader2, ShieldCheck, X } from "lucide-react";
+import { AlertCircle, Cpu, Loader2, ShieldCheck, X } from "lucide-react";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { AiModelStatus } from "../hooks/useAiModel.ts";
-import type { AiModelInfo } from "../utils/ai-models.ts";
+import { type AiModelInfo, formatApproxSize } from "../utils/ai-models.ts";
 import type { AiProgress } from "../utils/ai-runtime.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
+import { ModelCard } from "./ModelCard.tsx";
 
 interface AiConsentDialogProps {
   /** When `false` the dialog is unmounted entirely. */
   open: boolean;
+  /** Primary model — drives the headline when only one model is shown. */
   info: AiModelInfo;
+  /**
+   * Optional second model. When provided the consent body renders both
+   * as separate cards and the headline / copy adapt to the plural case.
+   */
+  secondaryInfo?: AiModelInfo;
+  /**
+   * Optional role labels matching `[info, secondaryInfo]`, e.g.
+   * `["chat", "retrieval"]`. Surface a small pill in each card so users
+   * know which model handles which job.
+   */
+  roles?: [string, string];
   status: AiModelStatus;
   progress: AiProgress | null;
   error: string | null;
@@ -42,6 +63,8 @@ interface AiConsentDialogProps {
 export function AiConsentDialog({
   open,
   info,
+  secondaryInfo,
+  roles,
   status,
   progress,
   error,
@@ -73,45 +96,62 @@ export function AiConsentDialog({
   // is mid-flight — an accidental click is a poor way to lose
   // visibility of either kind of progress.
   const dismissOnBackdrop = status !== "downloading" && status !== "loading";
+  const disableClose = !dismissOnBackdrop;
+
+  const models = secondaryInfo ? [info, secondaryInfo] : [info];
+  const totalBytes = models.reduce((sum, m) => sum + m.approxSizeBytes, 0);
 
   return createPortal(
     <div
-      className="fixed inset-0 z-200 flex items-center justify-center p-4 animate-fade-in overscroll-contain"
+      className="fixed inset-0 z-200 flex items-end sm:items-center justify-center sm:px-3 md:px-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="ai-consent-title"
+      style={{
+        // One painting layer for dim + blur — same pattern as
+        // ToolPickerModal so iOS Safari's hit-testing stays simple.
+        background: "color-mix(in oklab, rgb(15 23 42) 30%, transparent)",
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
+      }}
     >
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-slate-900/30 dark:bg-black/50"
-        style={{
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
-        }}
-      />
       <button
         type="button"
         onClick={dismissOnBackdrop ? onCancel : undefined}
         aria-label="Close"
         tabIndex={-1}
-        className="absolute inset-0 bg-transparent border-0 cursor-default"
+        className="absolute inset-0"
+        style={{ background: "transparent" }}
       />
 
-      <div className="relative w-full max-w-lg rounded-2xl overflow-hidden border border-slate-200/80 dark:border-dark-border bg-white/95 dark:bg-dark-surface/95 backdrop-blur-xl shadow-2xl animate-scale-in">
+      <div className="relative flex flex-col w-full sm:w-[min(560px,100%)] max-h-[88svh] sm:max-h-[min(720px,calc(100svh-64px))] overflow-hidden rounded-t-2xl sm:rounded-2xl border border-slate-200/80 dark:border-dark-border bg-white/85 dark:bg-dark-surface/85 backdrop-blur-xl shadow-2xl animate-slide-up-in overscroll-contain">
+        {/* Mobile drag handle — purely visual, no drag-to-dismiss
+            since the download flow has its own explicit Cancel CTA. */}
+        <div aria-hidden="true" className="grid place-items-center pt-2.5 pb-1 sm:hidden">
+          <span className="w-11 h-1 rounded-full bg-slate-300 dark:bg-dark-border" />
+        </div>
+
         <DialogHeader
-          info={info}
+          primary={info}
+          models={models}
           status={status}
           onCancel={onCancel}
-          disableClose={status === "downloading" || status === "loading"}
+          disableClose={disableClose}
         />
 
-        <div className="px-6 pb-2">
+        <div className="overflow-y-auto px-4 md:px-7 py-4 md:py-5 thin-scrollbar">
           {status === "awaiting-consent" || status === "idle" ? (
-            <ConsentBody info={info} />
+            <ConsentBody models={models} roles={roles} />
           ) : status === "downloading" || status === "loading" ? (
-            <DownloadBody info={info} progress={progress} warm={status === "loading"} />
+            <DownloadBody
+              primary={info}
+              models={models}
+              totalBytes={totalBytes}
+              progress={progress}
+              warm={status === "loading"}
+            />
           ) : status === "error" ? (
-            <ErrorBody info={info} message={error} />
+            <ErrorBody models={models} message={error} />
           ) : null}
         </div>
 
@@ -125,105 +165,90 @@ export function AiConsentDialog({
 // ── Sub-components ────────────────────────────────────────────────
 
 function DialogHeader({
-  info,
+  primary,
+  models,
   status,
   onCancel,
   disableClose,
 }: {
-  info: AiModelInfo;
+  primary: AiModelInfo;
+  models: AiModelInfo[];
   status: AiModelStatus;
   onCancel: () => void;
   disableClose: boolean;
 }) {
+  const multi = models.length > 1;
   const headline =
     status === "loading"
-      ? "Loading model"
+      ? multi
+        ? "Loading models"
+        : "Loading model"
       : status === "downloading"
-        ? "Downloading model"
+        ? multi
+          ? "Downloading models"
+          : "Downloading model"
         : status === "error"
           ? "Download failed"
-          : `Use ${info.displayName}?`;
+          : multi
+            ? "Use these AI models?"
+            : `Use ${primary.displayName}?`;
+
+  // Description: generic line when multi-model (each model has its
+  // own detailed description further down in its card); the model's
+  // own description when single.
+  const description = multi
+    ? "Two small models load together — one to chat with the document, one to find the right pages. Both run entirely on your device; your PDFs are never uploaded."
+    : primary.description;
 
   return (
-    <div className="p-6 pb-4">
-      <div className="flex items-start gap-4">
-        <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">
-          {status === "downloading" || status === "loading" ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : status === "error" ? (
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-          ) : (
-            <Cpu className="w-5 h-5" />
-          )}
-        </span>
-        <div className="flex-1 min-w-0">
-          <h2
-            id="ai-consent-title"
-            className="text-base font-semibold tracking-[-0.01em] text-slate-800 dark:text-dark-text"
-          >
-            {headline}
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-dark-text-muted mt-1 leading-relaxed">
-            {info.description}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={disableClose ? undefined : onCancel}
-          disabled={disableClose}
-          aria-label="Close"
-          className="p-1 rounded-md text-slate-400 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text hover:bg-slate-100 dark:hover:bg-dark-surface-alt transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+    <div className="flex items-start gap-4 px-4 md:px-7 pt-2 sm:pt-5 pb-3.5 border-b border-slate-200/70 dark:border-dark-border/70">
+      <span className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-400">
+        {status === "downloading" || status === "loading" ? (
+          <Loader2 className="w-5 h-5 animate-spin" />
+        ) : status === "error" ? (
+          <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+        ) : (
+          <Cpu className="w-5 h-5" />
+        )}
+      </span>
+      <div className="flex-1 min-w-0">
+        <h2
+          id="ai-consent-title"
+          className="text-card-title sm:text-base font-semibold tracking-[-0.01em] text-slate-800 dark:text-dark-text"
         >
-          <X className="w-4 h-4" />
-        </button>
+          {headline}
+        </h2>
+        <p className="text-card-desc text-slate-500 dark:text-dark-text-muted mt-0.5 leading-relaxed">
+          {description}
+        </p>
       </div>
+      <button
+        type="button"
+        onClick={disableClose ? undefined : onCancel}
+        disabled={disableClose}
+        aria-label="Close"
+        className="w-9 h-9 rounded-lg grid place-items-center text-slate-400 dark:text-dark-text-muted hover:bg-slate-100 dark:hover:bg-dark-surface-alt hover:text-slate-700 dark:hover:text-dark-text transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <X className="w-4 h-4" />
+      </button>
     </div>
   );
 }
 
-function ConsentBody({ info }: { info: AiModelInfo }) {
+function ConsentBody({ models, roles }: { models: AiModelInfo[]; roles?: [string, string] }) {
   return (
-    <div className="space-y-4">
-      {/* Model card */}
-      <div className="rounded-xl border border-slate-200 dark:border-dark-border bg-slate-50/60 dark:bg-dark-surface-alt/60 p-4 text-sm">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-slate-600 dark:text-dark-text-muted">
-          <dt className="font-medium text-slate-500 dark:text-dark-text-muted">Model</dt>
-          <dd className="text-slate-800 dark:text-dark-text font-mono text-xs wrap-anywhere">
-            {info.repo}
-          </dd>
-          <dt className="font-medium text-slate-500 dark:text-dark-text-muted">Approx. size</dt>
-          <dd className="text-slate-800 dark:text-dark-text tabular-nums">
-            {formatFileSize(info.approxSizeBytes)}
-          </dd>
-          <dt className="font-medium text-slate-500 dark:text-dark-text-muted">Licence</dt>
-          <dd className="text-slate-800 dark:text-dark-text">{info.license}</dd>
-          {info.bestFor && (
-            <>
-              <dt className="font-medium text-slate-500 dark:text-dark-text-muted">Best for</dt>
-              <dd className="text-slate-800 dark:text-dark-text leading-relaxed">{info.bestFor}</dd>
-            </>
-          )}
-          <dt className="font-medium text-slate-500 dark:text-dark-text-muted">Source</dt>
-          <dd>
-            <a
-              href={info.modelUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
-            >
-              View on Hugging Face
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
-          </dd>
-        </dl>
-      </div>
+    <div className="space-y-3">
+      {models.map((info, i) => (
+        <ModelCard key={info.id} info={info} role={roles?.[i]} />
+      ))}
 
-      {/* Privacy reassurance */}
-      <div className="flex items-start gap-2.5 text-xs text-slate-600 dark:text-dark-text-muted leading-relaxed">
+      {/* Privacy reassurance — repeated here intentionally; users may
+          jump straight to this block without reading the header. */}
+      <div className="flex items-start gap-2.5 text-xs text-slate-600 dark:text-dark-text-muted leading-relaxed pt-1">
         <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-primary-600 dark:text-primary-400" />
         <p>
-          The model file is downloaded once from Hugging Face's CDN and cached in your browser.
-          After that, it runs entirely on your device — your PDFs are never uploaded.
+          Files are downloaded once from Hugging Face's CDN and cached in your browser. After that
+          everything runs entirely on your device — your PDFs are never uploaded.
         </p>
       </div>
     </div>
@@ -231,11 +256,16 @@ function ConsentBody({ info }: { info: AiModelInfo }) {
 }
 
 function DownloadBody({
-  info,
+  primary,
+  models,
+  totalBytes,
   progress,
   warm,
 }: {
-  info: AiModelInfo;
+  primary: AiModelInfo;
+  models: AiModelInfo[];
+  /** Sum of `approxSizeBytes` across all models — used as the total fallback. */
+  totalBytes: number;
   progress: AiProgress | null;
   /**
    * `true` when the bytes are already in CacheStorage and we're only
@@ -245,6 +275,8 @@ function DownloadBody({
    */
   warm: boolean;
 }) {
+  const multi = models.length > 1;
+
   if (warm) {
     return (
       <div className="space-y-3">
@@ -253,21 +285,24 @@ function DownloadBody({
             aria-hidden="true"
             className="w-4 h-4 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin"
           />
-          <span className="font-medium">{progress?.status ?? "Loading model"}</span>
+          <span className="font-medium">
+            {progress?.status ?? (multi ? "Loading models" : "Loading model")}
+          </span>
         </div>
         <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
-          {info.displayName} is already cached in your browser — initialising the runtime now. This
-          usually takes a few seconds.
+          {multi
+            ? "Both models are already cached in your browser — initialising the runtimes now. This usually takes a few seconds."
+            : `${primary.displayName} is already cached in your browser — initialising the runtime now. This usually takes a few seconds.`}
         </p>
       </div>
     );
   }
 
   const loaded = progress?.loaded ?? 0;
-  // Fall back to the registry's hint if Transformers.js hasn't yet
-  // reported a total — this keeps the bar non-empty during the brief
+  // Fall back to the registry's combined hint if Transformers.js hasn't
+  // yet reported a total — this keeps the bar non-empty during the brief
   // window between "initiate" and the first "progress" event.
-  const total = Math.max(progress?.total ?? 0, info.approxSizeBytes);
+  const total = Math.max(progress?.total ?? 0, totalBytes);
   const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
   const fileName = progress?.file ? progress.file.split("/").pop() || progress.file : "preparing…";
 
@@ -297,11 +332,17 @@ function DownloadBody({
         If your connection drops, the download will resume next time — files already saved to your
         browser cache won't be redownloaded.
       </p>
+      {multi && (
+        <p className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums pt-0.5">
+          {models.length} models · ≈ {formatApproxSize(totalBytes)} total
+        </p>
+      )}
     </div>
   );
 }
 
-function ErrorBody({ info, message }: { info: AiModelInfo; message: string | null }) {
+function ErrorBody({ models, message }: { models: AiModelInfo[]; message: string | null }) {
+  const subject = models.length > 1 ? "the AI models" : `${models[0].displayName}`;
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/30 p-3 text-sm text-red-700 dark:text-red-300">
@@ -309,7 +350,7 @@ function ErrorBody({ info, message }: { info: AiModelInfo; message: string | nul
       </div>
       <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
         Files already saved to your browser cache are kept — retrying picks up where the last
-        attempt left off rather than starting {info.displayName} from scratch.
+        attempt left off rather than starting {subject} from scratch.
       </p>
     </div>
   );
@@ -327,7 +368,7 @@ function DialogFooter({
   onCancel: () => void;
 }) {
   return (
-    <div className="px-6 py-4 bg-slate-50/55 dark:bg-dark-surface-alt/55 border-t border-slate-200/70 dark:border-dark-border/70 flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-end gap-2">
+    <div className="px-4 md:px-7 py-4 bg-slate-50/55 dark:bg-dark-surface-alt/55 border-t border-slate-200/70 dark:border-dark-border/70 flex flex-col-reverse sm:flex-row items-stretch sm:items-center sm:justify-end gap-2">
       <button
         type="button"
         onClick={onCancel}

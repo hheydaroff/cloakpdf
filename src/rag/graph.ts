@@ -81,12 +81,12 @@
  *   result, deduplicated by chunkId. Cost: at most one extra chunk
  *   in context.
  */
-import { Document } from "@langchain/core/documents";
+import type { Document } from "@langchain/core/documents";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 import type { BaseRetriever } from "@langchain/core/retrievers";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
-import type { ChunkMetadata } from "./chunking.ts";
 import type { TransformersJsChatModel } from "./chat-model.ts";
+import type { ChunkMetadata } from "./chunking.ts";
 
 /**
  * System prompt for the on-device chat model (currently SmolLM2-1.7B).
@@ -144,21 +144,26 @@ const OFF_TOPIC_REFUSAL =
  * Minimum cosine similarity between the query embedding and the
  * best-matching chunk for us to attempt an answer.
  *
- * BGE embeddings live in roughly `[0, 1]` for natural text (negative
- * cosines basically never occur). Sampled on the résumé fixture:
- *
- * **Empirical sample (bge-base, résumé fixture)**:
+ * **bge-base history (kept for context):**
  *
  *   - on-topic "what tools are mentioned?"  → top cosine ≈ 0.65
  *   - on-topic "what is this about?"        → top cosine ≈ 0.50
  *   - off-topic "capital of France?"        → top cosine ≈ 0.40 (!)
  *
- * The off-topic floor is much higher than the 0.18 we expected — BGE
- * matches "capital of France" weakly against the contact block on
- * p1-0 because it mentions "Pune, Maharashtra, India" (a city +
- * country combo). 0.30 wasn't enough to refuse that, so we sit at
- * **0.50** — comfortably above the off-topic noise floor but still
- * below the typical on-topic match.
+ *   The off-topic floor sat at 0.40 because bge embedded "capital of
+ *   France" weakly against the contact block ("Pune, Maharashtra,
+ *   India" — a city + country combo). 0.50 was the safe threshold.
+ *
+ * **EmbeddingGemma (current).** The model is trained for asymmetric
+ * retrieval with task prefixes, so the absolute scale is different.
+ * Empirically the gap between on-topic and off-topic widens — the
+ * search-result/document prefixes effectively encode "this is a
+ * retrieval scenario" into both sides, so generic-knowledge queries
+ * that incidentally word-overlap with chunks score lower than they
+ * did under bge. We keep the threshold at **0.5** as a starting
+ * point and recalibrate from the retrieval probe (see
+ * `tests/retrieval-debug/*.json` — re-run `pnpm test:probe` after a
+ * model swap and confirm the off-topic question still refuses).
  *
  * False rejections on legitimate obscure questions are possible at
  * this threshold — that's an accuracy/safety trade we accept because
@@ -334,6 +339,29 @@ export function buildRagGraph(options: BuildGraphOptions) {
     if (state.docs.length === 0) {
       return { answer: "I could not find any relevant passages for that question." };
     }
+
+    // ── Verbatim-extraction fast path ─────────────────────────────
+    //
+    // For phone / email queries we bypass the chat model entirely and
+    // regex-extract the value from the anchor chunk (document header).
+    // Rationale: SmolLM2-1.7B is unreliable at character-perfect copy
+    // of digit strings even when they sit in the context — observed
+    // failure modes include returning the person's name instead of
+    // the phone number, and dropping suffix digits from emails
+    // ("sumitsahoo1988@…" → "sumitsahoo@…"). A regex over the header
+    // is deterministic, character-exact, and doesn't risk
+    // hallucination. It also skips a multi-second WASM inference for
+    // the most common contact queries.
+    //
+    // We fall back to the LLM whenever the question doesn't match the
+    // patterns or the regex finds nothing — overview / list /
+    // narrative questions all keep their existing path.
+    const direct = tryVerbatimExtraction(state.question, anchorChunks ?? []);
+    if (direct) {
+      onToken?.(direct.value);
+      return { answer: direct.value, citedPages: [direct.page] };
+    }
+
     const anchorIds = new Set((anchorChunks ?? []).map((c) => c.metadata.chunkId));
     const headers = state.docs.filter((d) => anchorIds.has(d.metadata.chunkId));
     const others = state.docs.filter((d) => !anchorIds.has(d.metadata.chunkId));
@@ -410,6 +438,79 @@ async function streamReply(
     onToken?.(piece);
   }
   return full;
+}
+
+/**
+ * Phone-number regex: matches an international `+CC-NNNN…NNN` form,
+ * an `(NNN) NNN-NNNN` form, or any plain run of 7+ digits (which
+ * covers local-format phone numbers without separators). Tight enough
+ * that it doesn't fire on years ("1988") or 4-digit IDs but loose
+ * enough to catch the variety of formats résumés / contact blocks use.
+ */
+const PHONE_RE =
+  /\+\d{1,3}[\s\-.]?\d[\d\s\-.()]{5,}\d|\(?\d{3}\)?[\s\-.]?\d{3,4}[\s\-.]?\d{4}|\b\d{7,}\b/;
+
+/**
+ * Email regex. Standard local-part / domain shape; the negative
+ * lookbehind avoids matching addresses embedded inside URLs that the
+ * regex engine could otherwise greedy-walk into.
+ */
+const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+
+/**
+ * Deterministic fast-path for verbatim contact-info extraction.
+ *
+ * Reads the user's question for phone / email intent and, if the
+ * intent is clear, regex-extracts the value out of the anchor chunks
+ * (the document header / contact block — always included on every
+ * retrieve). Returns `{ value, page }` on hit so the caller can short-
+ * circuit straight to the answer instead of invoking the chat model.
+ *
+ * **Why this exists.** SmolLM2-1.7B reliably *finds* the right chunk
+ * — the contact block sits in `[Document header]` at the top of the
+ * prompt — but fails to copy digit strings character-perfectly. The
+ * observed failure modes were:
+ *   - Phone questions returning the person's name instead of digits.
+ *   - Emails dropping trailing digits ("sumitsahoo1988@…" → "sumitsahoo@…").
+ *   - Random sampling occasionally producing a hedged refusal even
+ *     when the value sits in plain view.
+ * A regex against the header is character-exact, deterministic, and
+ * skips a multi-second WASM inference for the most common contact
+ * queries.
+ *
+ * Returns `null` when the intent isn't clearly verbatim-extraction
+ * (e.g. overview / list / narrative questions) or when no match
+ * exists — both cases fall through to the LLM path.
+ */
+function tryVerbatimExtraction(
+  question: string,
+  anchorChunks: Document<ChunkMetadata>[],
+): { value: string; page: number } | null {
+  if (anchorChunks.length === 0) return null;
+  const q = question.toLowerCase();
+
+  // Phone: any explicit phone-y vocabulary, or a bare "number"
+  // (in PDF Q&A "give me X's number" overwhelmingly means phone).
+  if (/\b(phone|mobile|tel|cell|telephone|whatsapp|number)\b/.test(q)) {
+    for (const chunk of anchorChunks) {
+      const match = chunk.pageContent.match(PHONE_RE);
+      if (match) {
+        return { value: match[0].replace(/\s+/g, " ").trim(), page: chunk.metadata.pageNumber };
+      }
+    }
+  }
+
+  // Email: explicit "email" / "mail" / a literal "@" in the query.
+  if (/\b(email|e-mail|mail)\b|@/.test(q)) {
+    for (const chunk of anchorChunks) {
+      const match = chunk.pageContent.match(EMAIL_RE);
+      if (match) {
+        return { value: match[0].trim(), page: chunk.metadata.pageNumber };
+      }
+    }
+  }
+
+  return null;
 }
 
 /** Unique, sorted page numbers from the retrieved chunks. */

@@ -14,7 +14,7 @@
  * loaded — not lazily on the first question — so the user isn't left
  * staring at a "Thinking…" spinner that's really doing extraction.
  */
-import { Database, Loader2, ScanSearch, Send, Sparkles, User } from "lucide-react";
+import { Database, Loader2, MemoryStick, ScanSearch, Send, Sparkles, User } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -25,12 +25,13 @@ import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
-import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
+import { findTool } from "../config/tool-registry.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useRagModels } from "../hooks/useRagModels.ts";
 import { createRagSession, type IndexingProgress, type RagSession } from "../rag/index.ts";
+import { isMobileDevice } from "../utils/device-memory.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
 
 interface ChatTurn {
@@ -175,8 +176,54 @@ export default function AskPdf() {
     [handleAsk],
   );
 
+  // RAM heads-up — always shown until the model is ready (warning
+  // is moot at that point). We tried gating this on
+  // `navigator.deviceMemory < 8` to hide it on machines that look
+  // comfortable, but the signal is too unreliable to use as a
+  // visibility switch:
+  //   - Chrome caps the reading at 8 GB for privacy, so a 16 / 32 GB
+  //     desktop reports the same value as an 8 GB one — we'd hide
+  //     the hint on devices we can't actually verify.
+  //   - Firefox / Safari don't ship the API at all (returns `null`).
+  //   - The mobile UA-string match is coarse.
+  // The detected RAM line still lives in `AiModelDetailsDialog` for
+  // users who want to inspect what we read; this surface just gives
+  // every user the recommendation up-front.
+  //
+  // Copy still adapts to phone vs desktop via the UA-string check so
+  // the recommended floor matches the device class.
+  const askPdfTool = findTool("ask-pdf");
+  const ramRequirement = askPdfTool?.requirements
+    ? isMobileDevice()
+      ? askPdfTool.requirements.mobile
+      : askPdfTool.requirements.desktop
+    : null;
+  const showRamNote = ramRequirement !== null && rag.status !== "ready";
+
   return (
     <div className="space-y-6">
+      {showRamNote && (
+        // Compact single-line RAM heads-up rendered at the *top* of
+        // the tool so users see it before they bother uploading a
+        // file — on a low-RAM device that decision matters before
+        // the download cost is paid. Lives outside the file-state
+        // conditional so it stays visible across the drop-zone /
+        // gate / indexing / scanned-hint stages, and hides once the
+        // model is loaded (warning is moot at that point).
+        // Amber icon flags it as a "watch out", not a hard block —
+        // users can still proceed.
+        <p className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-dark-text-muted px-1">
+          <MemoryStick
+            className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-500 dark:text-amber-400"
+            aria-hidden="true"
+          />
+          <span>
+            {ramRequirement}. The two models load into memory together — lower-RAM devices may run
+            slowly or close this tab during inference.
+          </span>
+        </p>
+      )}
+
       {!pdf.file ? (
         <FileDropZone
           glowColor={categoryGlow.transform}
@@ -203,8 +250,10 @@ export default function AskPdf() {
             <>
               <AiModelGate
                 ai={rag.chat}
+                models={[rag.chat.info, rag.embed.info]}
+                roles={["chat", "retrieval"]}
                 title="Download AI models to start chatting"
-                blurb="Two small models load together: a chat model and an embedder. Both run entirely in your browser; your PDFs are never uploaded."
+                blurb="Both run entirely in your browser; your PDFs are never uploaded."
               >
                 {/*
                   Once models are ready we render one of two states.
@@ -235,7 +284,12 @@ export default function AskPdf() {
                 )}
               </AiModelGate>
 
-              <ActiveModelBar info={rag.chat.info} ready={rag.status === "ready"} />
+              <ActiveModelBar
+                info={rag.chat.info}
+                secondaryInfo={rag.embed.info}
+                roles={["chat", "retrieval"]}
+                ready={rag.status === "ready"}
+              />
             </>
           )}
         </>
@@ -246,6 +300,8 @@ export default function AskPdf() {
       <AiConsentDialog
         open={dialogOpen}
         info={rag.chat.info}
+        secondaryInfo={rag.embed.info}
+        roles={["chat", "retrieval"]}
         status={rag.status}
         progress={rag.progress}
         error={rag.error}
@@ -273,6 +329,15 @@ export default function AskPdf() {
  */
 function IndexingCard({ progress }: { progress: IndexingProgress | null }) {
   const { label, hint } = describeIndexProgress(progress);
+  // **Why a custom bar instead of `<ProgressBar>`**: the indexing
+  // pipeline runs in two distinct phases (`extract` then `embed`),
+  // each with its own current/total. Using `<ProgressBar>` per phase
+  // means the bar climbs to ~100 % during extract, *resets to 0 %* the
+  // moment embed starts, then snaps to 100 % at the end — visually
+  // the bar moves backwards. We compute a single monotonic percent
+  // across both phases here and let the label carry the per-phase
+  // "(3/4)" detail.
+  const percent = overallIndexingPercent(progress);
   return (
     <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-6">
       <div className="flex items-start gap-3">
@@ -291,11 +356,43 @@ function IndexingCard({ progress }: { progress: IndexingProgress | null }) {
           </p>
         </div>
       </div>
-      <div className="mt-5">
-        <ProgressBar current={progress?.current ?? 0} total={progress?.total ?? 1} label={label} />
+      <div className="mt-5 space-y-2">
+        <div className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted">
+          <span className="min-w-0 truncate pr-2">{label}</span>
+          <span className="tabular-nums shrink-0">{percent}%</span>
+        </div>
+        <div className="w-full bg-slate-200 dark:bg-dark-border rounded-full h-2 overflow-hidden">
+          {/* No CSS transition: the bar snaps to the new width in
+              the same React render that updates the percent text. A
+              300ms `transition-[width]` was causing the bar's visual
+              fill to lag the displayed percent — bar at ~50 % while
+              the label already read 62 %, which looks broken. Embed
+              batches fire every couple of seconds so a snap reads as
+              progress, not a glitch. */}
+          <div className="bg-primary-600 h-2 rounded-full" style={{ width: `${percent}%` }} />
+        </div>
       </div>
     </div>
   );
+}
+
+/**
+ * Map the phase-specific {@link IndexingProgress} onto a single
+ * monotonic 0–100 progress percent.
+ *
+ * **Weight choice** (extract = 30 %, embed = 70 %): on a typical
+ * text-layer PDF, extraction is fast (a few ms per page) while
+ * embedding is the long pole — each batch is a WASM forward pass
+ * against a 309 MB int8 model. Roughly matches the wall-clock split
+ * we see on the résumé fixture. OCR-heavy PDFs invert this, but we
+ * accept the small lie there because OCR users see the dedicated
+ * "Running OCR on scanned pages…" label and know it's slow.
+ */
+function overallIndexingPercent(progress: IndexingProgress | null): number {
+  if (!progress) return 0;
+  const ratio = progress.total > 0 ? Math.min(1, progress.current / progress.total) : 0;
+  if (progress.kind === "extract") return Math.round(ratio * 30);
+  return Math.round(30 + ratio * 70);
 }
 
 function describeIndexProgress(progress: IndexingProgress | null): {

@@ -38,7 +38,6 @@ import {
   isModelMarkedReady,
   loadPipeline,
 } from "../utils/ai-runtime.ts";
-import { errorMessage } from "../utils/file-helpers.ts";
 
 /**
  * Lifecycle states for an AI model.
@@ -176,12 +175,15 @@ export function useAiModel(modelId: AiModelId): UseAiModelReturn {
       for (const { resolve } of pending) resolve(pipe);
     } catch (e) {
       if (!mountedRef.current) return;
-      const msg = errorMessage(
-        e,
-        "Failed to download the AI model. Check your connection and try again.",
-      );
+      // Always surface a generic, user-friendly message in the dialog —
+      // raw `error.message` strings from onnxruntime-web (e.g.
+      // "Could not find an implementation for GatherBlockQuantized…")
+      // mean nothing to end users and look alarming. The original
+      // error stays logged to the console so we can still triage from
+      // DevTools / Sentry.
+      console.error(`[ai-model:${modelId}] load failed`, e);
       setStatus("error");
-      setError(msg);
+      setError("We couldn't finish setting up the AI models. Please try again.");
     }
   }, [modelId]);
 
