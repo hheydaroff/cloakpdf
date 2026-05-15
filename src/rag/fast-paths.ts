@@ -127,6 +127,18 @@ const RESUME_DETECT_THRESHOLD = 2;
 const DOCUMENT_TYPE_QUESTION_RE =
   /\b(what (kind|type) of document|what is this( document| pdf)?|what (does this|do these) (document|excerpts?) (cover|describe|contain)|what is this about|what's this( document)? about)\b/i;
 
+/** "Firstname Lastname" or "Firstname Middle Lastname" — 2–4 words, each starts uppercase. */
+const NAME_LINE_RE = /^[A-Z][a-z]+(?:\s[A-Z][a-z]+){1,3}$/;
+
+/**
+ * ALL-CAPS role / department line: "ENTERPRISE ARCHITECT", "SENIOR
+ * DEVELOPER", "AI & CLOUD". At least 5 chars so single short caps
+ * tokens ("AI") don't qualify, and the character class deliberately
+ * excludes digits so it doesn't match accidental headings like
+ * "Q1 2026".
+ */
+const ROLE_TITLE_RE = /^[A-Z][A-Z\s&/-]{4,}$/;
+
 /**
  * Pull a plausible person-name out of the top of the anchor chunk.
  *
@@ -143,13 +155,57 @@ function extractAnchorName(anchor: Document<ChunkMetadata>): string | null {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean);
-  // "Firstname Lastname" or "Firstname Middlename Lastname" — each
-  // word starts uppercase, rest lowercase. Two to four words.
-  const namePattern = /^[A-Z][a-z]+(?:\s[A-Z][a-z]+){1,3}$/;
   for (const line of lines.slice(0, 8)) {
-    if (namePattern.test(line)) return line;
+    if (NAME_LINE_RE.test(line)) return line;
   }
   return null;
+}
+
+/**
+ * Personal-résumé header detector — fires when the chunk has the
+ * unmistakable layout of a CV title block even if the canonical
+ * section labels didn't survive PDF text extraction. Two structural
+ * cues must hold:
+ *
+ *   1. A "Firstname Lastname" line followed within the next few lines
+ *      by an ALL-CAPS role title (e.g. "ENTERPRISE ARCHITECT" under
+ *      "Sumit Sahoo").
+ *   2. A contact block — both an email AND a phone number anywhere
+ *      in the chunk.
+ *
+ * The combination is specific to résumés / CVs / personal portfolios:
+ * tech reports cite authors but rarely with a role-title line under
+ * the name; invoices have email + phone but no name + ALL-CAPS-role
+ * layout; whitepapers don't carry phone numbers next to author
+ * blocks.
+ *
+ * Why this exists in addition to the canonical-section check: real
+ * résumés routinely come out of PDF extraction with section labels
+ * glued to adjacent words ("COREEXPERIENCE", "TOOLSILOVE") that don't
+ * word-boundary-match `\bEXPERIENCE\b`. The canonical-section path
+ * then drops below the two-hit threshold and the fast-path silently
+ * falls back to the LLM, which mislabels the doc as "a guide" or "a
+ * professional bio". The structural-cue path catches these without
+ * loosening the canonical regex (which would broaden false positives
+ * on tech specs that happen to mention "EXPERIENCE" in passing).
+ */
+function hasResumeHeaderStructure(text: string): boolean {
+  if (!EMAIL_RE.test(text) || !PHONE_RE.test(text)) return false;
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  for (let i = 0; i < Math.min(6, lines.length); i++) {
+    if (!NAME_LINE_RE.test(lines[i])) continue;
+    // Look for an ALL-CAPS role title in the next few lines. We allow
+    // a small gap so an empty paragraph between the name and the role
+    // (common when the source PDF uses a styled subheading) doesn't
+    // defeat the match.
+    for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+      if (ROLE_TITLE_RE.test(lines[j])) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -178,11 +234,24 @@ export function tryDocumentTypeAnswer(
   if (!DOCUMENT_TYPE_QUESTION_RE.test(question)) return null;
 
   const headerText = anchorChunks.map((c) => c.pageContent).join("\n");
+
+  // Path A — ≥ 2 canonical section headers in the anchor. Tight but
+  // brittle: PDF extraction can glue section labels to neighbouring
+  // words ("COREEXPERIENCE") so the word-boundary regex misses them.
   const matches = headerText.match(RESUME_SECTION_RE) ?? [];
   // Dedupe by surface form so "EXPERIENCE" appearing twice doesn't
   // satisfy a two-section requirement on its own.
   const uniqueSections = new Set(matches.map((m) => m.toUpperCase()));
-  if (uniqueSections.size < RESUME_DETECT_THRESHOLD) return null;
+  const canonicalHit = uniqueSections.size >= RESUME_DETECT_THRESHOLD;
+
+  // Path B — structural CV-header layout: a "Firstname Lastname" line
+  // followed by an ALL-CAPS role title, plus a contact block (email +
+  // phone). Catches résumés whose section labels didn't survive
+  // extraction; see `hasResumeHeaderStructure` for the full
+  // rationale.
+  const structuralHit = hasResumeHeaderStructure(headerText);
+
+  if (!canonicalHit && !structuralHit) return null;
 
   const name = extractAnchorName(anchorChunks[0]);
   const value = name ? `This appears to be ${name}'s résumé.` : "This appears to be a résumé.";

@@ -179,6 +179,64 @@ describe("tryDocumentTypeAnswer", () => {
       expect(tryDocumentTypeAnswer("What is this document?", [whitepaperAnchor])).toBeNull();
     });
 
+    it("fires on a portfolio header with a glued section label and only CONTACT recognisable", () => {
+      // Reproduces the real-world failure on Sumit's PDF: extraction
+      // glued "CORE EXPERTISE" → "COREEXPE…" so only CONTACT survives
+      // as a word-boundary match. Canonical-section path falls below
+      // the 2-hit threshold; structural path (Name + ALL-CAPS role +
+      // email + phone) carries it.
+      const portfolioAnchor = chunk(
+        [
+          "Sumit Sahoo",
+          "ENTERPRISE ARCHITECT",
+          "",
+          "AI & CLOUD",
+          "CONTACT",
+          "sumitsahoo1988@gmail.com",
+          "+91-7899800899",
+          "Pune, Maharashtra, India",
+          "sumitsahoo.dev",
+          "linkedin.com/in/sumit-sahoo",
+          "COREEXPERTISE",
+          "AI Platforms, Cloud Architecture, Mobile",
+        ].join("\n"),
+      );
+      const hit = tryDocumentTypeAnswer("What kind of document is this?", [portfolioAnchor]);
+      expect(hit?.value).toBe("This appears to be Sumit Sahoo's résumé.");
+    });
+
+    it("does not fire on a corporate page that only has contact info (no Name + role title)", () => {
+      // A company landing page has email + phone but no
+      // "Firstname Lastname → ALL-CAPS ROLE" layout. The structural
+      // path must NOT fire here.
+      const companyContact = chunk(
+        [
+          "About Acme Corporation",
+          "Founded 2010, headquartered in Austin, TX.",
+          "Contact us:",
+          "hello@acme.example",
+          "+1-555-123-4567",
+          "We provide enterprise software solutions.",
+        ].join("\n"),
+      );
+      expect(tryDocumentTypeAnswer("What kind of document is this?", [companyContact])).toBeNull();
+    });
+
+    it("does not fire on a Name + role with no contact block (insufficient signal)", () => {
+      // Could be an author bio or speaker intro — we don't claim it's
+      // a résumé without the contact-block corroboration.
+      const speakerBio = chunk(
+        [
+          "Jane Doe",
+          "PRINCIPAL ENGINEER",
+          "",
+          "Jane spoke at the 2026 conference about distributed systems.",
+          "Her keynote covered consensus algorithms and operational pitfalls.",
+        ].join("\n"),
+      );
+      expect(tryDocumentTypeAnswer("What kind of document is this?", [speakerBio])).toBeNull();
+    });
+
     it("dedupes section headers — repeating EXPERIENCE twice is not 2 sections", () => {
       const oneSectionRepeated = chunk(
         [
