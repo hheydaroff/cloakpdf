@@ -115,12 +115,28 @@ import {
  *      question we want a one-line "the excerpts don't say", not a
  *      confident hallucination. Stays at the end so the model has
  *      already considered the rest of the rules.
+ *
+ *   4. **Identity questions get described, not just named.** An
+ *      earlier version of the verbatim-extraction rule listed
+ *      "names" alongside phone numbers / emails / URLs, with a "no
+ *      preamble, no hedging — lead with the value" instruction.
+ *      That worked for `Give me Sumit's phone number.` → `+91-…`
+ *      but broke `who is sumit` → the model dumped just
+ *      `Sumit Sahoo` with no description. The fix splits names off
+ *      into a separate "who is X" rule that asks for 1-3 sentences
+ *      of context on top of the name. Phone / email / address
+ *      extraction is unchanged because those go through the
+ *      verbatim fast-path (which never invokes the LLM) on the
+ *      common phrasings, and the rule-1 verbatim-quote-only
+ *      instruction still applies to the long-tail phrasings that
+ *      do reach the LLM.
  */
 const SYSTEM_PROMPT = `You answer questions about a PDF. The user message contains the document header (title and contact block) followed by relevant excerpts.
 
 How to answer:
 - Read the header and excerpts. Most questions can be answered directly from them — scan for the relevant span and use it.
-- For specific values (phone numbers, emails, URLs, addresses, dates, prices, IDs, names): find the value in the header or excerpts and quote it EXACTLY, every character. Lead the reply with the value itself — no preamble, no hedging.
+- For specific values (phone numbers, emails, URLs, addresses, dates, prices, IDs): find the value in the header or excerpts and quote it EXACTLY, every character. Lead the reply with the value itself — no preamble, no hedging.
+- For "who is X?" / "tell me about X" / "describe X" where X is a person named in the header: write 1-3 sentences describing X's role, expertise, and key details from the header and excerpts. Lead with the person's full name + role ("Sumit Sahoo is an Enterprise Architect …"), then add the relevant context. Do NOT reply with just the name on its own.
 - For "what is this document?" / "whose document is this?": identify the type from structure. A name + contact block + work experience sections = a résumé / CV. An executive summary + numbered sections = a report. Line items + total = an invoice. Name the person or entity from the header, not "the author".
 - For lists (tools, technologies, skills, dates): copy the names verbatim from the excerpts as a short comma-separated list. Do not add parenthetical descriptions ("Python (used for ML)") — only what the document literally says. Do not pad the list with common tools from general knowledge that aren't in the excerpts (e.g. don't add "Vue, Angular, Django, Kubernetes, Terraform" unless the document literally names them).
 - Keep answers tight: one sentence for a single fact, up to three for overviews. Cite (page N) only for facts visible on that page.
