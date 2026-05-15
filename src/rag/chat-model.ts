@@ -49,17 +49,41 @@ export class TransformersJsChatModel extends SimpleChatModel {
   constructor(options: TransformersJsChatModelOptions) {
     super(options);
     this.pipeline = options.pipeline;
-    // Defaults retuned for grounded extraction (2026-05): the previous
-    // 0.6 / 0.9 / 512 trio gave SmolLM2-1.7B too much rope on factual
-    // questions — it would correctly extract a phone number, then add
-    // three paragraphs of hedging and confabulated context. Lower
-    // temperature + nucleus cutoff make sampling more deterministic
-    // (the highest-probability tokens point at the grounded answer);
-    // the shorter token budget physically caps verbosity.
-    this.maxNewTokens = options.maxNewTokens ?? 384;
-    this.temperature = options.temperature ?? 0.5;
+    // Defaults retuned for grounded extraction (2026-05). The chain of
+    // tuning steps so far:
+    //
+    //   - 0.6 / 0.9 / 512 / 1.1 (original) → too much rope on factual
+    //     questions; the model would correctly extract a phone number
+    //     then add three paragraphs of hedging and confabulated context.
+    //   - 0.5 / 0.85 / 384 / 1.1 (intermediate) → caps verbosity but
+    //     probe still shows tool-list editorializing ("JavaScript
+    //     (used in Next.js, React, TypeScript)") and confident
+    //     hallucination on negative-topic questions ("what does the
+    //     document say about Docker?" → invented Docker content).
+    //   - 0.2 / 0.85 / 384 / 1.15 (intermediate) → near-greedy
+    //     sampling pushes the model to copy from retrieved chunks
+    //     rather than confabulate, but the expanded probe still
+    //     caught two failure modes the rep-penalty bump alone
+    //     couldn't fix: (a) the model padding tool lists with
+    //     common-but-absent items ("Python, Java, Kotlin, Docker,
+    //     Kubernetes, Terraform, Ansible, Vue, Angular, Django,
+    //     Okta, Twilio, Stripe …"), and (b) lexically-varied loops
+    //     ("Restricted tool sets, restricted tool selections,
+    //     restricted tool choices, restricted tool configurations,
+    //     restricted tool implementations …") that the rep penalty
+    //     can't catch because each surface form is distinct.
+    //   - 0.2 / 0.85 / 256 / 1.15 (current) → capping new tokens at
+    //     256 physically truncates both failure modes. A correct
+    //     list of the résumé's actual tools fits comfortably; a
+    //     fabricated 50-item list runs into the cap. The trade-off
+    //     is occasional mid-sentence truncation on legitimate long
+    //     overview answers — acceptable because the streaming UI
+    //     surfaces the partial answer immediately and the user can
+    //     ask a follow-up to continue.
+    this.maxNewTokens = options.maxNewTokens ?? 256;
+    this.temperature = options.temperature ?? 0.2;
     this.topP = options.topP ?? 0.85;
-    this.repetitionPenalty = options.repetitionPenalty ?? 1.1;
+    this.repetitionPenalty = options.repetitionPenalty ?? 1.15;
   }
 
   _llmType(): string {

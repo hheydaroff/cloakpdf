@@ -89,13 +89,29 @@ export const AI_MODELS: Record<AiModelId, AiModelInfo> = {
     //                              Docker, Kubernetes) none of which
     //                              appear in the chunks
     //   - SmolLM2-360M           → fabricated identifiers under load
+    //   - SmolLM3-3B (q4f16)     → tried as "same family, bigger" but
+    //                              regressed badly. Two distinct
+    //                              failures: (1) hybrid-reasoning
+    //                              model emits unclosed `<think>`
+    //                              tags our streaming pipe doesn't
+    //                              strip; (2) catastrophic repetition
+    //                              loops on open-ended questions
+    //                              ("tactical X, tactical Y, ..."
+    //                              for 50+ tokens, or "Wally, Wally,
+    //                              Wally..." on address extraction).
+    //                              Failure reproduced on both cold
+    //                              and warm cache paths.
     //   - SmolLM2-1.7B           → near-verbatim extraction (winner)
     //
     // The pattern that emerged across these tests: small instruct
     // models from Google / Meta optimise for conversational fluency
     // and fill in "plausible" answers from world knowledge. SmolLM2
     // alone in the small-model space stays close to the supplied
-    // excerpts. Until that changes we hold the line at 1.7B.
+    // excerpts. Scaling within the SmolLM family also doesn't help —
+    // SmolLM3 changes the training recipe (reasoning mode) and breaks
+    // the verbatim-extraction discipline. Until that changes we hold
+    // the line at 1.7B and improve quality via the retrieval /
+    // prompt path instead.
     approxSizeBytes: 1024 * 1024 * 1024,
     approxPeakRamBytes: Math.round(2.5 * 1024 * 1024 * 1024),
     description:

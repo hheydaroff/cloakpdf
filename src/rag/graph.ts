@@ -87,6 +87,11 @@ import type { BaseRetriever } from "@langchain/core/retrievers";
 import { Annotation, END, START, StateGraph } from "@langchain/langgraph";
 import type { TransformersJsChatModel } from "./chat-model.ts";
 import type { ChunkMetadata } from "./chunking.ts";
+import {
+  tryDocumentTypeAnswer,
+  tryTopicAbsenceRefusal,
+  tryVerbatimExtraction,
+} from "./fast-paths.ts";
 
 /**
  * System prompt for the on-device chat model (currently SmolLM2-1.7B).
@@ -117,8 +122,11 @@ How to answer:
 - Read the header and excerpts. Most questions can be answered directly from them — scan for the relevant span and use it.
 - For specific values (phone numbers, emails, URLs, addresses, dates, prices, IDs, names): find the value in the header or excerpts and quote it EXACTLY, every character. Lead the reply with the value itself — no preamble, no hedging.
 - For "what is this document?" / "whose document is this?": identify the type from structure. A name + contact block + work experience sections = a résumé / CV. An executive summary + numbered sections = a report. Line items + total = an invoice. Name the person or entity from the header, not "the author".
-- For lists (tools, technologies, skills, dates): a short comma-separated list or short bullets is fine.
+- For lists (tools, technologies, skills, dates): copy the names verbatim from the excerpts as a short comma-separated list. Do not add parenthetical descriptions ("Python (used for ML)") — only what the document literally says. Do not pad the list with common tools from general knowledge that aren't in the excerpts (e.g. don't add "Vue, Angular, Django, Kubernetes, Terraform" unless the document literally names them).
 - Keep answers tight: one sentence for a single fact, up to three for overviews. Cite (page N) only for facts visible on that page.
+
+When the question asks about a specific topic, technology, or named entity:
+- Scan the excerpts for that exact word (or an obvious variant). If it is not present, reply with exactly one sentence: "The document doesn't mention {topic}." Do not describe the topic from general knowledge, even briefly.
 
 When the answer is not in the header or excerpts:
 - Reply with exactly one sentence: "I couldn't find that in this document." Do not guess. Do not invent values, names, or numbers.
@@ -340,26 +348,30 @@ export function buildRagGraph(options: BuildGraphOptions) {
       return { answer: "I could not find any relevant passages for that question." };
     }
 
-    // ── Verbatim-extraction fast path ─────────────────────────────
+    // ── Deterministic fast paths ──────────────────────────────────
     //
-    // For phone / email queries we bypass the chat model entirely and
-    // regex-extract the value from the anchor chunk (document header).
-    // Rationale: SmolLM2-1.7B is unreliable at character-perfect copy
-    // of digit strings even when they sit in the context — observed
-    // failure modes include returning the person's name instead of
-    // the phone number, and dropping suffix digits from emails
-    // ("sumitsahoo1988@…" → "sumitsahoo@…"). A regex over the header
-    // is deterministic, character-exact, and doesn't risk
-    // hallucination. It also skips a multi-second WASM inference for
-    // the most common contact queries.
+    // Each function in `fast-paths.ts` is a pure pattern-match over
+    // (question, docs) → {value, citedPages} | null. They bypass the
+    // chat model for question shapes where regex / substring checks
+    // over the retrieved chunks are far more reliable than asking
+    // SmolLM2-1.7B to do it — see the module's header comment for
+    // the failure modes that motivated each.
     //
-    // We fall back to the LLM whenever the question doesn't match the
-    // patterns or the regex finds nothing — overview / list /
-    // narrative questions all keep their existing path.
-    const direct = tryVerbatimExtraction(state.question, anchorChunks ?? []);
-    if (direct) {
-      onToken?.(direct.value);
-      return { answer: direct.value, citedPages: [direct.page] };
+    // Order: narrowest → broadest. Verbatim contact extraction
+    // matches a very tight phone/email intent against anchor chunks;
+    // doc-type identification fires only when the anchor structure
+    // looks like a résumé; topic-absence refusal catches "what does
+    // the document say about X?" when X isn't anywhere in the
+    // retrieved chunks (the most common hallucination trigger). The
+    // first hit short-circuits the LLM call entirely.
+    const anchors = anchorChunks ?? [];
+    const fastHit =
+      tryVerbatimExtraction(state.question, anchors) ??
+      tryDocumentTypeAnswer(state.question, anchors) ??
+      tryTopicAbsenceRefusal(state.question, state.docs);
+    if (fastHit) {
+      onToken?.(fastHit.value);
+      return { answer: fastHit.value, citedPages: fastHit.citedPages };
     }
 
     const anchorIds = new Set((anchorChunks ?? []).map((c) => c.metadata.chunkId));
@@ -438,79 +450,6 @@ async function streamReply(
     onToken?.(piece);
   }
   return full;
-}
-
-/**
- * Phone-number regex: matches an international `+CC-NNNN…NNN` form,
- * an `(NNN) NNN-NNNN` form, or any plain run of 7+ digits (which
- * covers local-format phone numbers without separators). Tight enough
- * that it doesn't fire on years ("1988") or 4-digit IDs but loose
- * enough to catch the variety of formats résumés / contact blocks use.
- */
-const PHONE_RE =
-  /\+\d{1,3}[\s\-.]?\d[\d\s\-.()]{5,}\d|\(?\d{3}\)?[\s\-.]?\d{3,4}[\s\-.]?\d{4}|\b\d{7,}\b/;
-
-/**
- * Email regex. Standard local-part / domain shape; the negative
- * lookbehind avoids matching addresses embedded inside URLs that the
- * regex engine could otherwise greedy-walk into.
- */
-const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-
-/**
- * Deterministic fast-path for verbatim contact-info extraction.
- *
- * Reads the user's question for phone / email intent and, if the
- * intent is clear, regex-extracts the value out of the anchor chunks
- * (the document header / contact block — always included on every
- * retrieve). Returns `{ value, page }` on hit so the caller can short-
- * circuit straight to the answer instead of invoking the chat model.
- *
- * **Why this exists.** SmolLM2-1.7B reliably *finds* the right chunk
- * — the contact block sits in `[Document header]` at the top of the
- * prompt — but fails to copy digit strings character-perfectly. The
- * observed failure modes were:
- *   - Phone questions returning the person's name instead of digits.
- *   - Emails dropping trailing digits ("sumitsahoo1988@…" → "sumitsahoo@…").
- *   - Random sampling occasionally producing a hedged refusal even
- *     when the value sits in plain view.
- * A regex against the header is character-exact, deterministic, and
- * skips a multi-second WASM inference for the most common contact
- * queries.
- *
- * Returns `null` when the intent isn't clearly verbatim-extraction
- * (e.g. overview / list / narrative questions) or when no match
- * exists — both cases fall through to the LLM path.
- */
-function tryVerbatimExtraction(
-  question: string,
-  anchorChunks: Document<ChunkMetadata>[],
-): { value: string; page: number } | null {
-  if (anchorChunks.length === 0) return null;
-  const q = question.toLowerCase();
-
-  // Phone: any explicit phone-y vocabulary, or a bare "number"
-  // (in PDF Q&A "give me X's number" overwhelmingly means phone).
-  if (/\b(phone|mobile|tel|cell|telephone|whatsapp|number)\b/.test(q)) {
-    for (const chunk of anchorChunks) {
-      const match = chunk.pageContent.match(PHONE_RE);
-      if (match) {
-        return { value: match[0].replace(/\s+/g, " ").trim(), page: chunk.metadata.pageNumber };
-      }
-    }
-  }
-
-  // Email: explicit "email" / "mail" / a literal "@" in the query.
-  if (/\b(email|e-mail|mail)\b|@/.test(q)) {
-    for (const chunk of anchorChunks) {
-      const match = chunk.pageContent.match(EMAIL_RE);
-      if (match) {
-        return { value: match[0].trim(), page: chunk.metadata.pageNumber };
-      }
-    }
-  }
-
-  return null;
 }
 
 /** Unique, sorted page numbers from the retrieved chunks. */
