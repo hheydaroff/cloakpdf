@@ -23,6 +23,11 @@ import { TransformersJsEmbeddings } from "./embeddings.ts";
 import { buildRagGraph, type RagState, type RelevanceContext } from "./graph.ts";
 import { loadPdf } from "./pdf-loader.ts";
 import { cacheIndex, getCachedIndex, sha256Hex } from "./persistence.ts";
+
+// Re-export for consumers (e.g. the "Delete cached models" flow in
+// useRagModels) — the rag barrel is the only place outside src/rag/
+// that should reach into persistence internals.
+export { clearAllCachedIndexes } from "./persistence.ts";
 import { CrossEncoderReranker, RerankingRetriever } from "./reranker.ts";
 import { buildBm25Retriever } from "./retrievers/bm25.ts";
 import { buildDenseRetrieverFromStore } from "./retrievers/dense.ts";

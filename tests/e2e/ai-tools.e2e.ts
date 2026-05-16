@@ -172,7 +172,18 @@ async function main() {
     // Each flag is independent; combining them isolates per-feature
     // contribution in cross-cut comparison runs.
     const lsSeeds: Array<[string, string]> = [];
-    if (CHAT_VARIANT_OVERRIDE) lsSeeds.push(["cloakpdf:chat-variant", CHAT_VARIANT_OVERRIDE]);
+    // Always reset the chat-variant pref to a deterministic baseline
+    // (Quality / lfm2-2.6b) so a previous run's model-swap test
+    // doesn't leak into this run's warm-cache extraction checks.
+    // Without this, the swap step persists Compact and the next
+    // invocation hits Compact's weaker extraction (e.g. it
+    // hallucinates "Mumbai" for the address question that ground-
+    // truths "Pune"). Quality is the tier the extraction assertions
+    // are tuned against.
+    //
+    // Explicit CHAT_VARIANT env override still wins so cross-tier
+    // comparison runs work the same way they always did.
+    lsSeeds.push(["cloakpdf:chat-variant", CHAT_VARIANT_OVERRIDE ?? "lfm2-2.6b"]);
     if (process.env.RAG_NO_RERANK === "1") lsSeeds.push(["cloakpdf:rag-rerank", "0"]);
     if (process.env.RAG_NO_HYDE === "1") lsSeeds.push(["cloakpdf:rag-hyde", "0"]);
     if (lsSeeds.length > 0) {

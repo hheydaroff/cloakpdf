@@ -30,6 +30,7 @@
  *   - `cancel()`    — dismisses all consent dialogs in lockstep.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { clearAllCachedIndexes } from "../rag/index.ts";
 import {
   type ChatVariantId,
   clearAllReadyFlags,
@@ -391,15 +392,27 @@ export function useRagModels(): UseRagModelsReturn {
   /**
    * Full evict path. Ordering matters: drop RAM first so no
    * pipeline is mid-init when we yank the bytes from underneath it,
-   * then evict CacheStorage, then clear the consent flags so the
-   * user re-experiences the consent dialog (and the migration
-   * guard) on next use. Cache + flag clears are best-effort and
-   * independent — a private-mode localStorage failure shouldn't
-   * roll back the disk eviction.
+   * then evict CacheStorage, then wipe the IndexedDB vector cache,
+   * then clear the consent flags so the user re-experiences the
+   * consent dialog (and the migration guard) on next use.
+   *
+   * The IndexedDB wipe ({@link clearAllCachedIndexes}) is *not*
+   * optional. Without it, "Delete cached models" leaves every
+   * previously-indexed PDF's embeddings sitting on disk; the user
+   * re-uploads the same file expecting a clean slate and instead
+   * gets a silent rehydrate (no re-extract, no re-embed) because
+   * `getCachedIndex(sha256)` still hits. That's a surprise — Delete
+   * is meant to mean *everything*, and the embeddings were produced
+   * by models we just deleted, so they're stale-by-association even
+   * if the bytes-on-disk match.
+   *
+   * Cache + flag + index clears are independent and best-effort — a
+   * private-mode failure on any one shouldn't roll back the others.
    */
   const evict = useCallback(async (): Promise<ModelCacheEvictResult> => {
     await disposeAllModels();
     const result = await evictModelCacheBytes();
+    await clearAllCachedIndexes();
     clearAllReadyFlags();
     // Same reasoning as `dispose`: tell each sub-hook the pipeline
     // is gone so the rollup status drops to "idle" and the UI re-

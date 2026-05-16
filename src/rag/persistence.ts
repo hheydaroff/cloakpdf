@@ -175,6 +175,49 @@ async function evictOld(): Promise<void> {
   });
 }
 
+/**
+ * Wipe every cached RAG index from IndexedDB. Returns the number of
+ * records removed (0 if IDB is unavailable or the store was already
+ * empty). The on-disk model weights live in CacheStorage and are
+ * cleared by a separate path — see `evictModelCacheBytes`.
+ *
+ * Used by the "Delete cached models" flow so a full reset clears
+ * *everything* the AI pipeline persisted: model weights, ready
+ * flags, *and* the per-PDF vector index. Without this, re-uploading
+ * the same PDF after a Delete would silently rehydrate from the
+ * stale cached embeddings — the bug a user hit during e2e.
+ *
+ * Closes the cached connection at the end so a subsequent
+ * {@link getCachedIndex} call re-opens, in case we ever bump
+ * {@link DB_VERSION} between the evict and the next reload.
+ */
+export async function clearAllCachedIndexes(): Promise<number> {
+  const db = await openDb();
+  if (!db) return 0;
+  const count = await new Promise<number>((resolve) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const os = tx.objectStore(STORE_NAME);
+    const countReq = os.count();
+    countReq.onsuccess = () => {
+      const n = countReq.result;
+      const clearReq = os.clear();
+      clearReq.onsuccess = () => resolve(n);
+      clearReq.onerror = () => resolve(0);
+    };
+    countReq.onerror = () => resolve(0);
+  });
+  // Drop the cached connection so the next caller re-opens fresh.
+  // The promise was the only handle to the db; closing it makes the
+  // module-level `_dbPromise` reset benign.
+  try {
+    db.close();
+  } catch {
+    // ignore
+  }
+  _dbPromise = null;
+  return count;
+}
+
 /** Hex SHA-256 of the bytes — the cache key we use everywhere. */
 export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const hash = await crypto.subtle.digest("SHA-256", bytes);
