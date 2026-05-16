@@ -784,6 +784,131 @@ async function main() {
       `  ✓ address reply contains all three ground-truth components (${GROUND_TRUTH.addressCity}, ${GROUND_TRUTH.addressState}, ${GROUND_TRUTH.addressCountry})`,
     );
 
+    // ── Model swap ────────────────────────────────────────────────
+    // Exercise the mid-session tier swap: click "Change model" on
+    // the ActiveModelBar, pick the *other* tier in the dialog,
+    // confirm, wait for the new model to warm-load and the session
+    // to re-bind against it, then run one more question.
+    //
+    // Why this is a distinct regression case:
+    //
+    //   - `setChatVariant` unloads the previous chat pipeline; if
+    //     that drops the right entries from the runtime caches a
+    //     dangling reference in the still-mounted `RagSession`
+    //     would crash on the next `ask`. AskPdf invalidates the
+    //     session on `chatVariant` change to dodge that; if that
+    //     invalidation effect ever regresses, the next ask would
+    //     hit a disposed pipe.
+    //   - The new tier may already be cached (both flags set in
+    //     this profile), so the swap is a *warm load* — same code
+    //     path the no-flash assertion above pins, just triggered
+    //     from a different entry point. Without this case a swap-
+    //     time regression in the rollup status promotion would
+    //     never get exercised.
+    //   - Embed + rerank stay shared across tiers; the test that
+    //     these are *not* unloaded on a tier swap is implicit in
+    //     the fact that the post-swap question still works.
+    console.log("\n→ Opening the model picker to swap tiers…");
+    const swapStartedAt = Date.now();
+    const swapClicked = await page.evaluate(() => {
+      const btn = document.querySelector('button[aria-label="Change model"]');
+      if (btn instanceof HTMLButtonElement && !btn.disabled) {
+        btn.click();
+        return true;
+      }
+      return false;
+    });
+    if (!swapClicked)
+      bail("Couldn't find / click the 'Change model' button on the ActiveModelBar.");
+
+    await page
+      .waitForFunction(() => !!document.getElementById("chat-model-picker-title"), {
+        timeout: 5_000,
+      })
+      .catch(() => bail("Picker dialog never opened after clicking 'Change model'."));
+
+    // Pick the *unselected* tier — the picker uses aria-pressed="true"
+    // on the active one; the other one is what we want to swap to.
+    const swapTarget = await page.evaluate(() => {
+      const titleEl = document.getElementById("chat-model-picker-title");
+      const dialog = titleEl?.closest('[role="dialog"]');
+      if (!dialog) return null;
+      const tierButtons = Array.from(dialog.querySelectorAll("button[aria-pressed]"));
+      const unselected = tierButtons.find((b) => b.getAttribute("aria-pressed") === "false");
+      if (!(unselected instanceof HTMLButtonElement)) return null;
+      const label = (unselected.textContent ?? "").trim().slice(0, 80);
+      unselected.click();
+      return label;
+    });
+    if (!swapTarget) bail("Couldn't find an unselected tier button in the picker dialog.");
+    console.log(`  → picked: ${swapTarget}`);
+
+    const switchClicked = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll("button"));
+      const btn = buttons.find((b) => (b.textContent ?? "").trim() === "Switch model");
+      if (btn instanceof HTMLButtonElement && !btn.disabled) {
+        btn.click();
+        return true;
+      }
+      return false;
+    });
+    if (!switchClicked) {
+      bail("'Switch model' button missing or disabled after picking a different tier.");
+    }
+
+    // Wait for the swap to complete. Signal: picker gone AND the
+    // composer re-enables (the session-build effect rebuilt against
+    // the new chat pipe + the cached IDB index). 60s headroom covers
+    // a fresh download in case the second tier wasn't actually
+    // cached in this profile (defensive — usually it's < 5s warm).
+    console.log("→ Waiting for swap to complete (composer re-enables)…");
+    await page
+      .waitForFunction(
+        () => {
+          const dialogTitle = document.getElementById("chat-model-picker-title");
+          const composer = document.querySelector("textarea");
+          return !dialogTitle && composer instanceof HTMLTextAreaElement && !composer.disabled;
+        },
+        { timeout: 5 * 60_000 },
+      )
+      .catch(() => bail("Composer never re-enabled after model swap — swap stalled."));
+    console.log(`  ✓ swap complete in ${Date.now() - swapStartedAt} ms`);
+
+    console.log("→ Asking a question on the swapped tier…");
+    const swapReply = await timed("question-after-swap", async () => {
+      const priorSwapBubbleCount = await page.evaluate(
+        () => document.querySelectorAll("[data-bubble]").length,
+      );
+      await page.focus("textarea");
+      await page.keyboard.type("Summarize this document in two sentences.");
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        (prev) => {
+          const bubbles = document.querySelectorAll("[data-bubble]");
+          if (bubbles.length < prev + 2) return false;
+          const lastBubble = bubbles[bubbles.length - 1];
+          if (lastBubble.getAttribute("data-streaming") === "true") return false;
+          return (lastBubble.textContent ?? "").trim().length > 0;
+        },
+        { timeout: 5 * 60 * 1000 },
+        priorSwapBubbleCount,
+      );
+      return await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+        return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+      });
+    });
+    console.log("\n──────── post-swap assistant reply ────────");
+    console.log(swapReply);
+    console.log("───────────────────────────────────────────\n");
+    if (!swapReply) bail("Post-swap: assistant returned an empty reply.");
+    if (/^[! ]{20,}$/.test(swapReply)) bail("Post-swap: degenerate token loop.");
+    const swapNgramWorst = worstNgramRepeat(swapReply);
+    if (swapNgramWorst >= 4) {
+      bail(`Post-swap: assistant looped — same 4-word window ${swapNgramWorst}× in the reply.`);
+    }
+    console.log("  ✓ post-swap reply non-empty, no loop");
+
     // Smoke assertions tuned to the failure modes we've actually hit:
     //
     //   - Empty reply (model didn't speak).
@@ -826,6 +951,7 @@ async function main() {
         phone: phoneReply.slice(0, 200),
         email: emailReply.slice(0, 200),
         address: addressReply.slice(0, 200),
+        postSwap: swapReply.slice(0, 600),
       },
     };
     console.log(`E2E_SUMMARY ${JSON.stringify(summary)}`);
