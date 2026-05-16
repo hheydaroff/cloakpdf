@@ -298,20 +298,22 @@ export default function AskPdf() {
           {/*
             Render the active-model bar at the drop-zone stage too
             (in addition to the post-upload location below) whenever
-            models are already loaded. This brings "Free memory" and
-            "Delete cached models" one click away from the entry
-            point for return visitors who want to manage AI storage
-            without first uploading a PDF — previously the only path
-            in was upload → wait for indexing → bar → details modal.
+            there's anything to manage — either models in RAM
+            (canFreeMemory) or models cached on disk (canDelete).
+            This brings the storage actions one click from the entry
+            point for return visitors who want to free or delete
+            without first uploading a PDF.
           */}
-          {rag.status === "ready" && (
+          {(rag.canFreeMemory || rag.canDelete) && (
             <ActiveModelBar
               models={[rag.chat.info, rag.embed.info, rag.rerank.info]}
               roles={["chat", "retrieval", "rerank"]}
-              ready
+              ready={rag.status === "ready"}
               onChange={() => setVariantPickerOpen(true)}
               onFreeMemory={rag.dispose}
               onDeleteCachedModels={rag.evict}
+              canFreeMemory={rag.canFreeMemory}
+              canDelete={rag.canDelete}
             />
           )}
         </>
@@ -401,9 +403,14 @@ export default function AskPdf() {
                 // forces re-consent on next use. The session-
                 // invalidation effect above clears sessionRef when
                 // rag.status drops, so either action leaves the
-                // tool in a clean rebuild-on-next-ready state.
+                // tool in a clean rebuild-on-next-ready state. The
+                // can* flags hide each button after its
+                // corresponding store empties, so the user never
+                // gets to click on a no-op.
                 onFreeMemory={rag.dispose}
                 onDeleteCachedModels={rag.evict}
+                canFreeMemory={rag.canFreeMemory}
+                canDelete={rag.canDelete}
               />
             </>
           )}

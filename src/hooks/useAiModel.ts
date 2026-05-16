@@ -82,6 +82,18 @@ export interface UseAiModelReturn {
   retry: () => void;
   /** Cancel the pending consent or in-flight download. */
   cancel: () => void;
+  /**
+   * Drop the hook's reference to the loaded pipeline and reset state
+   * back to `idle`. Use this when an out-of-band action (e.g.
+   * `disposeAllModels()` from the rollup hook) has torn down the
+   * runtime-level pipeline — the hook would otherwise keep reporting
+   * `ready` forever even though the underlying pipeline is gone.
+   *
+   * Does **not** touch the localStorage ready-flag or CacheStorage
+   * bytes; those are managed at the runtime/rollup layer. This is
+   * pure in-hook state reset.
+   */
+  reset: () => void;
 }
 
 export function useAiModel(modelId: AiModelId): UseAiModelReturn {
@@ -238,6 +250,20 @@ export function useAiModel(modelId: AiModelId): UseAiModelReturn {
     setError(null);
   }, []);
 
+  const reset = useCallback(() => {
+    // Drop the hook's pipeline ref so a future ensureReady() doesn't
+    // short-circuit to the now-torn-down handle. Reject any pending
+    // consumers since the pipeline they were waiting for is gone.
+    pipelineRef.current = null;
+    const pending = pendingRef.current;
+    pendingRef.current = [];
+    for (const { reject } of pending) reject(new Error("reset"));
+    if (!mountedRef.current) return;
+    setStatus("idle");
+    setProgress(null);
+    setError(null);
+  }, []);
+
   return {
     info,
     status,
@@ -247,5 +273,6 @@ export function useAiModel(modelId: AiModelId): UseAiModelReturn {
     confirm,
     retry,
     cancel,
+    reset,
   };
 }

@@ -100,6 +100,23 @@ export interface UseRagModelsReturn {
    * means there was nothing cached to begin with).
    */
   evict: () => Promise<ModelCacheEvictResult>;
+  /**
+   * `true` when at least one pipeline is currently loaded in RAM —
+   * i.e. there's something for {@link dispose} to free. Drives the
+   * "Free memory" button's disabled state: after a successful
+   * dispose this flips to `false` and the button hides until a
+   * re-load.
+   */
+  canFreeMemory: boolean;
+  /**
+   * `true` when at least one model is loaded in RAM *or* known to
+   * have weights cached on disk (`isModelMarkedReady` set). Drives
+   * the "Delete cached models" button. After {@link evict} runs the
+   * flags are cleared and statuses reset, so this flips to `false`
+   * — preventing the user from clicking Delete on an already-empty
+   * cache.
+   */
+  canDelete: boolean;
 }
 
 /**
@@ -259,7 +276,20 @@ export function useRagModels(): UseRagModelsReturn {
 
   const dispose = useCallback(async () => {
     await disposeAllModels();
-  }, []);
+    // `disposeAllModels` only clears the runtime-level pipeline
+    // cache; without these resets each sub-hook keeps its local
+    // `status === "ready"` state forever even though the underlying
+    // pipeline is gone. That's the bug that made the "Free memory"
+    // button stay enabled after a successful click. Resetting each
+    // hook drops them to "idle"; the rollup re-derives from there.
+    chat.reset();
+    embed.reset();
+    rerank.reset();
+    // Reset the auto-load guard so a fresh ensureReady() on a
+    // post-dispose return-visitor re-fires correctly instead of
+    // being skipped by the "I already tried this variant" check.
+    attemptedRef.current = null;
+  }, [chat, embed, rerank]);
 
   /**
    * Full evict path. Ordering matters: drop RAM first so no
@@ -274,8 +304,27 @@ export function useRagModels(): UseRagModelsReturn {
     await disposeAllModels();
     const result = await evictModelCacheBytes();
     clearAllReadyFlags();
+    // Same reasoning as `dispose`: tell each sub-hook the pipeline
+    // is gone so the rollup status drops to "idle" and the UI re-
+    // renders with the buttons disabled.
+    chat.reset();
+    embed.reset();
+    rerank.reset();
+    attemptedRef.current = null;
     return result;
-  }, []);
+  }, [chat, embed, rerank]);
+
+  // Derived booleans for the storage-action buttons. Recomputed on
+  // every render so flag clears + status resets propagate without
+  // any extra subscription plumbing. `chatModelId` already keys off
+  // the active chat variant, so a tier swap reads the right flag.
+  const canFreeMemory =
+    chat.status === "ready" || embed.status === "ready" || rerank.status === "ready";
+  const canDelete =
+    canFreeMemory ||
+    isModelMarkedReady(chatModelId) ||
+    isModelMarkedReady("embed") ||
+    isModelMarkedReady("rerank");
 
   return {
     chat,
@@ -292,5 +341,7 @@ export function useRagModels(): UseRagModelsReturn {
     cancel,
     dispose,
     evict,
+    canFreeMemory,
+    canDelete,
   };
 }

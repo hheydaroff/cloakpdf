@@ -60,6 +60,24 @@ interface AiModelDetailsDialogProps {
    * state; we don't try to second-guess it from the model status.
    */
   storageActionsDisabled?: boolean;
+  /**
+   * `true` when at least one pipeline is resident in RAM — i.e.
+   * there's something for {@link onFreeMemory} to actually free.
+   * When `false` (e.g. right after a dispose/evict), the "Free
+   * memory" button hides so the user isn't offered a no-op action.
+   * Wire from `useRagModels.canFreeMemory`. Default `true`
+   * preserves the old always-show behaviour for callers that
+   * haven't been updated yet.
+   */
+  canFreeMemory?: boolean;
+  /**
+   * `true` when at least one model is loaded in RAM *or* known to
+   * have weights cached on disk. When `false` (cache evicted, no
+   * pipelines loaded), the destructive "Delete cached models"
+   * button hides — nothing to delete, so the affordance would be a
+   * no-op. Wire from `useRagModels.canDelete`.
+   */
+  canDelete?: boolean;
 }
 
 export function AiModelDetailsDialog({
@@ -70,6 +88,8 @@ export function AiModelDetailsDialog({
   onFreeMemory,
   onDelete,
   storageActionsDisabled,
+  canFreeMemory = true,
+  canDelete = true,
 }: AiModelDetailsDialogProps) {
   // Two-step confirm state for "Delete cached models" — clicking the
   // button arms it ("Click again to confirm"); clicking the armed
@@ -99,7 +119,15 @@ export function AiModelDetailsDialog({
   if (!open) return null;
 
   const totalBytes = models.reduce((sum, m) => sum + m.approxSizeBytes, 0);
-  const showStorageActions = Boolean(onFreeMemory || onDelete);
+  // An individual button shows iff its callback is wired AND there's
+  // actually something for it to act on. The whole storage section
+  // hides when neither button has anything to do — keeps the modal
+  // tidy after a successful evict (nothing to free, nothing to
+  // delete) instead of leaving two ghost rows of "this won't do
+  // anything" buttons.
+  const showFreeMemory = Boolean(onFreeMemory) && canFreeMemory;
+  const showDelete = Boolean(onDelete) && canDelete;
+  const showStorageActions = showFreeMemory || showDelete;
 
   async function handleFreeMemory() {
     if (!onFreeMemory || busy) return;
@@ -204,8 +232,8 @@ export function AiModelDetailsDialog({
           {showStorageActions && (
             <StorageActions
               totalBytes={totalBytes}
-              onFreeMemory={onFreeMemory}
-              onDelete={onDelete}
+              onFreeMemory={showFreeMemory ? onFreeMemory : undefined}
+              onDelete={showDelete ? onDelete : undefined}
               deleteArmed={deleteArmed}
               onDeleteClick={handleDeleteClick}
               onCancelDelete={() => setDeleteArmed(false)}

@@ -76,6 +76,21 @@ interface ActiveModelBarProps {
    * dialog on next use. Wire from `useRagModels.evict`. Omit to hide.
    */
   onDeleteCachedModels?: () => void | Promise<unknown>;
+  /**
+   * `true` when there's actually anything in RAM for "Free memory"
+   * to release. Drives both the inline bar button visibility and
+   * the matching dialog button. Wire from `useRagModels.canFreeMemory`.
+   * Defaults to {@link ready} so older callers keep working.
+   */
+  canFreeMemory?: boolean;
+  /**
+   * `true` when there's anything cached on disk or loaded in RAM
+   * for "Delete cached models" to evict. After a successful delete
+   * this flips to `false` and the dialog's Delete button hides —
+   * preventing a click on an already-empty cache. Wire from
+   * `useRagModels.canDelete`. Defaults to {@link ready}.
+   */
+  canDelete?: boolean;
 }
 
 export function ActiveModelBar({
@@ -86,7 +101,14 @@ export function ActiveModelBar({
   disabled,
   onFreeMemory,
   onDeleteCachedModels,
+  canFreeMemory,
+  canDelete,
 }: ActiveModelBarProps) {
+  // Fall back to `ready` for callers that haven't been migrated to
+  // the explicit can* props yet — preserves old behaviour (button
+  // visible whenever all models are loaded).
+  const freeMemoryAvailable = canFreeMemory ?? ready;
+  const deleteAvailable = canDelete ?? ready;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const verb = ready ? "Running" : "Selected";
 
@@ -133,7 +155,7 @@ export function ActiveModelBar({
           </button>
         </div>
         <div className="shrink-0 flex items-center gap-1.5">
-          {onFreeMemory && ready && (
+          {onFreeMemory && freeMemoryAvailable && (
             <button
               type="button"
               onClick={() => void onFreeMemory()}
@@ -169,6 +191,8 @@ export function ActiveModelBar({
         onFreeMemory={onFreeMemory}
         onDelete={onDeleteCachedModels}
         storageActionsDisabled={disabled}
+        canFreeMemory={freeMemoryAvailable}
+        canDelete={deleteAvailable}
       />
     </>
   );
