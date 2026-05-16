@@ -2,9 +2,11 @@
  * End-to-end smoke test for the AI tools.
  *
  * This is the only test that can answer "does the model actually
- * work?" — everything else runs in Node, with the LLM mocked. Here we
- * drive a real browser, let it download the Qwen weights, and assert
- * the chat tool produces a non-degenerate reply.
+ * work?" — everything else runs in Node, with the LLM mocked. Here
+ * we drive a real browser, let it download the active chat tier's
+ * weights (LFM2.5-1.2B-Instruct by default — see
+ * {@link getDefaultChatVariant}), and assert the chat tool produces
+ * a non-degenerate reply.
  *
  * ## Requirements
  *
@@ -30,8 +32,13 @@
  *     produced *some* output, not that the output is correct. Output
  *     quality is a human-judgement call and lives outside automated
  *     testing.
- *   - The tool now loads a single chat model and an embedder together;
- *     there is no tier picker to bypass.
+ *   - The tool ships a 3-tier chat picker (Compact / Balanced /
+ *     Quality) but this test exercises only the default tier — the
+ *     picker is a click-through in the gate, and clicking "Download
+ *     model" without first picking another tier loads whatever is
+ *     stored in localStorage (or the static default on a fresh
+ *     profile). Override with `cloakpdf:chat-variant` in localStorage
+ *     when you want to e2e a specific tier.
  */
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -39,6 +46,27 @@ import { launch } from "puppeteer-core";
 
 const FIXTURE_PATH = resolve(import.meta.dirname, "../fixtures/sample.pdf");
 const DEV_URL = process.env.E2E_URL ?? "http://localhost:5173";
+
+/**
+ * Optional chat-tier override. When set, we seed the picker's
+ * localStorage key before page navigation so the test exercises a
+ * specific tier (e.g. for cross-model comparison runs):
+ *
+ *   CHAT_VARIANT=lfm2-2.6b pnpm test:e2e
+ *
+ * Valid values are the `ChatVariantId` slugs in
+ * `src/utils/ai-models.ts`. Unset → use whatever's already in
+ * localStorage, or the static default for a fresh profile.
+ */
+const VALID_CHAT_VARIANTS = ["lfm2.5-1.2b", "lfm2-2.6b"] as const;
+type ValidChatVariant = (typeof VALID_CHAT_VARIANTS)[number];
+const CHAT_VARIANT_OVERRIDE: ValidChatVariant | null = (() => {
+  const raw = process.env.CHAT_VARIANT;
+  if (!raw) return null;
+  if ((VALID_CHAT_VARIANTS as readonly string[]).includes(raw)) return raw as ValidChatVariant;
+  console.error(`✗ Invalid CHAT_VARIANT="${raw}". Pick one of: ${VALID_CHAT_VARIANTS.join(", ")}.`);
+  process.exit(1);
+})();
 // puppeteer-core needs an explicit browser binary. Default to the
 // stock macOS Chrome path; override with CHROME_PATH=/path/to/chrome
 // when running on Linux/Windows or with a different channel.
@@ -120,6 +148,37 @@ async function main() {
   try {
     const page = await browser.newPage();
     page.setDefaultTimeout(60_000);
+
+    // Seed the chat-tier preference *before* any app script runs so
+    // the picker boots straight into the override. `evaluateOnNewDocument`
+    // fires before every navigation in this page's lifetime, so the
+    // post-reload warm-cache path is covered too.
+    if (CHAT_VARIANT_OVERRIDE) {
+      const variant = CHAT_VARIANT_OVERRIDE;
+      await page.evaluateOnNewDocument((v) => {
+        try {
+          localStorage.setItem("cloakpdf:chat-variant", v);
+        } catch {
+          // Private mode / quota — the test will just exercise
+          // whatever localStorage default applies.
+        }
+      }, variant);
+      console.log(`→ CHAT_VARIANT override active: ${variant}`);
+    }
+
+    // Per-question timing so cross-tier comparison runs can be
+    // collated. We append to this array on every measured question
+    // and dump it as a single JSON line at the end so a wrapper
+    // script can parse without parsing the prose log.
+    const timings: Array<{ label: string; ms: number }> = [];
+    const timed = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+      const t0 = Date.now();
+      const out = await fn();
+      const ms = Date.now() - t0;
+      timings.push({ label, ms });
+      console.log(`  ⏱ ${label}: ${ms} ms`);
+      return out;
+    };
 
     // Surface browser-side errors to the Node test runner. Without
     // this, a runtime exception in the React tree (e.g. a bad
@@ -298,9 +357,19 @@ async function main() {
     if (!gateClicked && !consentClicked) {
       console.log("  · skipping progress-advances check (warm cache — no progress dialog)");
     } else if (progressOutcome.states.length < 3) {
-      bail(
-        `Progress did not visibly advance — only ${progressOutcome.states.length} distinct state(s) observed: ${progressOutcome.states.join(", ")}. Indicates the React-batching regression has returned.`,
-      );
+      // The React-batching regression check is meant to catch a UI
+      // regression on the canonical default-tier load. Cross-tier
+      // comparison runs (CHAT_VARIANT_OVERRIDE set) are about
+      // measuring inference quality + latency across variants —
+      // not the cold-load progress UX. Soften to a warning so a
+      // single weird progress sample doesn't abort a multi-tier
+      // comparison.
+      const msg = `Progress did not visibly advance — only ${progressOutcome.states.length} distinct state(s) observed: ${progressOutcome.states.join(", ")}.`;
+      if (CHAT_VARIANT_OVERRIDE) {
+        console.warn(`  ⚠ ${msg} (warned: CHAT_VARIANT comparison run, not bailing)`);
+      } else {
+        bail(`${msg} Indicates the React-batching regression has returned.`);
+      }
     }
 
     console.log("→ Asking a question…");
@@ -311,33 +380,35 @@ async function main() {
     // the user's own message as the assistant reply. The data
     // attribute is a stable test hook — switching the inner rendering
     // (e.g. plain `<p>` → react-markdown) doesn't change it.
-    const priorBubbleCount = await page.evaluate(
-      () => document.querySelectorAll("[data-bubble]").length,
-    );
-    await page.focus("textarea");
-    await page.keyboard.type("What is this document about?");
-    await page.keyboard.press("Enter");
+    const reply = await timed("question-cold-overview", async () => {
+      const priorBubbleCount = await page.evaluate(
+        () => document.querySelectorAll("[data-bubble]").length,
+      );
+      await page.focus("textarea");
+      await page.keyboard.type("What is this document about?");
+      await page.keyboard.press("Enter");
 
-    // Wait for the assistant turn's streaming to finish. We detect
-    // "done" by the bubble's `data-streaming` attribute flipping to
-    // "false" — the markdown rewrite means `.animate-pulse` is no
-    // longer reliably inside the last `<p>` and a class-name probe
-    // would silently fall through.
-    await page.waitForFunction(
-      (prev) => {
-        const bubbles = document.querySelectorAll("[data-bubble]");
-        if (bubbles.length < prev + 2) return false;
-        const lastBubble = bubbles[bubbles.length - 1];
-        if (lastBubble.getAttribute("data-streaming") === "true") return false;
-        return (lastBubble.textContent ?? "").trim().length > 0;
-      },
-      { timeout: 5 * 60 * 1000 },
-      priorBubbleCount,
-    );
+      // Wait for the assistant turn's streaming to finish. We detect
+      // "done" by the bubble's `data-streaming` attribute flipping to
+      // "false" — the markdown rewrite means `.animate-pulse` is no
+      // longer reliably inside the last `<p>` and a class-name probe
+      // would silently fall through.
+      await page.waitForFunction(
+        (prev) => {
+          const bubbles = document.querySelectorAll("[data-bubble]");
+          if (bubbles.length < prev + 2) return false;
+          const lastBubble = bubbles[bubbles.length - 1];
+          if (lastBubble.getAttribute("data-streaming") === "true") return false;
+          return (lastBubble.textContent ?? "").trim().length > 0;
+        },
+        { timeout: 5 * 60 * 1000 },
+        priorBubbleCount,
+      );
 
-    const reply = await page.evaluate(() => {
-      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
-      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+      return await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+        return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+      });
     });
 
     console.log("\n──────── assistant reply ────────");
@@ -392,26 +463,28 @@ async function main() {
     // here we prove the full retrieve → generate pipeline still works
     // after the page reload that wiped in-memory pipelines.
     console.log("→ Asking a question on the warm-cache path…");
-    const priorWarmBubbleCount = await page.evaluate(
-      () => document.querySelectorAll("[data-bubble]").length,
-    );
-    await page.focus("textarea");
-    await page.keyboard.type("What does the document discuss?");
-    await page.keyboard.press("Enter");
-    await page.waitForFunction(
-      (prev) => {
-        const bubbles = document.querySelectorAll("[data-bubble]");
-        if (bubbles.length < prev + 2) return false;
-        const lastBubble = bubbles[bubbles.length - 1];
-        if (lastBubble.getAttribute("data-streaming") === "true") return false;
-        return (lastBubble.textContent ?? "").trim().length > 0;
-      },
-      { timeout: 5 * 60 * 1000 },
-      priorWarmBubbleCount,
-    );
-    const warmReply = await page.evaluate(() => {
-      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
-      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+    const warmReply = await timed("question-warm-overview", async () => {
+      const priorWarmBubbleCount = await page.evaluate(
+        () => document.querySelectorAll("[data-bubble]").length,
+      );
+      await page.focus("textarea");
+      await page.keyboard.type("What does the document discuss?");
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        (prev) => {
+          const bubbles = document.querySelectorAll("[data-bubble]");
+          if (bubbles.length < prev + 2) return false;
+          const lastBubble = bubbles[bubbles.length - 1];
+          if (lastBubble.getAttribute("data-streaming") === "true") return false;
+          return (lastBubble.textContent ?? "").trim().length > 0;
+        },
+        { timeout: 5 * 60 * 1000 },
+        priorWarmBubbleCount,
+      );
+      return await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+        return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+      });
     });
     console.log("\n──────── warm-cache assistant reply ────────");
     console.log(warmReply);
@@ -453,26 +526,28 @@ async function main() {
       addressCountry: "India",
     };
     console.log("→ Asking an extraction question (phone)…");
-    const priorExtractBubbleCount = await page.evaluate(
-      () => document.querySelectorAll("[data-bubble]").length,
-    );
-    await page.focus("textarea");
-    await page.keyboard.type("Give me Sumit's phone number.");
-    await page.keyboard.press("Enter");
-    await page.waitForFunction(
-      (prev) => {
-        const bubbles = document.querySelectorAll("[data-bubble]");
-        if (bubbles.length < prev + 2) return false;
-        const lastBubble = bubbles[bubbles.length - 1];
-        if (lastBubble.getAttribute("data-streaming") === "true") return false;
-        return (lastBubble.textContent ?? "").trim().length > 0;
-      },
-      { timeout: 5 * 60 * 1000 },
-      priorExtractBubbleCount,
-    );
-    const phoneReply = await page.evaluate(() => {
-      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
-      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+    const phoneReply = await timed("question-phone-extraction", async () => {
+      const priorExtractBubbleCount = await page.evaluate(
+        () => document.querySelectorAll("[data-bubble]").length,
+      );
+      await page.focus("textarea");
+      await page.keyboard.type("Give me Sumit's phone number.");
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        (prev) => {
+          const bubbles = document.querySelectorAll("[data-bubble]");
+          if (bubbles.length < prev + 2) return false;
+          const lastBubble = bubbles[bubbles.length - 1];
+          if (lastBubble.getAttribute("data-streaming") === "true") return false;
+          return (lastBubble.textContent ?? "").trim().length > 0;
+        },
+        { timeout: 5 * 60 * 1000 },
+        priorExtractBubbleCount,
+      );
+      return await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+        return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+      });
     });
     console.log("\n──────── phone extraction reply ────────");
     console.log(phoneReply);
@@ -505,26 +580,28 @@ async function main() {
     // path. Email is structurally easier (no normalisation
     // ambiguity) so we just look for the literal address.
     console.log("→ Asking an extraction question (email)…");
-    const priorEmailBubbleCount = await page.evaluate(
-      () => document.querySelectorAll("[data-bubble]").length,
-    );
-    await page.focus("textarea");
-    await page.keyboard.type("What is the email address in this document?");
-    await page.keyboard.press("Enter");
-    await page.waitForFunction(
-      (prev) => {
-        const bubbles = document.querySelectorAll("[data-bubble]");
-        if (bubbles.length < prev + 2) return false;
-        const lastBubble = bubbles[bubbles.length - 1];
-        if (lastBubble.getAttribute("data-streaming") === "true") return false;
-        return (lastBubble.textContent ?? "").trim().length > 0;
-      },
-      { timeout: 5 * 60 * 1000 },
-      priorEmailBubbleCount,
-    );
-    const emailReply = await page.evaluate(() => {
-      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
-      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+    const emailReply = await timed("question-email-extraction", async () => {
+      const priorEmailBubbleCount = await page.evaluate(
+        () => document.querySelectorAll("[data-bubble]").length,
+      );
+      await page.focus("textarea");
+      await page.keyboard.type("What is the email address in this document?");
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        (prev) => {
+          const bubbles = document.querySelectorAll("[data-bubble]");
+          if (bubbles.length < prev + 2) return false;
+          const lastBubble = bubbles[bubbles.length - 1];
+          if (lastBubble.getAttribute("data-streaming") === "true") return false;
+          return (lastBubble.textContent ?? "").trim().length > 0;
+        },
+        { timeout: 5 * 60 * 1000 },
+        priorEmailBubbleCount,
+      );
+      return await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+        return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+      });
     });
     console.log("\n──────── email extraction reply ────────");
     console.log(emailReply);
@@ -544,26 +621,28 @@ async function main() {
     // ("just Pune") or fabricating one ("Hyderabad" — which IS in the
     // doc as a former workplace location, an easy confusion path).
     console.log("→ Asking an extraction question (address)…");
-    const priorAddrBubbleCount = await page.evaluate(
-      () => document.querySelectorAll("[data-bubble]").length,
-    );
-    await page.focus("textarea");
-    await page.keyboard.type("Where is Sumit based? Give me the city, state, and country.");
-    await page.keyboard.press("Enter");
-    await page.waitForFunction(
-      (prev) => {
-        const bubbles = document.querySelectorAll("[data-bubble]");
-        if (bubbles.length < prev + 2) return false;
-        const lastBubble = bubbles[bubbles.length - 1];
-        if (lastBubble.getAttribute("data-streaming") === "true") return false;
-        return (lastBubble.textContent ?? "").trim().length > 0;
-      },
-      { timeout: 5 * 60 * 1000 },
-      priorAddrBubbleCount,
-    );
-    const addressReply = await page.evaluate(() => {
-      const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
-      return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+    const addressReply = await timed("question-address-extraction", async () => {
+      const priorAddrBubbleCount = await page.evaluate(
+        () => document.querySelectorAll("[data-bubble]").length,
+      );
+      await page.focus("textarea");
+      await page.keyboard.type("Where is Sumit based? Give me the city, state, and country.");
+      await page.keyboard.press("Enter");
+      await page.waitForFunction(
+        (prev) => {
+          const bubbles = document.querySelectorAll("[data-bubble]");
+          if (bubbles.length < prev + 2) return false;
+          const lastBubble = bubbles[bubbles.length - 1];
+          if (lastBubble.getAttribute("data-streaming") === "true") return false;
+          return (lastBubble.textContent ?? "").trim().length > 0;
+        },
+        { timeout: 5 * 60 * 1000 },
+        priorAddrBubbleCount,
+      );
+      return await page.evaluate(() => {
+        const bubbles = document.querySelectorAll('[data-bubble="assistant"]');
+        return bubbles[bubbles.length - 1]?.textContent?.trim() ?? "";
+      });
     });
     console.log("\n──────── address extraction reply ────────");
     console.log(addressReply);
@@ -613,6 +692,24 @@ async function main() {
     }
 
     console.log("✓ AI chat smoke test passed.");
+
+    // Structured summary on a single line so a wrapper script can
+    // parse it across runs (we use it to build the cross-tier
+    // comparison table). Replies are truncated to keep the line
+    // size manageable but contain enough text to judge quality.
+    const summary = {
+      kind: "e2e-summary" as const,
+      variant: CHAT_VARIANT_OVERRIDE ?? "(default)",
+      timings,
+      replies: {
+        coldOverview: reply.slice(0, 600),
+        warmOverview: warmReply.slice(0, 600),
+        phone: phoneReply.slice(0, 200),
+        email: emailReply.slice(0, 200),
+        address: addressReply.slice(0, 200),
+      },
+    };
+    console.log(`E2E_SUMMARY ${JSON.stringify(summary)}`);
   } finally {
     await browser.close();
   }

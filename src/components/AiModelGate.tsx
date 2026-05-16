@@ -26,9 +26,10 @@
 import { Cpu, Loader2 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { UseAiModelReturn } from "../hooks/useAiModel.ts";
-import { type AiModelInfo, formatApproxSize } from "../utils/ai-models.ts";
+import { type AiModelInfo, type ChatVariantId, formatApproxSize } from "../utils/ai-models.ts";
 import { isModelMarkedReady } from "../utils/ai-runtime.ts";
 import { AiModelDetailsDialog } from "./AiModelDetailsDialog.tsx";
+import { ChatVariantPicker } from "./ChatVariantPicker.tsx";
 
 interface AiModelGateProps {
   ai: UseAiModelReturn;
@@ -45,6 +46,16 @@ interface AiModelGateProps {
    * details modal.
    */
   roles?: string[];
+  /**
+   * Active chat tier — when provided alongside {@link onChatVariantChange}
+   * the gate renders a tier picker above the download button so the
+   * user picks *before* committing to a download. Omitting either
+   * prop falls back to the single-tier layout used by tools that
+   * don't expose tier choice.
+   */
+  chatVariant?: ChatVariantId;
+  /** Fires when the user picks a different chat tier. */
+  onChatVariantChange?: (next: ChatVariantId) => void;
   /** Headline shown on the gate card. */
   title?: string;
   /** Lead-in sentence. Aggregate footprint and details link are appended. */
@@ -57,6 +68,8 @@ export function AiModelGate({
   ai,
   models,
   roles,
+  chatVariant,
+  onChatVariantChange,
   title = "Download AI model to continue",
   blurb = "Runs entirely in your browser; your PDFs are never uploaded.",
   children,
@@ -95,6 +108,11 @@ export function AiModelGate({
       ? `${modelList.length} small models load together — about ${formatApproxSize(totalBytes)} total.`
       : `${ai.info.displayName} (~${formatApproxSize(ai.info.approxSizeBytes)}).`;
 
+  // Tier picker is opt-in: both `chatVariant` and `onChatVariantChange`
+  // must be supplied (single-tier callers — e.g. tools that don't
+  // expose a chat-model choice — keep the original lean layout).
+  const showPicker = chatVariant !== undefined && onChatVariantChange !== undefined;
+
   return (
     <>
       <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-5">
@@ -119,6 +137,18 @@ export function AiModelGate({
             </p>
           </div>
         </div>
+        {showPicker && (
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-dark-border/60">
+            <p className="text-xs font-medium text-slate-600 dark:text-dark-text-muted mb-2">
+              Choose a chat model
+            </p>
+            <ChatVariantPicker
+              value={chatVariant}
+              onChange={onChatVariantChange}
+              disabled={loading}
+            />
+          </div>
+        )}
         <button
           type="button"
           onClick={() => {

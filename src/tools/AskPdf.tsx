@@ -31,6 +31,7 @@ import { ActiveModelBar } from "../components/ActiveModelBar.tsx";
 import { AiConsentDialog } from "../components/AiConsentDialog.tsx";
 import { AiModelGate } from "../components/AiModelGate.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
+import { ChatVariantPickerDialog } from "../components/ChatVariantPickerDialog.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
@@ -43,12 +44,13 @@ import { createRagSession, type IndexingProgress, type RagSession } from "../rag
 import { formatFileSize } from "../utils/file-helpers.ts";
 
 /**
- * Hard cap on user-question length. SmolLM2-1.7B has a 2 K token
- * context window; we reserve most of it for the document anchor +
- * relevant excerpts + system prompt, leaving the question slot at
+ * Hard cap on user-question length. The chat model tiers we ship have
+ * context windows from 2 K (SmolLM2-1.7B) up to 32 K (LFM2-2.6B); we
+ * reserve most of the smallest tier's window for the document anchor
+ * + relevant excerpts + system prompt, leaving the question slot at
  * ~100-150 tokens. 500 characters is a comfortable English-prose cap
  * for that slot — long enough for a detailed multi-clause question,
- * short enough that the model never has to truncate retrieved
+ * short enough that the smallest tier never has to truncate retrieved
  * context to fit. The textarea's `maxLength` enforces the cap at the
  * keystroke level so users can't paste a 10 KB blob and trigger
  * silent context-window overflow downstream.
@@ -73,6 +75,7 @@ export default function AskPdf() {
   const [indexing, setIndexing] = useState<IndexingProgress | null>(null);
   const [scannedHint, setScannedHint] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [variantPickerOpen, setVariantPickerOpen] = useState(false);
 
   const rag = useRagModels();
 
@@ -107,6 +110,25 @@ export default function AskPdf() {
   const isIndexing = indexing !== null;
 
   /**
+   * Invalidate the RAG session whenever the user swaps chat tiers.
+   * The session captured the previous chat pipeline by reference; that
+   * pipeline gets `unloadModel`'d by `setChatVariant` so the next
+   * `session.ask` would call into a disposed handle. Rebuilding is
+   * cheap — the IndexedDB vector cache survives (embedder didn't
+   * change) so it's a pipeline rewire, not a re-index.
+   *
+   * Chat turns are intentionally preserved: each question runs
+   * through the graph independently, so the displayed history stays
+   * coherent across a tier swap even though the answering model is
+   * now different.
+   */
+  useEffect(() => {
+    sessionRef.current = null;
+    setSessionReady(false);
+    setIndexing(null);
+  }, [rag.chatVariant]);
+
+  /**
    * Build the RAG session as soon as the PDF is loaded *and* both
    * models are ready. Idempotent — re-renders short-circuit on
    * `sessionRef.current`.
@@ -121,6 +143,7 @@ export default function AskPdf() {
         const { chat, embed } = await rag.ensureReady();
         const session = await createRagSession({
           chatPipe: chat,
+          chatInfo: rag.chat.info,
           embedPipe: embed,
           file,
           onIndexProgress: setIndexing,
@@ -270,6 +293,8 @@ export default function AskPdf() {
                 ai={rag.chat}
                 models={[rag.chat.info, rag.embed.info]}
                 roles={["chat", "retrieval"]}
+                chatVariant={rag.chatVariant}
+                onChatVariantChange={rag.setChatVariant}
                 title="Download AI models to start chatting"
                 blurb="Both run entirely in your browser; your PDFs are never uploaded."
               >
@@ -302,13 +327,13 @@ export default function AskPdf() {
                     />
                     {/*
                       Persistent caveat shown beneath the chat panel while
-                      chatting. On-device models are useful but small —
-                      SmolLM2-1.7B will occasionally misread digits,
-                      mis-attribute facts, or paraphrase loosely. Users
-                      should treat answers as a search assist, not as
-                      authoritative extracts. Matches the visual idiom of
-                      the RAM heads-up above so the warning vocabulary
-                      stays consistent across the tool.
+                      chatting. On-device chat models in the 1-3 B range
+                      occasionally misread digits, mis-attribute facts, or
+                      paraphrase loosely — true across all three tiers we
+                      ship today. Users should treat answers as a search
+                      assist, not as authoritative extracts. Matches the
+                      visual idiom of the RAM heads-up above so the
+                      warning vocabulary stays consistent across the tool.
                     */}
                     <p className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-dark-text-muted px-1">
                       <AlertTriangle
@@ -329,6 +354,8 @@ export default function AskPdf() {
                 secondaryInfo={rag.embed.info}
                 roles={["chat", "retrieval"]}
                 ready={rag.status === "ready"}
+                onChange={() => setVariantPickerOpen(true)}
+                disabled={task.processing || isIndexing}
               />
             </>
           )}
@@ -348,6 +375,16 @@ export default function AskPdf() {
         onConfirm={rag.confirm}
         onRetry={rag.retry}
         onCancel={rag.cancel}
+      />
+
+      <ChatVariantPickerDialog
+        open={variantPickerOpen}
+        current={rag.chatVariant}
+        onConfirm={(next) => {
+          rag.setChatVariant(next);
+          setVariantPickerOpen(false);
+        }}
+        onCancel={() => setVariantPickerOpen(false)}
       />
     </div>
   );

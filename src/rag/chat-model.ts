@@ -5,8 +5,13 @@
  * Why this adapter exists: LangGraph nodes, prompt templates, and any
  * future chains/agents speak in LangChain's `BaseMessage` / `ChatResult`
  * vocabulary. This class bridges that abstraction to our on-device
- * inference. Sampling defaults match the values that stop small-model
- * loop pathologies — see `runChat` for the full story.
+ * inference.
+ *
+ * Generation defaults travel with the model — each entry in
+ * `src/utils/ai-models.ts` carries its own `generationParams`. Pass
+ * the active model's {@link AiModelInfo} and the adapter pulls
+ * sampler / penalty / cap defaults straight off it. Constructor
+ * overrides win where the caller cares (rare; primarily tests).
  *
  * Streaming is implemented via `_streamResponseChunks` so consumers
  * can pipe tokens straight into the UI (typewriter chat) without
@@ -23,82 +28,128 @@ import {
   SystemMessage,
 } from "@langchain/core/messages";
 import { ChatGenerationChunk } from "@langchain/core/outputs";
+import type { AiModelInfo, ChatGenerationParams } from "../utils/ai-models.ts";
 import type { AiPipeline } from "../utils/ai-runtime.ts";
 import { type ChatMessage, runChat } from "../utils/ai-tasks.ts";
 
 export interface TransformersJsChatModelOptions extends BaseChatModelParams {
   /** Resolved Transformers.js `text-generation` pipeline. */
   pipeline: AiPipeline;
-  /** Per-call cap on tokens emitted. Default 384. */
+  /**
+   * Metadata for the active chat variant — supplies the generation
+   * defaults (`generationParams`). Required so a tier switch
+   * (SmolLM2 ↔ LFM2) automatically picks up the right sampler / rep-
+   * penalty / loop-breaker combo without a per-call override.
+   */
+  info: AiModelInfo;
+  /** Per-call cap on tokens emitted. Overrides `info.generationParams`. */
   maxNewTokens?: number;
-  /** Sampling temperature. Default 0.3. */
+  /** Sampling temperature. Overrides `info.generationParams`. */
   temperature?: number;
-  /** Nucleus sampling cutoff. Default 0.85. */
+  /** Top-p (nucleus) cutoff. Overrides `info.generationParams`. */
   topP?: number;
-  /** Repetition penalty. Default 1.1. */
+  /** Min-p cutoff (LFM2-style sampler). Overrides `info.generationParams`. */
+  minP?: number;
+  /** Repetition penalty. Overrides `info.generationParams`. */
   repetitionPenalty?: number;
-  /** Bans repeated n-grams of this size. 0 disables. Default 6. */
+  /** Bans repeated n-grams of this size. Overrides `info.generationParams`. */
   noRepeatNgramSize?: number;
 }
 
+/**
+ * Per-variant tuning history (so future-us doesn't repeat past
+ * dead-ends). Each entry below is keyed to the model in
+ * `src/utils/ai-models.ts` and lists the actual sampler walks against
+ * the résumé probe in `tests/e2e/retrieval-probe.ts`.
+ *
+ * **SmolLM2-1.7B-Instruct**  — `{ temp: 0.2, top_p: 0.85, rep: 1.15,
+ *                                no_repeat_ngram_size: 6, max: 256 }`
+ *
+ *   - 0.6 / 0.9 / 512 / 1.1 (original) → too much rope on factual
+ *     questions; the model would correctly extract a phone number
+ *     then add three paragraphs of hedging and confabulated context.
+ *   - 0.5 / 0.85 / 384 / 1.1 → caps verbosity but probe still
+ *     shows tool-list editorializing ("JavaScript (used in
+ *     Next.js, React, TypeScript)") and confident hallucination on
+ *     negative-topic questions ("what does the document say about
+ *     Docker?" → invented Docker content).
+ *   - 0.2 / 0.85 / 384 / 1.15 → near-greedy sampling pushes the
+ *     model to copy from retrieved chunks rather than confabulate,
+ *     but the expanded probe still caught two failure modes the
+ *     rep-penalty bump alone couldn't fix: (a) padding tool lists
+ *     with common-but-absent items, and (b) lexically-varied loops
+ *     ("Restricted tool sets, restricted tool selections, …") that
+ *     the rep penalty can't catch because each surface form is
+ *     distinct.
+ *   - 0.2 / 0.85 / 256 / 1.15 → capping new tokens at 256
+ *     truncates the worst of (a) and (b). A correct list fits
+ *     comfortably; a fabricated 50-item list runs into the cap.
+ *   - 0.2 / 0.85 / 256 / 1.15 + `no_repeat_ngram_size: 6` → e2e
+ *     still caught a lexical "ramp" loop on the overview question
+ *     ("X - Y - A - B - …") where each iteration extends the
+ *     previous by one token so the repetition penalty never fires.
+ *     The n-gram ban at size 6 is gentle enough that common short
+ *     phrases ("the document doesn't mention", "Sumit Sahoo is")
+ *     can still recur naturally, strict enough that an 8+ token
+ *     prefix-extension loop is broken immediately.
+ *
+ * **LFM2 family (1.2B + 2.6B)** — `{ temp: 0.3, min_p: 0.15,
+ *                                    rep: 1.05, max: 256 }`
+ *
+ *   - Liquid AI's documented sampler. Their training recipe already
+ *     discourages tight loops so `repetition_penalty` only needs the
+ *     gentlest tap (1.05 vs SmolLM2's 1.15). `min_p` (not `top_p`)
+ *     is the LFM2 family's documented cutoff — they're trained
+ *     against it; stacking `top_p` on top tends to over-constrain.
+ *   - Starting *without* `no_repeat_ngram_size`. If the probe
+ *     surfaces an LFM2-specific lexical-ramp loop we'll add it back
+ *     at size 6, but ship without the SmolLM2-specific crutch.
+ */
 export class TransformersJsChatModel extends SimpleChatModel {
   private pipeline: AiPipeline;
-  private maxNewTokens: number;
-  private temperature: number;
-  private topP: number;
-  private repetitionPenalty: number;
-  private noRepeatNgramSize: number;
+  private params: Required<
+    Pick<ChatGenerationParams, "maxNewTokens" | "temperature" | "repetitionPenalty">
+  > & {
+    topP?: number;
+    minP?: number;
+    noRepeatNgramSize?: number;
+  };
 
   constructor(options: TransformersJsChatModelOptions) {
     super(options);
     this.pipeline = options.pipeline;
-    // Defaults retuned for grounded extraction (2026-05). The chain of
-    // tuning steps so far:
-    //
-    //   - 0.6 / 0.9 / 512 / 1.1 (original) → too much rope on factual
-    //     questions; the model would correctly extract a phone number
-    //     then add three paragraphs of hedging and confabulated context.
-    //   - 0.5 / 0.85 / 384 / 1.1 (intermediate) → caps verbosity but
-    //     probe still shows tool-list editorializing ("JavaScript
-    //     (used in Next.js, React, TypeScript)") and confident
-    //     hallucination on negative-topic questions ("what does the
-    //     document say about Docker?" → invented Docker content).
-    //   - 0.2 / 0.85 / 384 / 1.15 (intermediate) → near-greedy
-    //     sampling pushes the model to copy from retrieved chunks
-    //     rather than confabulate, but the expanded probe still
-    //     caught two failure modes the rep-penalty bump alone
-    //     couldn't fix: (a) the model padding tool lists with
-    //     common-but-absent items ("Python, Java, Kotlin, Docker,
-    //     Kubernetes, Terraform, Ansible, Vue, Angular, Django,
-    //     Okta, Twilio, Stripe …"), and (b) lexically-varied loops
-    //     ("Restricted tool sets, restricted tool selections,
-    //     restricted tool choices, restricted tool configurations,
-    //     restricted tool implementations …") that the rep penalty
-    //     can't catch because each surface form is distinct.
-    //   - 0.2 / 0.85 / 256 / 1.15 (intermediate) → capping new tokens
-    //     at 256 truncates the worst of (a) and (b). A correct list
-    //     of the résumé's actual tools fits comfortably; a fabricated
-    //     50-item list runs into the cap.
-    //   - 0.2 / 0.85 / 256 / 1.15 + `no_repeat_ngram_size: 6`
-    //     (current) → e2e still caught a lexical "ramp" loop on the
-    //     overview question ("Teachers' Development Network - Kenya
-    //     - Africa - Asia - Europe - North America - South America
-    //     …") where each iteration extends the previous by one token
-    //     so the repetition penalty never fires. Re-add the n-gram
-    //     ban that the 360M variant carried, but at size 6 instead
-    //     of 4 — gentle enough that common short phrases ("the
-    //     document doesn't mention", "Sumit Sahoo is") can still
-    //     recur naturally, strict enough that an 8+ token prefix-
-    //     extension loop is broken immediately.
-    this.maxNewTokens = options.maxNewTokens ?? 256;
-    this.temperature = options.temperature ?? 0.2;
-    this.topP = options.topP ?? 0.85;
-    this.repetitionPenalty = options.repetitionPenalty ?? 1.15;
-    this.noRepeatNgramSize = options.noRepeatNgramSize ?? 6;
+
+    // The active variant supplies tuned defaults; constructor options
+    // override per-field. `??` (not `||`) so a deliberate `0` stays.
+    const base = options.info.generationParams ?? {
+      maxNewTokens: 256,
+      temperature: 0.3,
+      repetitionPenalty: 1.1,
+    };
+    this.params = {
+      maxNewTokens: options.maxNewTokens ?? base.maxNewTokens,
+      temperature: options.temperature ?? base.temperature,
+      repetitionPenalty: options.repetitionPenalty ?? base.repetitionPenalty,
+      topP: options.topP ?? base.topP,
+      minP: options.minP ?? base.minP,
+      noRepeatNgramSize: options.noRepeatNgramSize ?? base.noRepeatNgramSize,
+    };
   }
 
   _llmType(): string {
     return "transformers-js";
+  }
+
+  /** Build the option bag passed to `runChat` — one definition, used by both call paths. */
+  private genOptions() {
+    return {
+      maxNewTokens: this.params.maxNewTokens,
+      temperature: this.params.temperature,
+      topP: this.params.topP,
+      minP: this.params.minP,
+      repetitionPenalty: this.params.repetitionPenalty,
+      noRepeatNgramSize: this.params.noRepeatNgramSize,
+    };
   }
 
   /**
@@ -107,13 +158,7 @@ export class TransformersJsChatModel extends SimpleChatModel {
    */
   async _call(messages: BaseMessage[]): Promise<string> {
     const chatMessages = toChatMessages(messages);
-    return runChat(this.pipeline, chatMessages, {
-      maxNewTokens: this.maxNewTokens,
-      temperature: this.temperature,
-      topP: this.topP,
-      repetitionPenalty: this.repetitionPenalty,
-      noRepeatNgramSize: this.noRepeatNgramSize,
-    });
+    return runChat(this.pipeline, chatMessages, this.genOptions());
   }
 
   /**
@@ -162,11 +207,7 @@ export class TransformersJsChatModel extends SimpleChatModel {
     // Kick off generation. We don't await here so we can yield tokens
     // through the async generator as they arrive.
     const generationPromise = runChat(this.pipeline, chatMessages, {
-      maxNewTokens: this.maxNewTokens,
-      temperature: this.temperature,
-      topP: this.topP,
-      repetitionPenalty: this.repetitionPenalty,
-      noRepeatNgramSize: this.noRepeatNgramSize,
+      ...this.genOptions(),
       onToken: (delta) => push(delta),
     })
       .then(() => {

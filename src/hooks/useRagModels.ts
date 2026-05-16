@@ -4,19 +4,38 @@
  * use so the gate UX is "Download AI" → ready, not two sequential
  * consent dialogs.
  *
+ * The chat slot has three picker tiers (Compact / Balanced / Quality
+ * — see `src/utils/ai-models.ts`). The active tier is held in React
+ * state here so changing it re-renders downstream components with the
+ * new `chat.info` and triggers a fresh consent / load for the new
+ * variant. The embedder is shared across tiers — swapping chat models
+ * does NOT invalidate the IndexedDB-cached vector index.
+ *
  * Returns:
  *
- *   - `chat`   — `useAiModel` state for SmolLM2.
- *   - `embed`  — `useAiModel` state for the embedding model.
- *   - `status` — coarse rollup ("idle" / "downloading" / "ready" /
+ *   - `chat`        — `useAiModel` state for the active chat variant.
+ *   - `embed`       — `useAiModel` state for the embedding model.
+ *   - `status`      — coarse rollup ("idle" / "downloading" / "ready" /
  *     "error" / "awaiting-consent") so consumers don't have to combine
  *     the two state machines themselves.
- *   - `progress` — merged byte-count progress across both downloads.
+ *   - `progress`    — merged byte-count progress across both downloads.
+ *   - `chatVariant` — currently-selected tier id; drives picker UI.
+ *   - `setChatVariant` — swap tiers; unloads the previous chat
+ *     pipeline and resets `chat.status` to `idle` so the user re-
+ *     consents (or auto-loads if the new tier is already cached).
  *   - `ensureReady()` — kicks off both downloads and resolves with the
  *     two pipelines once both are loaded. Rejects on cancel/error.
- *   - `cancel()` — dismisses both consent dialogs in lockstep.
+ *   - `cancel()`    — dismisses both consent dialogs in lockstep.
  */
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ChatVariantId,
+  getActiveChatModelId,
+  getActiveChatVariant,
+  getChatModelId,
+  migrateLegacyChatReadyFlag,
+  setActiveChatVariant,
+} from "../utils/ai-models.ts";
 import {
   type AiProgress,
   cancelScheduledDispose,
@@ -24,6 +43,7 @@ import {
   isModelMarkedReady,
   registerPagehideCleanup,
   scheduleDispose,
+  unloadModel,
 } from "../utils/ai-runtime.ts";
 import { type AiModelStatus, useAiModel, type UseAiModelReturn } from "./useAiModel.ts";
 
@@ -40,6 +60,17 @@ export interface UseRagModelsReturn {
   progress: AiProgress | null;
   /** Combined error (chat first, then embed) or `null`. */
   error: string | null;
+  /** Currently-selected chat tier — feed into the picker UI. */
+  chatVariant: ChatVariantId;
+  /**
+   * Swap to a different chat tier. No-op when `next === chatVariant`.
+   * Unloads the previous chat pipeline so its weights stop sitting
+   * in RAM, persists the choice to localStorage, and lets the hook
+   * re-render with the new `chat.info` — `useAiModel`'s
+   * `useEffect([modelId])` then resets `chat.status` so the gate UI
+   * picks up correctly (warm-load if cached, consent flow if not).
+   */
+  setChatVariant: (next: ChatVariantId) => void;
   /** Trigger consent + download for both models. */
   ensureReady: () => Promise<{ chat: object; embed: object }>;
   /** Approve both downloads from the consent dialog. */
@@ -71,6 +102,14 @@ function rollupStatus(a: AiModelStatus, b: AiModelStatus): AiModelStatus {
 }
 
 export function useRagModels(): UseRagModelsReturn {
+  // One-shot migration from the pre-tier `cloakpdf:ai-model-ready:chat`
+  // localStorage flag so return visitors don't see a redundant consent
+  // dialog when we changed the storage-key shape. Idempotent — safe to
+  // call on every mount.
+  useEffect(() => {
+    migrateLegacyChatReadyFlag();
+  }, []);
+
   // Belt-and-braces: register a `pagehide` listener once per page so
   // pipelines are disposed when the tab truly closes (not bfcache).
   // Idempotent — calling more than once is a no-op.
@@ -100,7 +139,14 @@ export function useRagModels(): UseRagModelsReturn {
     };
   }, []);
 
-  const chat = useAiModel("chat");
+  // Active chat tier in React state so the picker can swap it and
+  // downstream components re-render with the new `chat.info`.
+  // Initialise from localStorage (or the RAM-aware recommendation
+  // when no choice has been persisted yet).
+  const [chatVariant, setChatVariantState] = useState<ChatVariantId>(() => getActiveChatVariant());
+  const chatModelId = getChatModelId(chatVariant);
+
+  const chat = useAiModel(chatModelId);
   const embed = useAiModel("embed");
 
   const status = rollupStatus(chat.status, embed.status);
@@ -121,20 +167,24 @@ export function useRagModels(): UseRagModelsReturn {
    * Idempotent — `ensureReady` short-circuits once each pipeline is
    * resolved, and the `attemptedRef` guard stops React from firing the
    * effect repeatedly under StrictMode dev double-invokes.
+   *
+   * The guard is rekeyed by `chatVariant` so swapping tiers re-arms
+   * auto-load for the *new* tier — if the user picked something they
+   * already cached, the warm-load fires automatically.
    */
-  const attemptedRef = useRef(false);
+  const attemptedRef = useRef<ChatVariantId | null>(null);
   useEffect(() => {
-    if (attemptedRef.current) return;
+    if (attemptedRef.current === chatVariant) return;
     if (chat.status !== "idle" || embed.status !== "idle") return;
-    if (!isModelMarkedReady("chat") || !isModelMarkedReady("embed")) return;
-    attemptedRef.current = true;
+    if (!isModelMarkedReady(chatModelId) || !isModelMarkedReady("embed")) return;
+    attemptedRef.current = chatVariant;
     void Promise.all([chat.ensureReady(), embed.ensureReady()]).catch(() => {
       // Each `useAiModel` already routes failures into its own `error`
       // state — the rollup surfaces them. Nothing to do here beyond
       // swallowing the unhandled rejection so it doesn't reach the
       // window error handler.
     });
-  }, [chat, embed]);
+  }, [chat, embed, chatVariant, chatModelId]);
 
   // Combined progress: sum the loaded/total bytes when at least one
   // model is downloading. Keeps the consent dialog showing a single
@@ -172,6 +222,28 @@ export function useRagModels(): UseRagModelsReturn {
   }, [chat, embed]);
 
   /**
+   * Swap chat tiers. We unload the previous chat pipeline so its
+   * weights stop sitting in RAM; CacheStorage on disk is left intact
+   * so re-selecting that tier later warm-loads in a second or two
+   * rather than re-downloading. The embedder is shared across tiers
+   * and stays resident.
+   */
+  const setChatVariant = useCallback(
+    (next: ChatVariantId) => {
+      if (next === chatVariant) return;
+      const previousId = getActiveChatModelId();
+      setActiveChatVariant(next);
+      setChatVariantState(next);
+      // Best-effort release of the previous pipeline. Errors are
+      // already swallowed inside `unloadModel`; if it can't dispose
+      // cleanly the GC still reclaims memory once the references in
+      // _resolvedPipelines / _pipelineCache are dropped.
+      void unloadModel(previousId);
+    },
+    [chatVariant],
+  );
+
+  /**
    * Manually release both pipelines. Useful when the user explicitly
    * wants to free RAM (e.g. via a "Free model memory" button). The
    * registry layer drops in-memory refs + calls `pipeline.dispose()`
@@ -182,5 +254,18 @@ export function useRagModels(): UseRagModelsReturn {
     await disposeAllModels();
   }, []);
 
-  return { chat, embed, status, progress, error, ensureReady, confirm, retry, cancel, dispose };
+  return {
+    chat,
+    embed,
+    status,
+    progress,
+    error,
+    chatVariant,
+    setChatVariant,
+    ensureReady,
+    confirm,
+    retry,
+    cancel,
+    dispose,
+  };
 }

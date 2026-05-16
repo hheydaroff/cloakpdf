@@ -15,6 +15,7 @@
  * the same file skips extraction, chunking, and embedding.
  */
 import type { Document } from "@langchain/core/documents";
+import type { AiModelInfo } from "../utils/ai-models.ts";
 import type { AiPipeline } from "../utils/ai-runtime.ts";
 import { TransformersJsChatModel } from "./chat-model.ts";
 import { type ChunkMetadata, chunkDocuments } from "./chunking.ts";
@@ -30,6 +31,14 @@ import { PackedVectorStore } from "./vector-store.ts";
 export interface CreateSessionOptions {
   /** Resolved Transformers.js `text-generation` pipeline. */
   chatPipe: AiPipeline;
+  /**
+   * Metadata for the active chat variant. Carries per-tier generation
+   * defaults (sampler, repetition penalty, n-gram ban) — passed
+   * straight through to {@link TransformersJsChatModel} so SmolLM2
+   * keeps its top_p + n-gram crutches while LFM2 gets its min_p
+   * sampler.
+   */
+  chatInfo: AiModelInfo;
   /** Resolved Transformers.js `feature-extraction` pipeline. */
   embedPipe: AiPipeline;
   /** The PDF the session indexes and answers questions about. */
@@ -108,13 +117,13 @@ const CANDIDATE_K = 20;
  * and persists.
  */
 export async function createRagSession(options: CreateSessionOptions): Promise<RagSession> {
-  const { chatPipe, embedPipe, file, onIndexProgress } = options;
+  const { chatPipe, chatInfo, embedPipe, file, onIndexProgress } = options;
 
   const bytes = await file.arrayBuffer();
   const documentId = await sha256Hex(bytes);
 
   const embeddings = new TransformersJsEmbeddings({ pipeline: embedPipe });
-  const chatModel = new TransformersJsChatModel({ pipeline: chatPipe });
+  const chatModel = new TransformersJsChatModel({ pipeline: chatPipe, info: chatInfo });
 
   // ── Build (or load) the index ────────────────────────────────────
   const cached = await getCachedIndex(documentId);

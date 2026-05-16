@@ -355,22 +355,28 @@ export const tools: Tool[] = [
     // Surfaced as a "Beta" badge on the tool card. The AI tool ships
     // a functional end-to-end pipeline (chunking → hybrid retrieval
     // → relevance gate → small chat model) but answer quality is
-    // bounded by SmolLM2-1.7B's ceiling and we're still iterating
-    // on prompt + retrieval tuning. Badge sets expectations.
+    // bounded by the small-model ceiling we're stuck with in-browser,
+    // and we're still iterating on prompt + retrieval tuning. Badge
+    // sets expectations.
     beta: true,
-    // Two models load together: SmolLM2-1.7B (~1 GB / ~2.5 GB peak
-    // RAM) + EmbeddingGemma 300M (~197 MB / ~300 MB peak RAM). With
-    // OS + browser + tab overhead the practical floor is ~16 GB on
-    // a desktop or laptop. The `desktopOnly` flag below hides the
-    // tool on mobile entirely — phone WebGPU drivers reliably lose
-    // the device mid-inference ("Failed to execute 'mapAsync' on
-    // 'GPUBuffer': [Device] is lost.") and iOS just runs out of
-    // memory and crashes the tab. We tried a 360 M mobile-tier
-    // override and a ≥ 12 GB RAM hint, but neither was enough to
-    // make the experience reliable — better to set the boundary
-    // honestly than to ship a feature that crashes the user's
-    // browser.
-    requirements: "Best on devices with ≥ 16 GB RAM",
+    // Two chat tiers ship today (see `CHAT_VARIANT_IDS` in
+    // `src/utils/ai-models.ts`): LFM2.5-1.2B-Instruct Compact
+    // (~1.2 GB / 2 GB peak) and LFM2-2.6B Quality (~1.5 GB / 3.5 GB
+    // peak). Both are Liquid AI's LFM family — the cross-tier e2e
+    // showed they dominate SmolLM2-1.7B on speed AND extraction
+    // discipline, so we dropped SmolLM2 entirely. The embedder is
+    // shared — EmbeddingGemma 300M (~197 MB / ~300 MB peak RAM).
+    // With OS + browser + tab overhead the practical floor for the
+    // Quality tier is ~16 GB; users on lower-RAM machines should
+    // pick Compact in the gate's tier picker. The `desktopOnly` flag below hides the tool on mobile
+    // entirely — phone WebGPU drivers reliably lose the device mid-
+    // inference ("Failed to execute 'mapAsync' on 'GPUBuffer':
+    // [Device] is lost.") and iOS just runs out of memory and
+    // crashes the tab. We tried a 360 M mobile-tier override and a
+    // ≥ 12 GB RAM hint, but neither was enough to make the experience
+    // reliable — better to set the boundary honestly than to ship a
+    // feature that crashes the user's browser.
+    requirements: "Best on devices with ≥ 16 GB RAM — pick the Compact tier on lower-RAM machines",
     desktopOnly: true,
   },
 ];

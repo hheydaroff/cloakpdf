@@ -44,7 +44,7 @@ export interface ChatMessage {
 }
 
 export interface ChatGenerationOptions {
-  /** Cap on tokens emitted by this call. Default 512. */
+  /** Cap on tokens emitted by this call. Default 256. */
   maxNewTokens?: number;
   /**
    * `true` enables nucleus/temperature sampling. Default `true` because
@@ -55,12 +55,22 @@ export interface ChatGenerationOptions {
   doSample?: boolean;
   /** Sampling temperature. Ignored when `doSample` is false. */
   temperature?: number;
-  /** Nucleus sampling cutoff. Ignored when `doSample` is false. */
+  /**
+   * Nucleus sampling cutoff (top_p). Pass *or* {@link minP}, not both
+   * — they're alternative cutoff strategies and stacking them tends to
+   * over-constrain the distribution. Omit to disable nucleus sampling.
+   */
   topP?: number;
   /**
+   * Min-p sampling cutoff. Liquid AI's LFM2 family is trained against
+   * this sampler (they recommend `min_p: 0.15`); SmolLM2 still uses
+   * `top_p`. Omit to disable.
+   */
+  minP?: number;
+  /**
    * Penalty applied to tokens already in the output, suppressing repeat
-   * loops. Default 1.1 — the value the small-model authors recommend.
-   * 1.0 disables.
+   * loops. 1.0 / omitted disables. Tune per-model — Liquid recommends
+   * `1.05` for LFM2; SmolLM2-1.7B needs `~1.15` against the résumé probe.
    */
   repetitionPenalty?: number;
   /**
@@ -115,24 +125,20 @@ export async function runChat(
     );
   }
 
-  // Defaults tuned for SmolLM2-1.7B-Instruct. The 1.7B is large enough
-  // that it doesn't suffer from the loop pathology of the 360M variant
-  // — we can drop the heavy crutches (no_repeat_ngram_size, hot
-  // repetition_penalty) that were specifically there to keep the small
-  // model from emitting 39-line numbered loops.
-  //
-  //   - `temperature: 0.6` — conservative; output stays anchored to
-  //     the supplied excerpts.
-  //   - `top_p: 0.9` — model-card recommended.
-  //   - `repetition_penalty: 1.1` — mild; SmolLM2-1.7B doesn't need
-  //     more.
-  //   - `max_new_tokens: 512` — room for a properly written answer.
-  //     The earlier 256 cap was damage-control for 360M loops.
+  // Neutral fallbacks. The chat-model adapter reads each variant's
+  // tuned `generationParams` (see `src/utils/ai-models.ts`) and
+  // passes them through explicitly — so the defaults here only fire
+  // when the helper is called directly without options (rare; mostly
+  // tests). Conservative temperature and a mild rep-penalty are safe
+  // for any small instruct model; sampler cutoffs are *only* applied
+  // when the caller asks for one, so we never accidentally stack
+  // top_p + min_p on a model that's tuned against only one.
   const result = await generator(messages, {
-    max_new_tokens: options.maxNewTokens ?? 512,
+    max_new_tokens: options.maxNewTokens ?? 256,
     do_sample: options.doSample ?? true,
-    temperature: options.temperature ?? 0.6,
-    top_p: options.topP ?? 0.9,
+    temperature: options.temperature ?? 0.3,
+    ...(typeof options.topP === "number" ? { top_p: options.topP } : {}),
+    ...(typeof options.minP === "number" ? { min_p: options.minP } : {}),
     repetition_penalty: options.repetitionPenalty ?? 1.1,
     ...(options.noRepeatNgramSize && options.noRepeatNgramSize > 0
       ? { no_repeat_ngram_size: options.noRepeatNgramSize }
