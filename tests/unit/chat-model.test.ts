@@ -51,7 +51,7 @@ function makeStubPipeline(reply = "stub answer"): {
 }
 
 describe("TransformersJsChatModel — per-variant generation params", () => {
-  it("LFM2-2.6B sends Liquid AI's min_p sampler and soft repetition penalty", async () => {
+  it("LFM2-2.6B sends Liquid AI's min_p sampler, soft repetition penalty, and a degenerate-loop safety net", async () => {
     const { pipe, lastOptions } = makeStubPipeline();
     const info = AI_MODELS[getChatModelId("lfm2-2.6b")];
     const model = new TransformersJsChatModel({ pipeline: pipe, info });
@@ -60,11 +60,22 @@ describe("TransformersJsChatModel — per-variant generation params", () => {
     const opts = lastOptions();
 
     expect(opts).not.toBeNull();
+    // Temperature 0.3 — Liquid AI's recommended default. We briefly
+    // tried 0.4 hoping more variance would break single-token traps
+    // ("To To …" loops), but the extra entropy started destabilising
+    // the model in a different direction (off-language drift —
+    // Arabic / French / philosophy-of-law content on questions
+    // about a résumé). Staying at 0.3 + `no_repeat_ngram_size: 6`
+    // gives us the loop safety net without the drift.
     expect(opts?.temperature).toBe(0.3);
     expect(opts?.min_p).toBe(0.15);
     expect(opts?.top_p).toBeUndefined();
     expect(opts?.repetition_penalty).toBe(1.05);
-    expect(opts?.no_repeat_ngram_size).toBeUndefined();
+    // ngram=6 is a safety net for the "To To To … (252×)" single-
+    // token loop the e2e probe surfaced. Locking it down so a future
+    // PR that drops the safety net for "cleanliness" gets a test
+    // failure to read before merging.
+    expect(opts?.no_repeat_ngram_size).toBe(6);
     expect(opts?.max_new_tokens).toBe(256);
   });
 
@@ -83,6 +94,7 @@ describe("TransformersJsChatModel — per-variant generation params", () => {
     expect(opts?.min_p).toBe(0.15);
     expect(opts?.top_p).toBeUndefined();
     expect(opts?.repetition_penalty).toBe(1.05);
+    expect(opts?.no_repeat_ngram_size).toBe(6);
   });
 
   it("constructor overrides win without trashing other tuned defaults", async () => {

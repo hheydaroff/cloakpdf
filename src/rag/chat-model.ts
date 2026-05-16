@@ -94,16 +94,26 @@ export interface TransformersJsChatModelOptions extends BaseChatModelParams {
  *     prefix-extension loop is broken immediately.
  *
  * **LFM2 family (1.2B + 2.6B)** — `{ temp: 0.3, min_p: 0.15,
- *                                    rep: 1.05, max: 256 }`
+ *                                    rep: 1.05, no_repeat_ngram: 6,
+ *                                    max: 256 }`
  *
- *   - Liquid AI's documented sampler. Their training recipe already
- *     discourages tight loops so `repetition_penalty` only needs the
- *     gentlest tap (1.05 vs SmolLM2's 1.15). `min_p` (not `top_p`)
- *     is the LFM2 family's documented cutoff — they're trained
- *     against it; stacking `top_p` on top tends to over-constrain.
- *   - Starting *without* `no_repeat_ngram_size`. If the probe
- *     surfaces an LFM2-specific lexical-ramp loop we'll add it back
- *     at size 6, but ship without the SmolLM2-specific crutch.
+ *   - Liquid AI's documented sampler. `min_p` (not `top_p`) is the
+ *     LFM2 family's documented cutoff — they're trained against it;
+ *     stacking `top_p` on top tends to over-constrain. Repetition
+ *     penalty stays low (1.05) because Liquid's training recipe
+ *     already discourages tight loops.
+ *   - `no_repeat_ngram_size: 6` is on as a *safety net*, not because
+ *     the family routinely loops. We shipped without it first; the
+ *     e2e probe surfaced single-token runs ("To To … 252×") and
+ *     asterisk-only Markdown loops on the warm-cache overview path
+ *     — rare but reproducible enough to ship past. At size 6 it
+ *     only fires on genuine degenerate loops (no natural 6-gram
+ *     repeats in prose) so it doesn't restrict normal phrasing.
+ *   - We briefly tested bumping `temperature` to 0.4 hoping the
+ *     extra variance would break the loops on its own, but 0.4
+ *     started causing off-language drift (Arabic / French gibberish
+ *     instead of the document content). 0.3 + the ngram safety net
+ *     is the combination that keeps both pathologies at bay.
  */
 export class TransformersJsChatModel extends SimpleChatModel {
   private pipeline: AiPipeline;

@@ -210,18 +210,27 @@ const CHAT_LFM2_5_1_2B: AiModelInfo = {
   license: "LFM Open License v1.0",
   modelUrl: "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct",
   pipelineOptions: { dtype: "q4" },
-  // Liquid AI's recommended sampler for the LFM2 family — see
-  // their model card. min_p (not top_p) is the documented
-  // sampling strategy; repetition_penalty stays low because their
-  // training recipe already discourages tight loops. We start
-  // without `no_repeat_ngram_size` (a SmolLM2 crutch) and add it
-  // back only if the probe surfaces an LFM2-specific loop
-  // pathology. LFM2.5 inherits the same recommended defaults.
+  // Liquid AI's recommended sampler for the LFM2 family — see their
+  // model card. min_p (not top_p) is the documented sampling
+  // strategy; repetition_penalty stays low because their training
+  // recipe already discourages tight loops. LFM2.5 inherits the
+  // same recommended defaults.
+  //
+  // `noRepeatNgramSize: 6` is a *loop safety net*, not a quality
+  // tweak. The e2e probe surfaced an LFM2-specific failure mode
+  // (single-token "To To To … (252×)" run that mauled the warm-
+  // cache overview answer) — Liquid's discipline normally avoids
+  // this but sampling stochasticity occasionally trips it. With
+  // ngram=6 the loop is broken after at most 6 repeats of any
+  // 6-token sequence, which keeps natural prose ("Sumit Sahoo
+  // is …" recurring at most once per reply) intact while making
+  // a 252× repeat impossible. Documented in chat-model.ts.
   generationParams: {
     maxNewTokens: 256,
     temperature: 0.3,
     minP: 0.15,
     repetitionPenalty: 1.05,
+    noRepeatNgramSize: 6,
   },
 };
 
@@ -243,11 +252,16 @@ const CHAT_LFM2_2_6B: AiModelInfo = {
   license: "LFM Open License v1.0",
   modelUrl: "https://huggingface.co/LiquidAI/LFM2-2.6B",
   pipelineOptions: { dtype: "q4f16" },
+  // Same generation params as LFM2.5-1.2B — see that entry for the
+  // rationale on each field, including why `noRepeatNgramSize: 6`
+  // was added as a loop safety net after the e2e probe caught a
+  // "To To … (252×)" pathology on the Quality tier specifically.
   generationParams: {
     maxNewTokens: 256,
     temperature: 0.3,
     minP: 0.15,
     repetitionPenalty: 1.05,
+    noRepeatNgramSize: 6,
   },
 };
 
