@@ -261,7 +261,7 @@ export default function AskPdf() {
   const showRamNote = ramRequirement !== null && rag.status !== "ready";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-rag-status={rag.status} data-rag-chat-status={rag.chat.status}>
       {showRamNote && (
         // Compact single-line RAM heads-up rendered at the *top* of
         // the tool so users see it before they bother uploading a
@@ -312,8 +312,28 @@ export default function AskPdf() {
         roles={["chat", "retrieval", "rerank"]}
         chatVariant={rag.chatVariant}
         onChatVariantChange={rag.setChatVariant}
-        title="Download AI models to chat with your PDFs"
-        blurb="Ask your PDF runs entirely on your device. Pick a chat-model size below, download it once, then upload a PDF to start chatting."
+        // Copy that matches the *current* state. The "Download AI
+        // models…" headline only makes sense on a first-run download
+        // (or an explicit re-download via the consent dialog); on a
+        // returning visitor with the bytes already cached we're not
+        // downloading, we're restoring — and the headline shouldn't
+        // claim otherwise. Mapping by rollup status keeps the gate
+        // honest across all three lifecycle paths the user can land
+        // on (cold first-visit, warm reload, partial cache).
+        title={
+          rag.status === "loading"
+            ? "Restoring AI models from your device cache…"
+            : rag.status === "downloading"
+              ? "Downloading AI models…"
+              : "Download AI models to chat with your PDFs"
+        }
+        blurb={
+          rag.status === "loading"
+            ? "We're loading the models you already downloaded — no network needed. This usually takes a few seconds."
+            : rag.status === "downloading"
+              ? "Hang tight — the models are streaming into your browser cache. After this, every future visit loads in seconds."
+              : "Ask your PDF runs entirely on your device. Pick a chat-model size below, download it once, then upload a PDF to start chatting."
+        }
         ready={rag.status === "ready"}
         loading={
           rag.status === "downloading" ||

@@ -276,16 +276,30 @@ async function main() {
         { timeout: 30_000 },
       )
       .catch(() => undefined);
-    const gateClicked = await page.evaluate(() => {
+    const gateState = await page.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll("button"));
+      const labels = buttons.map((b) => (b.textContent ?? "").trim().slice(0, 60));
       const dl = buttons.find((b) => (b.textContent ?? "").trim().startsWith("Download model"));
+      const root = document.querySelector("[data-rag-status]") as HTMLElement | null;
+      const ragStatus = root?.dataset.ragStatus ?? "(no AskPdf root found)";
+      const chatStatus = root?.dataset.ragChatStatus ?? "(no AskPdf root found)";
+      let clicked = false;
       if (dl instanceof HTMLButtonElement) {
         dl.click();
-        return true;
+        clicked = true;
       }
-      return false;
+      return { clicked, labels, ragStatus, chatStatus };
     });
-    console.log(gateClicked ? "  ✓ clicked gate Download" : "  · gate already past Download");
+    if (gateState.clicked) {
+      console.log("  ✓ clicked gate Download");
+      console.log("    [debug] visible buttons:", JSON.stringify(gateState.labels));
+      console.log(
+        `    [debug] rag.status="${gateState.ragStatus}" chat.status="${gateState.chatStatus}"`,
+      );
+    } else {
+      console.log("  · gate already past Download (no Download model button found)");
+    }
+    const gateClicked = gateState.clicked;
 
     // The consent dialog has its own "Download model" button. On first
     // use it pops up after the gate click; on returning profiles it's
@@ -490,6 +504,43 @@ async function main() {
     if (!cardClickedAgain) {
       console.warn("⚠ Couldn't re-navigate to Ask PDF after reload.");
     }
+
+    // No-flash assertion. The fix here is the synchronous willAutoLoad
+    // derivation in useRagModels: on a warm-cache return visit the
+    // rollup must report "loading" from the very first paint, not
+    // "idle". If the bug regresses, the gate flashes "Download model"
+    // for the duration of the warm-load before reverting to children.
+    // We poll for the first stable state and fail if the visible gate
+    // button is "Download model" rather than "Loading model…" (or
+    // nothing, if init was instant and children mounted immediately).
+    await page
+      .waitForFunction(
+        () => {
+          const buttons = Array.from(document.querySelectorAll("button"));
+          const hasGateButton = buttons.some((b) => {
+            const t = (b.textContent ?? "").trim();
+            return t.startsWith("Download model") || t.startsWith("Loading model");
+          });
+          const hasFileInput = !!document.querySelector('input[type="file"]');
+          return hasGateButton || hasFileInput;
+        },
+        { timeout: 30_000 },
+      )
+      .catch(() => bail("Warm-cache: gate / file input never rendered within 30s of reload."));
+    const gateLabel = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll("button"));
+      const labels = buttons.map((b) => (b.textContent ?? "").trim());
+      if (labels.some((t) => t.startsWith("Download model"))) return "Download model";
+      if (labels.some((t) => t.startsWith("Loading model"))) return "Loading model";
+      return "(none — children already mounted)";
+    });
+    if (gateLabel === "Download model") {
+      bail(
+        "Warm-cache flash regression: gate shows 'Download model' instead of 'Loading model…' — useRagModels.willAutoLoad derivation is broken.",
+      );
+    }
+    console.log(`  ✓ warm gate label: "${gateLabel}" (no Download flash)`);
+
     // On the warm-cache return visit, the file drop zone doesn't
     // render until `rag.status === "ready"` — i.e. until both
     // AiModelGate's chat auto-load AND useRagModels' all-three

@@ -58,8 +58,12 @@ export interface UseRagModelsReturn {
   rerank: UseAiModelReturn;
   /**
    * Coarse rollup of the three models' state machines. Priority is:
-   * `error` > `downloading` > `awaiting-consent` > `idle` > `ready`.
-   * "Ready" only when *all three* models are loaded.
+   * `error` > `downloading` > `awaiting-consent` > `loading` > `ready` > `idle`.
+   * "Ready" only when *all three* models are loaded. "Loading" is
+   * also reported synchronously when every model is marked ready on
+   * disk and the auto-load effect is about to fire — that's what
+   * keeps the gate from flashing a "Download model" button on the
+   * first paint of a returning visitor.
    */
   status: AiModelStatus;
   /** Combined byte progress when at least one model is downloading. */
@@ -124,11 +128,19 @@ export interface UseRagModelsReturn {
  * so the UI surfaces the *most informative* state to the user — they
  * don't need to know there are three models behind the scenes until
  * something goes wrong.
+ *
+ * "loading" sits below "awaiting-consent" so a mixed state where one
+ * pipeline still needs consent doesn't get masked by another that's
+ * warm-loading. It sits above "ready" so the rollup never reports
+ * "idle" when any pipeline is mid-construct from cache — that was the
+ * gap that flashed a "Download model" button while three cached
+ * pipelines were silently warm-loading.
  */
 function rollupStatus(...statuses: AiModelStatus[]): AiModelStatus {
   if (statuses.includes("error")) return "error";
   if (statuses.includes("downloading")) return "downloading";
   if (statuses.includes("awaiting-consent")) return "awaiting-consent";
+  if (statuses.includes("loading")) return "loading";
   if (statuses.every((s) => s === "ready")) return "ready";
   return "idle";
 }
@@ -175,7 +187,33 @@ export function useRagModels(): UseRagModelsReturn {
   const embed = useAiModel("embed");
   const rerank = useAiModel("rerank");
 
-  const status = rollupStatus(chat.status, embed.status, rerank.status);
+  // Sync flash-killer. We *promote* a rollup of "idle" to "loading"
+  // whenever (a) every model is flagged ready in localStorage (so the
+  // auto-load `useEffect` below is about to call `ensureReady` on
+  // them all) and (b) at least one sub-hook is still in `idle` state
+  // (so there's actually work the auto-load is about to do).
+  //
+  // Reporting "loading" *during this render* (instead of waiting for
+  // the post-paint effect to set state) keeps the gate on "Loading
+  // model…" from the very first paint — no "Download model" button
+  // flashes while the warm-load is in flight.
+  //
+  // Why not "all three idle": React 18 StrictMode (dev) double-
+  // invokes mount → cleanup → mount. By the time mount 2 runs, the
+  // module-level pipeline cache may have already resolved chat from
+  // mount 1's in-flight load. `useAiModel`'s initial-status check
+  // picks that up and chat enters mount 2 with `status === "ready"`
+  // while embed + rerank are still `idle`. An "all three idle" guard
+  // misses that branch, the rollup returns "idle", and the gate
+  // flashes Download for one paint — the bug the e2e regression
+  // now pins.
+  const rollup = rollupStatus(chat.status, embed.status, rerank.status);
+  const canAutoLoad =
+    isModelMarkedReady(chatModelId) && isModelMarkedReady("embed") && isModelMarkedReady("rerank");
+  const hasIdleSubHook =
+    chat.status === "idle" || embed.status === "idle" || rerank.status === "idle";
+  const status: AiModelStatus =
+    rollup === "idle" && canAutoLoad && hasIdleSubHook ? "loading" : rollup;
   const error = chat.error ?? embed.error ?? rerank.error;
 
   /**
@@ -194,7 +232,6 @@ export function useRagModels(): UseRagModelsReturn {
   const attemptedRef = useRef<ChatVariantId | null>(null);
   useEffect(() => {
     if (attemptedRef.current === chatVariant) return;
-    if (chat.status !== "idle" || embed.status !== "idle" || rerank.status !== "idle") return;
     if (
       !isModelMarkedReady(chatModelId) ||
       !isModelMarkedReady("embed") ||
@@ -202,6 +239,18 @@ export function useRagModels(): UseRagModelsReturn {
     ) {
       return;
     }
+    // Deliberately *not* gated on "all three sub-hooks still idle".
+    // {@link AiModelGate} ships its own chat-only auto-load that
+    // fires from a child useEffect — and child effects run *before*
+    // this parent effect on the same render. By the time we get here
+    // on first mount, `chat.status` has already flipped to "loading"
+    // and an idle-only guard would (silently) skip the all-three
+    // load; embed + rerank would stay idle forever, the rollup would
+    // drop to "idle" once chat finished, and the gate would flash
+    // "Download model" — exactly the bug the e2e regression now
+    // pins. `ensureReady()` is idempotent on a loading/ready
+    // pipeline (queues another consumer, no fresh fetch), so re-
+    // calling it on chat is safe.
     attemptedRef.current = chatVariant;
     void Promise.all([chat.ensureReady(), embed.ensureReady(), rerank.ensureReady()]).catch(() => {
       // Each `useAiModel` already routes failures into its own `error`
