@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ChatVariantId,
+  clearAllReadyFlags,
   getActiveChatModelId,
   getActiveChatVariant,
   getChatModelId,
@@ -42,7 +43,9 @@ import {
   type AiProgress,
   cancelScheduledDispose,
   disposeAllModels,
+  evictModelCacheBytes,
   isModelMarkedReady,
+  type ModelCacheEvictResult,
   registerPagehideCleanup,
   scheduleDispose,
   unloadModel,
@@ -86,6 +89,17 @@ export interface UseRagModelsReturn {
    * done with AI and wants to free RAM.
    */
   dispose: () => Promise<void>;
+  /**
+   * Full evict — releases RAM **and** deletes the model weights
+   * from the browser's CacheStorage, then clears every
+   * `cloakpdf:ai-model-ready:*` flag so the consent dialog re-
+   * appears on next use. Frees ~1.5 GB of disk for the current AI
+   * bundle; the user pays a full re-download next time they touch
+   * the AI feature. Returns the cache-evict result so the caller
+   * can tell the user how much was actually deleted (0 caches
+   * means there was nothing cached to begin with).
+   */
+  evict: () => Promise<ModelCacheEvictResult>;
 }
 
 /**
@@ -247,6 +261,22 @@ export function useRagModels(): UseRagModelsReturn {
     await disposeAllModels();
   }, []);
 
+  /**
+   * Full evict path. Ordering matters: drop RAM first so no
+   * pipeline is mid-init when we yank the bytes from underneath it,
+   * then evict CacheStorage, then clear the consent flags so the
+   * user re-experiences the consent dialog (and the migration
+   * guard) on next use. Cache + flag clears are best-effort and
+   * independent — a private-mode localStorage failure shouldn't
+   * roll back the disk eviction.
+   */
+  const evict = useCallback(async (): Promise<ModelCacheEvictResult> => {
+    await disposeAllModels();
+    const result = await evictModelCacheBytes();
+    clearAllReadyFlags();
+    return result;
+  }, []);
+
   return {
     chat,
     embed,
@@ -261,5 +291,6 @@ export function useRagModels(): UseRagModelsReturn {
     retry,
     cancel,
     dispose,
+    evict,
   };
 }

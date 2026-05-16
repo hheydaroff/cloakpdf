@@ -197,6 +197,76 @@ export function cancelScheduledDispose(): void {
 }
 
 /**
+ * Cache-name(s) Transformers.js uses for model weight storage when
+ * `env.useBrowserCache` is true. v3/v4 default to a single
+ * `transformers-cache` entry; we delete it whole rather than walking
+ * the URL list because (a) it's the simplest correct evict and (b)
+ * it also reclaims orphan bytes from models that were swapped out of
+ * the registry (SmolLM2, bge-reranker-v2-m3, bge-reranker-base) but
+ * left their weights sitting in CacheStorage forever after.
+ *
+ * Add additional names here if a future Transformers.js bump moves
+ * to a versioned cache key (`transformers-cache-v5` etc.).
+ */
+const TRANSFORMERS_CACHE_NAMES = ["transformers-cache"];
+
+/**
+ * Result of an evict pass — what we tell the user back in the UI.
+ *
+ *   - `deletedCaches`: number of CacheStorage entries we successfully
+ *     dropped. 0 means there was nothing cached (e.g. user never
+ *     downloaded), 1 means we wiped the canonical Transformers.js
+ *     cache, >1 only happens if we add additional cache names above.
+ *   - `cacheApiAvailable`: `false` on the rare browser that doesn't
+ *     expose the Cache API at all (very old engines / privacy modes).
+ *     The UI uses this to fall back to "Free memory only" copy
+ *     instead of pretending the eviction succeeded.
+ */
+export interface ModelCacheEvictResult {
+  deletedCaches: number;
+  cacheApiAvailable: boolean;
+}
+
+/**
+ * Evict the Transformers.js model bytes from the browser's
+ * CacheStorage. Frees ~1.5 GB of disk for the current AI bundle
+ * (chat + embed + rerank) and forces a fresh download on next use.
+ *
+ * Does **not** unload the in-memory pipelines — call
+ * {@link disposeAllModels} alongside this when you actually want the
+ * full evict. The hook layer in {@link useRagModels.evict} chains
+ * both for the UI affordance.
+ *
+ * Also does not clear the localStorage ready flags
+ * (`cloakpdf:ai-model-ready:*`) — that's
+ * {@link clearAllReadyFlags}'s job. Three small functions instead of
+ * one big one so the orchestration is testable and the failure modes
+ * stay independent (e.g. CacheStorage delete succeeds but the
+ * localStorage clear throws on a private window — we don't want to
+ * roll back the disk eviction over that).
+ */
+export async function evictModelCacheBytes(): Promise<ModelCacheEvictResult> {
+  if (typeof caches === "undefined") {
+    return { deletedCaches: 0, cacheApiAvailable: false };
+  }
+  let deleted = 0;
+  for (const name of TRANSFORMERS_CACHE_NAMES) {
+    try {
+      const ok = await caches.delete(name);
+      if (ok) deleted += 1;
+    } catch (e) {
+      // Best-effort — a failure on one entry shouldn't abort the
+      // rest. We don't surface this to the user because there's
+      // nothing actionable; the failure mode is "the bytes are still
+      // there and will be re-evicted next time the user clicks
+      // delete". The console log is for triage.
+      console.warn(`[ai-runtime] failed to delete CacheStorage "${name}"`, e);
+    }
+  }
+  return { deletedCaches: deleted, cacheApiAvailable: true };
+}
+
+/**
  * Best-effort `pagehide` handler that releases pipelines when the tab
  * is going away for real (`event.persisted === false`). For bfcache
  * navigations (`persisted === true`) the JS is frozen and we leave the

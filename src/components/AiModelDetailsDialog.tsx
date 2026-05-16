@@ -21,8 +21,8 @@
  * One painting layer keeps iOS Safari from getting confused about
  * which element should scroll.
  */
-import { MemoryStick, ShieldCheck, X } from "lucide-react";
-import { useEffect } from "react";
+import { AlertTriangle, HardDrive, MemoryStick, ShieldCheck, Trash2, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { type AiModelInfo, formatApproxSize } from "../utils/ai-models.ts";
 import { ModelCard } from "./ModelCard.tsx";
@@ -38,13 +38,52 @@ interface AiModelDetailsDialogProps {
    * labels aren't meaningful.
    */
   roles?: string[];
+  /**
+   * Release the in-tab pipelines (RAM only). The browser keeps the
+   * downloaded weight files in CacheStorage so re-loading is fast.
+   * Wire from `useRagModels.dispose`. The dialog hides the "Free
+   * memory" affordance entirely when this is omitted (e.g. opened
+   * from the pre-download gate, where there's no RAM to free yet).
+   */
+  onFreeMemory?: () => void | Promise<unknown>;
+  /**
+   * Destructive: also delete the model weights from CacheStorage
+   * and clear the consent flags so the user re-experiences the
+   * download dialog on next use. Wire from `useRagModels.evict`.
+   * Hidden when omitted; rendered with an inline two-step confirm
+   * when present so a stray click can't nuke a 1.5 GB download.
+   */
+  onDelete?: () => void | Promise<unknown>;
+  /**
+   * Disables both storage actions while another AI task is running
+   * (e.g. mid-question, mid-indexing). The host knows the task
+   * state; we don't try to second-guess it from the model status.
+   */
+  storageActionsDisabled?: boolean;
 }
 
-export function AiModelDetailsDialog({ open, onClose, models, roles }: AiModelDetailsDialogProps) {
+export function AiModelDetailsDialog({
+  open,
+  onClose,
+  models,
+  roles,
+  onFreeMemory,
+  onDelete,
+  storageActionsDisabled,
+}: AiModelDetailsDialogProps) {
+  // Two-step confirm state for "Delete cached models" — clicking the
+  // button arms it ("Click again to confirm"); clicking the armed
+  // button fires the actual delete. Resets whenever the dialog opens
+  // or closes so a future visit starts cleanly disarmed.
+  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+
   // Lock body scroll + wire Escape while open. Matches the workflow
   // ToolPickerModal pattern so the two dialogs feel like one system.
   useEffect(() => {
     if (!open) return;
+    setDeleteArmed(false);
+    setBusy(false);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
@@ -60,6 +99,37 @@ export function AiModelDetailsDialog({ open, onClose, models, roles }: AiModelDe
   if (!open) return null;
 
   const totalBytes = models.reduce((sum, m) => sum + m.approxSizeBytes, 0);
+  const showStorageActions = Boolean(onFreeMemory || onDelete);
+
+  async function handleFreeMemory() {
+    if (!onFreeMemory || busy) return;
+    setBusy(true);
+    try {
+      await onFreeMemory();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteClick() {
+    if (!onDelete || busy) return;
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      await onDelete();
+      // After a successful evict the modal's content (model badges,
+      // memory line) is still accurate metadata, but the in-page
+      // state has changed — close so the host can re-render the
+      // gate/consent flow from scratch.
+      onClose();
+    } finally {
+      setBusy(false);
+      setDeleteArmed(false);
+    }
+  }
 
   return createPortal(
     <div
@@ -130,6 +200,20 @@ export function AiModelDetailsDialog({ open, onClose, models, roles }: AiModelDe
               After that, everything runs entirely on your device.
             </p>
           </div>
+
+          {showStorageActions && (
+            <StorageActions
+              totalBytes={totalBytes}
+              onFreeMemory={onFreeMemory}
+              onDelete={onDelete}
+              deleteArmed={deleteArmed}
+              onDeleteClick={handleDeleteClick}
+              onCancelDelete={() => setDeleteArmed(false)}
+              onFreeMemoryClick={handleFreeMemory}
+              disabled={Boolean(storageActionsDisabled) || busy}
+              busy={busy}
+            />
+          )}
         </div>
       </div>
     </div>,
@@ -170,6 +254,138 @@ function RequirementsLine({ totalBytes }: { totalBytes: number }) {
           GB of RAM is recommended for smooth performance.
         </p>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Footer panel offering the two storage knobs: a soft "Free memory"
+ * (release RAM, keep the downloaded weights cached on disk so the
+ * next use warm-loads in seconds) and a destructive "Delete cached
+ * models" (also evict the CacheStorage bytes, ~1.5 GB).
+ *
+ * The destructive action goes through a two-step confirm: the first
+ * click swaps the button into an "armed" state with a red warning
+ * blurb and a "Cancel" escape hatch; the second click actually fires
+ * the evict. This is cheaper than a separate confirm modal and
+ * harder to dismiss by accident than `window.confirm` (whose dialog
+ * placement varies wildly across browsers/OS).
+ *
+ * Both buttons disable while a task is running (`disabled` from the
+ * host) and while either operation is in flight (`busy`) — frees the
+ * caller from having to model the two-state dance themselves.
+ */
+function StorageActions({
+  totalBytes,
+  onFreeMemory,
+  onDelete,
+  deleteArmed,
+  onDeleteClick,
+  onCancelDelete,
+  onFreeMemoryClick,
+  disabled,
+  busy,
+}: {
+  totalBytes: number;
+  onFreeMemory?: () => void | Promise<unknown>;
+  onDelete?: () => void | Promise<unknown>;
+  deleteArmed: boolean;
+  onDeleteClick: () => void;
+  onCancelDelete: () => void;
+  onFreeMemoryClick: () => void;
+  disabled: boolean;
+  busy: boolean;
+}) {
+  const totalGb = totalBytes / (1024 * 1024 * 1024);
+  return (
+    <div className="rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-3.5 text-xs">
+      <div className="flex items-start gap-2.5">
+        <HardDrive
+          className="w-4 h-4 shrink-0 mt-0.5 text-slate-500 dark:text-dark-text-muted"
+          aria-hidden="true"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-slate-700 dark:text-dark-text">Storage</p>
+          <p className="opacity-80 mt-0.5 text-slate-600 dark:text-dark-text-muted leading-relaxed">
+            The models sit in two places: loaded in RAM while you're using AI, and cached on disk (~
+            {totalGb.toFixed(1)} GB) so future sessions skip the download.
+          </p>
+          <ul className="mt-2 space-y-1 text-slate-600 dark:text-dark-text-muted leading-relaxed">
+            <li className="flex gap-1.5">
+              <span aria-hidden="true">·</span>
+              <span>
+                <strong className="text-slate-700 dark:text-dark-text">Free memory</strong> —
+                releases RAM only. The disk cache stays, so re-opening Ask&nbsp;PDF re-loads in
+                seconds.
+              </span>
+            </li>
+            <li className="flex gap-1.5">
+              <span aria-hidden="true">·</span>
+              <span>
+                <strong className="text-slate-700 dark:text-dark-text">Delete cached models</strong>{" "}
+                — frees RAM <em>and</em> the disk cache. Next use redownloads the full ~
+                {totalGb.toFixed(1)} GB.
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-col sm:flex-row gap-2">
+        {onFreeMemory && (
+          <button
+            type="button"
+            onClick={onFreeMemoryClick}
+            disabled={disabled}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-dark-text bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border hover:border-slate-300 dark:hover:border-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <MemoryStick className="w-3.5 h-3.5" aria-hidden="true" />
+            Free memory
+          </button>
+        )}
+        {onDelete && !deleteArmed && (
+          <button
+            type="button"
+            onClick={onDeleteClick}
+            disabled={disabled}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 bg-white dark:bg-dark-surface border border-red-200 dark:border-red-800/60 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+            Delete cached models
+          </button>
+        )}
+      </div>
+
+      {onDelete && deleteArmed && (
+        <div className="mt-3 rounded-lg border border-red-200 dark:border-red-800/60 bg-red-50 dark:bg-red-900/20 p-3">
+          <div className="flex items-start gap-2 text-red-700 dark:text-red-300">
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
+            <p className="font-medium leading-relaxed">
+              Delete the cached models? You'll need to redownload ~{totalGb.toFixed(1)} GB to use AI
+              features again.
+            </p>
+          </div>
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={onCancelDelete}
+              disabled={busy}
+              className="flex-1 inline-flex items-center justify-center px-3 py-2 rounded-lg text-sm font-medium text-slate-700 dark:text-dark-text bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border hover:border-slate-300 hover:bg-slate-50 dark:hover:bg-dark-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onDeleteClick}
+              disabled={busy}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+              {busy ? "Deleting…" : "Confirm delete"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

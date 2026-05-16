@@ -285,14 +285,36 @@ export default function AskPdf() {
       )}
 
       {!pdf.file ? (
-        <FileDropZone
-          glowColor={categoryGlow.transform}
-          iconColor={categoryAccent.transform}
-          accept=".pdf,application/pdf"
-          onFiles={pdf.onFiles}
-          label="Drop a PDF file here"
-          hint="Chat with your PDF — answers are generated on-device, never uploaded"
-        />
+        <>
+          <FileDropZone
+            glowColor={categoryGlow.transform}
+            iconColor={categoryAccent.transform}
+            accept=".pdf,application/pdf"
+            onFiles={pdf.onFiles}
+            label="Drop a PDF file here"
+            hint="Chat with your PDF — answers are generated on-device, never uploaded"
+          />
+
+          {/*
+            Render the active-model bar at the drop-zone stage too
+            (in addition to the post-upload location below) whenever
+            models are already loaded. This brings "Free memory" and
+            "Delete cached models" one click away from the entry
+            point for return visitors who want to manage AI storage
+            without first uploading a PDF — previously the only path
+            in was upload → wait for indexing → bar → details modal.
+          */}
+          {rag.status === "ready" && (
+            <ActiveModelBar
+              models={[rag.chat.info, rag.embed.info, rag.rerank.info]}
+              roles={["chat", "retrieval", "rerank"]}
+              ready
+              onChange={() => setVariantPickerOpen(true)}
+              onFreeMemory={rag.dispose}
+              onDeleteCachedModels={rag.evict}
+            />
+          )}
+        </>
       ) : (
         <>
           <FileInfoBar
@@ -374,6 +396,14 @@ export default function AskPdf() {
                 ready={rag.status === "ready"}
                 onChange={() => setVariantPickerOpen(true)}
                 disabled={task.processing || isIndexing}
+                // Storage knobs in the details modal: dispose frees
+                // RAM (warm cache stays), evict frees disk too +
+                // forces re-consent on next use. The session-
+                // invalidation effect above clears sessionRef when
+                // rag.status drops, so either action leaves the
+                // tool in a clean rebuild-on-next-ready state.
+                onFreeMemory={rag.dispose}
+                onDeleteCachedModels={rag.evict}
               />
             </>
           )}

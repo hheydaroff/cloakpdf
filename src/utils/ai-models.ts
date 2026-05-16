@@ -526,20 +526,22 @@ export function getActiveChatModelId(): AiModelId {
  *     re-appears one more time on first run after the swap, then
  *     never bothers the user again.
  *
- * **Orphan CacheStorage entries we can't clean up:** every retired
- * model leaves its weight files in the browser's CacheStorage —
- * SmolLM2 (~1 GB), bge-reranker-v2-m3 (571 MB), bge-reranker-base
- * (279 MB) are the notable ones. The Cache API requires the exact
- * request URLs to evict, and Transformers.js doesn't expose them.
- * They get reclaimed when:
+ * **Orphan CacheStorage entries:** every retired model leaves its
+ * weight files in the browser's CacheStorage — SmolLM2 (~1 GB),
+ * bge-reranker-v2-m3 (571 MB), bge-reranker-base (279 MB) are the
+ * notable ones. Two ways those bytes get reclaimed:
  *
+ *   - User clicks "Delete cached models" in the AI Model Details
+ *     dialog — `evictModelCacheBytes()` in {@link ../utils/ai-runtime.ts}
+ *     drops the entire `transformers-cache`, which removes both
+ *     active model weights AND any retired-model orphans in one go.
  *   - The browser hits its origin storage quota and evicts LRU.
- *   - The user clicks "Clear site data" in browser settings.
  *
- * "Free model memory" in the active-model bar only releases the
- * in-tab JS / WASM heap — it does **not** clear CacheStorage.
- * Document this to avoid the same finding showing up in future
- * audits.
+ * "Free memory" in the same dialog only releases the in-tab JS /
+ * WASM heap — it does **not** clear CacheStorage. The two
+ * affordances are distinct on purpose: most users want the soft
+ * action (free RAM, keep instant re-load); the destructive one is
+ * gated behind a two-step confirm.
  */
 const RERANK_SWAP_MIGRATION_KEY = "cloakpdf:migration:rerank-minilm-swap";
 
@@ -587,4 +589,44 @@ export function formatApproxSize(bytes: number): string {
     return `≈ ${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
   }
   return `≈ ${Math.round(bytes / (1024 * 1024))} MB`;
+}
+
+/**
+ * Clear every localStorage flag the AI stack uses to remember "this
+ * user already consented to / downloaded model X" — the
+ * `cloakpdf:ai-model-ready:*` flags **and** the one-shot migration
+ * guard added for the rerank swap. Used by the "Delete cached
+ * models" affordance so the user, after evicting CacheStorage
+ * bytes, sees the consent dialog again on next use (matching the
+ * fresh-visitor experience).
+ *
+ * Does **not** touch the chat-variant preference — the user picked
+ * their tier and clearing the disk cache doesn't invalidate that
+ * choice. They'd just have to re-pick on next use otherwise, which
+ * is busywork.
+ *
+ * Idempotent and best-effort: failures on individual keys (private
+ * mode, quota) are swallowed.
+ */
+export function clearAllReadyFlags(): void {
+  const storage = safeLocalStorage();
+  if (!storage) return;
+  const PREFIX = "cloakpdf:ai-model-ready:";
+  try {
+    // Iterate snapshot of keys — removeItem during iteration shifts
+    // indices on some Storage shims.
+    const keys: string[] = [];
+    for (let i = 0; i < storage.length; i++) {
+      const k = storage.key(i);
+      if (k && k.startsWith(PREFIX)) keys.push(k);
+    }
+    for (const k of keys) storage.removeItem(k);
+    // Also clear the migration guard so a return visit after evict
+    // re-fires the "rerank swap" re-consent path uniformly with the
+    // rest of the consent flow, instead of skipping it because the
+    // guard says "I already did that migration once".
+    storage.removeItem(RERANK_SWAP_MIGRATION_KEY);
+  } catch {
+    // ignore
+  }
 }

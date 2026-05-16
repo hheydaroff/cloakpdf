@@ -1,17 +1,33 @@
 /**
- * Small strip rendered below an AI tool's primary controls that shows
- * the model(s) currently in use, the total on-device footprint, and a
- * link to a per-model details modal.
+ * Small strip rendered alongside an AI tool's primary controls that
+ * shows the model(s) currently in use, the total on-device footprint,
+ * and quick-action buttons.
  *
  * Layout intent: a single flex-wrapping row of segments separated by
  * subtle bullets, so the line breaks cleanly on phones (each segment
  * lands on its own row at the natural wrap point — no orphan bullets,
  * no half-rendered "≈" symbols, no awkward 3-line stack).
  *
- * Per-model details (names, repos, licences, Hugging Face links) live
- * in {@link AiModelDetailsDialog} one tap away.
+ * **Direct-action buttons on the bar** (one-click from anywhere the
+ * bar renders):
+ *
+ *   - **Change model** — opens the tier picker. Hidden when there's
+ *     only one tier registered.
+ *   - **Free memory** — releases the in-tab pipelines (RAM); the disk
+ *     cache stays warm so re-loading is fast. The single most common
+ *     management action, so it gets pulled out of the details modal
+ *     and onto the bar itself.
+ *
+ * The destructive **Delete cached models** action lives one click
+ * deeper, inside {@link AiModelDetailsDialog} via "View details" —
+ * intentionally not at the bar level because it needs a two-step
+ * confirm and a clear warning about the re-download cost.
+ *
+ * Per-model details (names, repos, licences, Hugging Face links) and
+ * the destructive delete action live in {@link AiModelDetailsDialog}
+ * one tap away.
  */
-import { RefreshCcw, ShieldCheck } from "lucide-react";
+import { MemoryStick, RefreshCcw, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { type AiModelInfo, formatApproxSize } from "../utils/ai-models.ts";
 import { AiModelDetailsDialog } from "./AiModelDetailsDialog.tsx";
@@ -48,9 +64,29 @@ interface ActiveModelBarProps {
    * Ignored when `onChange` is omitted.
    */
   disabled?: boolean;
+  /**
+   * Release in-tab pipelines (RAM only). Passed through to the
+   * details modal's Storage section. Wire from `useRagModels.dispose`.
+   * Omit to hide the affordance.
+   */
+  onFreeMemory?: () => void | Promise<unknown>;
+  /**
+   * Destructive: release pipelines **and** evict CacheStorage bytes
+   * + clear consent flags so the user re-experiences the consent
+   * dialog on next use. Wire from `useRagModels.evict`. Omit to hide.
+   */
+  onDeleteCachedModels?: () => void | Promise<unknown>;
 }
 
-export function ActiveModelBar({ models, roles, ready, onChange, disabled }: ActiveModelBarProps) {
+export function ActiveModelBar({
+  models,
+  roles,
+  ready,
+  onChange,
+  disabled,
+  onFreeMemory,
+  onDeleteCachedModels,
+}: ActiveModelBarProps) {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const verb = ready ? "Running" : "Selected";
 
@@ -96,18 +132,33 @@ export function ActiveModelBar({ models, roles, ready, onChange, disabled }: Act
             View details
           </button>
         </div>
-        {onChange && (
-          <button
-            type="button"
-            onClick={onChange}
-            disabled={disabled}
-            aria-label="Change model"
-            className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:text-slate-800 dark:hover:text-dark-text hover:bg-slate-100 dark:hover:bg-dark-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCcw className="w-3 h-3" />
-            <span className="hidden sm:inline">Change model</span>
-          </button>
-        )}
+        <div className="shrink-0 flex items-center gap-1.5">
+          {onFreeMemory && ready && (
+            <button
+              type="button"
+              onClick={() => void onFreeMemory()}
+              disabled={disabled}
+              aria-label="Free memory"
+              title="Release loaded models from RAM. Files stay cached on disk so re-loading is fast."
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:text-slate-800 dark:hover:text-dark-text hover:bg-slate-100 dark:hover:bg-dark-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <MemoryStick className="w-3 h-3" />
+              <span className="hidden sm:inline">Free memory</span>
+            </button>
+          )}
+          {onChange && (
+            <button
+              type="button"
+              onClick={onChange}
+              disabled={disabled}
+              aria-label="Change model"
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:text-slate-800 dark:hover:text-dark-text hover:bg-slate-100 dark:hover:bg-dark-surface-alt transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCcw className="w-3 h-3" />
+              <span className="hidden sm:inline">Change model</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <AiModelDetailsDialog
@@ -115,6 +166,9 @@ export function ActiveModelBar({ models, roles, ready, onChange, disabled }: Act
         onClose={() => setDetailsOpen(false)}
         models={models}
         roles={roles}
+        onFreeMemory={onFreeMemory}
+        onDelete={onDeleteCachedModels}
+        storageActionsDisabled={disabled}
       />
     </>
   );
