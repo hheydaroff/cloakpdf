@@ -209,25 +209,73 @@ export function useRagModels(): UseRagModelsReturn {
     });
   }, [chat, embed, rerank, chatVariant, chatModelId]);
 
-  // Combined progress: sum the loaded/total bytes when at least one
-  // model is downloading. Keeps the consent dialog showing a single
-  // bar that tracks the *whole* download, not three leapfrogging ones.
+  // Combined progress: a single bar that tracks the *whole* bundle,
+  // not three leapfrogging ones.
+  //
+  // **Why this isn't just `sum(model.progress)`.** Two bugs an earlier
+  // naive aggregator hit, both visible to the user:
+  //
+  //   1. When a model finishes, `useAiModel` clears its `progress` to
+  //      null. A naive sum would then drop that model's bytes from
+  //      both `loaded` and `total`, so the bar would either crash
+  //      backwards (if `total` was the only term using the
+  //      registry-estimate fallback) or stall at a fraction (if
+  //      `total` kept the estimate but `loaded` lost the bytes).
+  //   2. Transformers.js often reports a per-file `total` that's a
+  //      few percent below the registry's `approxSizeBytes` estimate
+  //      (different quant builds, packaging overhead). With the
+  //      registry estimate as the denominator and reported bytes as
+  //      the numerator, the percent caps below 100% — the canonical
+  //      "stopped at 85%" symptom that triggered this rewrite.
+  //
+  // The fix: each model contributes max(reported, registry-estimate)
+  // to `total` regardless of status, and contributes its **full**
+  // expected size to `loaded` the moment its status flips to
+  // "ready". Active downloads contribute their reported `loaded`.
+  // Idle / awaiting-consent models contribute 0 to loaded but still
+  // their full size to total — so the bar starts at a realistic
+  // small percent and climbs smoothly to 100% as each model
+  // completes, with no mid-stream resets.
   const progress: AiProgress | null = useMemo(() => {
-    const sources = [chat.progress, embed.progress, rerank.progress];
-    if (sources.every((p) => !p)) return null;
+    const items = [chat, embed, rerank];
+    // Render the combined bar while anything is actively moving OR
+    // anything has reported partial progress. Once *everything* is
+    // ready/idle/error, return null so the dialog can close.
+    const anyActive = items.some(
+      (m) => m.progress != null || m.status === "downloading" || m.status === "loading",
+    );
+    if (!anyActive) return null;
+
     let loaded = 0;
     let total = 0;
     let file = "";
     let statusText = "Downloading";
-    for (const s of sources) {
-      if (!s) continue;
-      loaded += s.loaded;
-      total += s.total;
-      file ||= s.file;
-      statusText = s.status ?? statusText;
+
+    for (const m of items) {
+      // Each model's expected contribution = max(reported-total, registry-estimate).
+      // The max() protects against Transformers.js under-reporting; the registry
+      // estimate is itself an approximation, so a slightly-high reported total
+      // still wins.
+      const expected = Math.max(m.progress?.total ?? 0, m.info.approxSizeBytes);
+      total += expected;
+
+      if (m.status === "ready") {
+        // Done — count the full expected size as loaded so the percent
+        // reaches 100% on the last model finishing, instead of capping
+        // at whatever the reported sum was.
+        loaded += expected;
+      } else if (m.progress) {
+        loaded += m.progress.loaded;
+        file ||= m.progress.file;
+        statusText = m.progress.status ?? statusText;
+      }
+      // idle / awaiting-consent / error: contribute 0 to `loaded`,
+      // but their `expected` is already in `total` so the bar
+      // accurately shows "this much of the whole still to go".
     }
+
     return { loaded, total, file, status: statusText };
-  }, [chat.progress, embed.progress, rerank.progress]);
+  }, [chat, embed, rerank]);
 
   const ensureReady = useCallback(async () => {
     const [chatPipe, embedPipe, rerankPipe] = await Promise.all([

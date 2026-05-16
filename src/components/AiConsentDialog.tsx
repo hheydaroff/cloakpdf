@@ -336,10 +336,19 @@ function DownloadBody({
   }
 
   const loaded = progress?.loaded ?? 0;
-  // Fall back to the registry's combined hint if Transformers.js hasn't
-  // yet reported a total — this keeps the bar non-empty during the brief
-  // window between "initiate" and the first "progress" event.
-  const total = Math.max(progress?.total ?? 0, totalBytes);
+  // Use the aggregated `total` from `useRagModels.progress` directly
+  // when available — it already accounts for completed models by
+  // counting their full `approxSizeBytes` toward both `loaded` and
+  // `total`, so the percent reaches 100% on the last model
+  // finishing. Falls back to the registry sum only in the brief
+  // pre-progress window before Transformers.js fires its first
+  // event. The earlier `Math.max(reported, registry)` pattern was
+  // the bug behind "stopped at 85%" — when Transformers.js
+  // under-reports total bytes (smaller actual quant than the
+  // estimate), the dialog would cap percent below 100% because
+  // `loaded` reached the reported total but `total` kept the
+  // higher registry estimate.
+  const total = progress?.total && progress.total > 0 ? progress.total : totalBytes;
   const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
 
   // Single-model fallback (e.g. a tool that only loads one pipeline)
@@ -475,11 +484,14 @@ function ModelProgressCard({
   progress: AiProgress | null;
 }) {
   const loaded = progress?.loaded ?? 0;
-  // Fall back to the model's published size hint when the runtime
-  // hasn't reported a total yet — keeps the card's percent meaningful
-  // during the early "initiate" / first-file window before the first
-  // byte arrives.
-  const total = Math.max(progress?.total ?? 0, info.approxSizeBytes);
+  // Prefer the runtime-reported total once it's available — that's
+  // the authoritative denominator and lets the percent reach 100%
+  // when the model actually finishes. Fall back to the registry
+  // estimate only in the pre-progress window (no events fired yet).
+  // The earlier `Math.max(reported, registry)` workaround capped
+  // per-card percent below 100% whenever the actual download was
+  // smaller than the registry estimate.
+  const total = progress?.total && progress.total > 0 ? progress.total : info.approxSizeBytes;
   const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
 
   // Bar appearance keys off status, not just percent — a finished
