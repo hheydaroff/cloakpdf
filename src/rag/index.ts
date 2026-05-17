@@ -190,7 +190,14 @@ export async function createRagSession(options: CreateSessionOptions): Promise<R
 
     chunks = await chunkDocuments(pages, { chunkSize: 700, chunkOverlap: 100 });
     if (chunks.length === 0) {
-      throw new Error("Document chunked to zero pieces — text may be too sparse.");
+      // Same error shape as the "no pages" branch above so the
+      // AskPdf catch (which matches /no usable text/i) routes both
+      // failure modes to the "scanned PDF" recovery card. Without
+      // this match, an all-whitespace or all-glyph-fallback PDF would
+      // build an empty index, look "indexed" successfully, and then
+      // return "no relevant passages" for every question — a silent
+      // failure that's easy to mistake for a model bug.
+      throw new Error("No usable text in this PDF — chunking produced zero pieces.");
     }
 
     // Pre-embed in batches so we can stream progress to the UI. We

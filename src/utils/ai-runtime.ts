@@ -107,6 +107,31 @@ export function forgetModel(modelId: AiModelId): void {
 }
 
 /**
+ * Sync-evict an in-flight {@link loadPipeline} promise so its
+ * late-arrival check (inside the loader) trips and the resolved
+ * pipeline is discarded without setting the ready flag or
+ * re-populating runtime state.
+ *
+ * Used by {@link useAiModel.cancel} when the user explicitly bails
+ * out of a download via the consent dialog — without this, the
+ * underlying fetch (Transformers.js doesn't expose an abort signal)
+ * runs to completion, sets `markModelReady`, and the user comes back
+ * to a half-downloaded `localStorage` flag pointing at potentially-
+ * incomplete `CacheStorage` bytes. Next visit auto-loads, fails
+ * mid-construct, surfaces a generic error, and the user is stuck
+ * until they hit "Delete cached models" — even though they thought
+ * they'd already cancelled cleanly.
+ *
+ * Does not touch any `_resolvedPipelines` entry — only the in-flight
+ * promise reference. If the pipeline somehow finished resolving
+ * before this runs (race), the late-arrival check will see the
+ * cleared cache slot and discard the pipe.
+ */
+export function abortPendingLoad(modelId: AiModelId): void {
+  _pipelineCache.delete(modelId);
+}
+
+/**
  * Release the in-memory pipeline for a model without touching the
  * "downloaded once" flag. The browser's CacheStorage keeps the bytes
  * so re-loading is cheap. Used when the user switches chat tiers so
@@ -337,7 +362,16 @@ export async function loadPipeline(
 
   const info = getModelInfo(modelId);
 
-  const promise = (async () => {
+  // Self-reference holder so the IIFE below can compare its own
+  // promise against whatever's currently in `_pipelineCache`. By the
+  // time the IIFE's first `await` lands, `handle.promise` is already
+  // assigned (the IIFE expression evaluates synchronously through its
+  // first await, then the assignment statement runs, then the IIFE
+  // resumes). TypeScript can't reason about that ordering on a bare
+  // `let promise: Promise<...>` declaration, so we wrap in an object
+  // whose field is optional.
+  const handle: { promise?: Promise<AiPipeline> } = {};
+  handle.promise = (async () => {
     const t = await getTransformers();
     const useWebGpu = await detectWebGpu();
 
@@ -418,6 +452,36 @@ export async function loadPipeline(
         ...info.pipelineOptions,
       });
 
+      // Late-arrival check. If our promise was evicted from the cache
+      // while `t.pipeline(...)` was in flight, the original consumer
+      // is gone (user cancelled the consent dialog, switched chat
+      // tier, or navigated away long enough for `scheduleDispose` to
+      // fire). Without this check we'd still:
+      //   - Mark the model ready in localStorage — but the bytes the
+      //     user *intentionally* abandoned would silently get treated
+      //     as a successful download. Next visit auto-loads against
+      //     a half-finished CacheStorage entry, fails mid-construct,
+      //     and the user is stuck in error state without realising
+      //     the prior cancel caused it.
+      //   - Re-populate `_resolvedPipelines`, defeating the dispose
+      //     that just freed ~2 GB of WebGPU/WASM RAM. The orphan
+      //     pipeline sits resident with no consumer.
+      // Discard the pipe instead (best-effort dispose to free GPU
+      // resources synchronously where possible), and reject the
+      // promise — consumers were already gone, so the rejection is
+      // a no-op for them.
+      if (_pipelineCache.get(modelId) !== handle.promise) {
+        const disposable = pipe as { dispose?: () => Promise<void> | void };
+        if (typeof disposable.dispose === "function") {
+          try {
+            await disposable.dispose();
+          } catch {
+            // best-effort
+          }
+        }
+        throw new Error("load-cancelled");
+      }
+
       // Final "ready" tick so the UI can close the dialog confidently.
       let total = 0;
       let loaded = 0;
@@ -443,13 +507,18 @@ export async function loadPipeline(
     } catch (err) {
       // On failure, drop the cached promise so the next attempt re-runs
       // the whole pipeline factory rather than re-resolving the failed one.
-      _pipelineCache.delete(modelId);
+      // `delete(...)` is a no-op if a later writer already replaced our
+      // entry (in which case the late-arrival check above tripped and
+      // we're not the cache's owner anyway).
+      if (_pipelineCache.get(modelId) === handle.promise) {
+        _pipelineCache.delete(modelId);
+      }
       throw err;
     }
   })();
 
-  _pipelineCache.set(modelId, promise);
-  return promise;
+  _pipelineCache.set(modelId, handle.promise);
+  return handle.promise;
 }
 
 /**

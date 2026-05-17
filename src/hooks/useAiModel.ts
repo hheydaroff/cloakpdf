@@ -32,8 +32,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type AiModelId, type AiModelInfo, getModelInfo } from "../utils/ai-models.ts";
 import {
+  abortPendingLoad,
   type AiPipeline,
   type AiProgress,
+  forgetModel,
   getResolvedPipeline,
   isModelMarkedReady,
   loadPipeline,
@@ -186,7 +188,29 @@ export function useAiModel(modelId: AiModelId): UseAiModelReturn {
       pendingRef.current = [];
       for (const { resolve } of pending) resolve(pipe);
     } catch (e) {
+      // Late-arrival reject from `loadPipeline` (user cancelled, tier
+      // swap, dispose). Not a real error — the consumer was already
+      // dropped via `pendingRef.reject(...)` in `cancel()` and the
+      // status was reset there. Just bail without surfacing UI.
+      if (e instanceof Error && e.message === "load-cancelled") return;
       if (!mountedRef.current) return;
+      // If we got here on the warm-cache path, the localStorage flag
+      // says the model was previously downloaded but the actual load
+      // just threw — most likely the CacheStorage bytes are corrupt
+      // (browser eviction mid-write, storage pressure, bit-flip). The
+      // next Retry would hit the *exact same* warm-cache path and
+      // fail identically: an infinite loop unless the user finds the
+      // "Delete cached models" button. Clear the ready flag so the
+      // retry goes through the fresh-download UI instead — the user
+      // gets the full progress dialog and Cancel CTA, which is the
+      // clearer recovery surface even though Transformers.js may
+      // still reuse some of the corrupt bytes via its own URL-keyed
+      // CacheStorage. From the user's side, the next attempt at
+      // least *looks* like a fresh download instead of silently
+      // re-hitting the same poison cache.
+      if (cacheWarm) {
+        forgetModel(modelId);
+      }
       // Always surface a generic, user-friendly message in the dialog —
       // raw `error.message` strings from onnxruntime-web (e.g.
       // "Could not find an implementation for GatherBlockQuantized…")
@@ -244,11 +268,21 @@ export function useAiModel(modelId: AiModelId): UseAiModelReturn {
     const pending = pendingRef.current;
     pendingRef.current = [];
     for (const { reject } of pending) reject(new Error("cancelled"));
+    // Sync-evict any in-flight `loadPipeline` promise so the
+    // background fetch can't quietly set `markModelReady` after the
+    // user clicked Cancel. The promise itself can't be aborted
+    // (Transformers.js doesn't expose a signal), but the late-arrival
+    // check inside `loadPipeline` discards the resolved pipe + skips
+    // the flag/_resolvedPipelines population when its own promise
+    // isn't in `_pipelineCache` any more. Without this, a cancel
+    // during a fresh download would leave the user with a "ready"
+    // flag pointing at potentially-incomplete `CacheStorage` bytes.
+    if (!pipelineRef.current) abortPendingLoad(modelId);
     if (!mountedRef.current) return;
     setStatus(pipelineRef.current ? "ready" : "idle");
     setProgress(null);
     setError(null);
-  }, []);
+  }, [modelId]);
 
   const reset = useCallback(() => {
     // Drop the hook's pipeline ref so a future ensureReady() doesn't
