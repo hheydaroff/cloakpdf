@@ -5,7 +5,14 @@
  * pieces we test the helpers in isolation.
  */
 import { describe, expect, it } from "vitest";
-import { extractCoreQuery, looksLikePastedProse } from "../../src/rag/graph.ts";
+import {
+  CHITCHAT_PROMPT,
+  extractCoreQuery,
+  HYDE_PROMPT,
+  looksLikePastedProse,
+  OFF_TOPIC_REFUSAL,
+  SYSTEM_PROMPT,
+} from "../../src/rag/graph.ts";
 
 describe("extractCoreQuery (dilution-attack defence)", () => {
   it("returns the question alone when prose follows a `?` (canonical attack)", () => {
@@ -157,4 +164,89 @@ describe("looksLikePastedProse (pasted-prose attack defence)", () => {
     expect(looksLikePastedProse("")).toBe(false);
     expect(looksLikePastedProse("   ")).toBe(false);
   });
+});
+
+/**
+ * Regression guard: the strings that get sent to the chat model as
+ * system/user instructions must not bake in concrete content the
+ * model could lift into its answer. Small LLMs (LFM2-2.6B in our
+ * default bundle) copy in-prompt examples verbatim, so any stray
+ * concrete value becomes a hallucination shape that fires on every
+ * non-matching document.
+ *
+ * **History.** The system prompt once used the e2e résumé fixture's
+ * exact header line — `"Sumit Sahoo is an Enterprise Architect …"` —
+ * as a by-example illustration of "lead with name + role". On a
+ * totally unrelated Google whitepaper the model reproduced it
+ * verbatim: *"Sumit Sahoo is the Enterprise Architect behind the
+ * content, focusing on prompt engineering strategies."* The
+ * follow-up principle is **describe the output shape in words; never
+ * by example** — placeholders like `<Name>` get copied just as
+ * eagerly, often with the brackets included.
+ *
+ * Two categories of forbidden content:
+ *   1. Test-fixture identifiers (the résumé fixture's name, phone,
+ *      email, city, role) — direct leak of test data.
+ *   2. Generic by-example content (concrete tool names,
+ *      `<angle-bracket placeholders>`, demonstration phrases) —
+ *      anything the model could treat as a template.
+ */
+describe("prompt hygiene (no by-example content)", () => {
+  const FIXTURE_TOKENS = [
+    // Test-fixture identifiers (résumé sample.pdf header):
+    "Sumit",
+    "Sahoo",
+    "sumitsahoo",
+    "7899800899",
+    "+91-78",
+    "Pune",
+    "Maharashtra",
+    "Enterprise Architect",
+  ];
+  // Common concrete content that's a smell when seen inside an
+  // instruction string — these have shown up historically as
+  // by-example illustrations and the model latches onto them. The
+  // list is not exhaustive (any concrete name/tool is a smell);
+  // these are the specific patterns the previous prompt drift
+  // demonstrated.
+  const BY_EXAMPLE_SMELLS = [
+    // Placeholders the model literally echoes:
+    "<Name>",
+    "<Role>",
+    "<Person>",
+    // Concrete tool names that were used as "do not pad with these"
+    // counter-examples in an earlier draft of SYSTEM_PROMPT — the
+    // model treated them as a *suggestion list* on tech résumés.
+    "Vue, Angular",
+    "Django, Kubernetes",
+    "Python (used for",
+  ];
+  const PROMPTS = {
+    SYSTEM_PROMPT,
+    HYDE_PROMPT,
+    CHITCHAT_PROMPT,
+    OFF_TOPIC_REFUSAL,
+  };
+
+  for (const [name, prompt] of Object.entries(PROMPTS)) {
+    it(`${name} contains no résumé-fixture identifiers`, () => {
+      for (const token of FIXTURE_TOKENS) {
+        // Case-insensitive — the model's verbatim copies aren't case-
+        // sensitive, so neither is the guard.
+        expect(
+          prompt.toLowerCase(),
+          `${name} must not contain "${token}" — the model will copy it verbatim into answers. Describe the output shape in words, not by example.`,
+        ).not.toContain(token.toLowerCase());
+      }
+    });
+
+    it(`${name} contains no by-example illustrations`, () => {
+      for (const token of BY_EXAMPLE_SMELLS) {
+        expect(
+          prompt,
+          `${name} must not contain "${token}" — by-example content (placeholders, concrete tool names, demonstration phrases) gets lifted into answers by small LLMs.`,
+        ).not.toContain(token);
+      }
+    });
+  }
 });

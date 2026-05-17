@@ -131,14 +131,37 @@ import {
  *      instruction still applies to the long-tail phrasings that
  *      do reach the LLM.
  */
-const SYSTEM_PROMPT = `You answer questions about a PDF. The user message contains the document header (title and contact block) followed by relevant excerpts.
+/**
+ * **Hard rule: no by-example illustrations of names, roles, tools, or
+ * any other content the model could lift into an answer.**
+ *
+ * Small chat models (LFM2-2.6B in our shipping bundle) are prone to
+ * copying any concrete example they see in their instructions into
+ * the answer — especially when the retrieved excerpts don't strongly
+ * anchor an alternative. A previous version of this prompt
+ * illustrated the "lead with name + role" shape with the literal
+ * string `"Sumit Sahoo is an Enterprise Architect …"` (matching the
+ * e2e résumé fixture's header). On the Google Prompt Engineering
+ * whitepaper — a totally unrelated PDF — the model echoed it back
+ * verbatim: *"Sumit Sahoo is the Enterprise Architect behind the
+ * content, focusing on prompt engineering strategies."*
+ *
+ * The fix is *not* to swap in a placeholder example (`<Name> is a
+ * <Role>`) — the model will copy that just as readily, sometimes
+ * outputting the angle brackets unchanged. Instead, describe the
+ * desired output **shape** in words and rely on the grounded
+ * excerpts to supply the actual values. The unit test in
+ * `tests/unit/rag-graph.test.ts` blocks any concrete name / phone /
+ * email / city / common tool name from appearing here in future.
+ */
+export const SYSTEM_PROMPT = `You answer questions about a PDF. The user message contains the document header (title and contact block) followed by relevant excerpts.
 
 How to answer:
 - Read the header and excerpts. Most questions can be answered directly from them — scan for the relevant span and use it.
 - For specific values (phone numbers, emails, URLs, addresses, dates, prices, IDs): find the value in the header or excerpts and quote it EXACTLY, every character. Lead the reply with the value itself — no preamble, no hedging.
-- For "who is X?" / "tell me about X" / "describe X" where X is a person named in the header: write 1-3 sentences describing X's role, expertise, and key details from the header and excerpts. Lead with the person's full name + role ("Sumit Sahoo is an Enterprise Architect …"), then add the relevant context. Do NOT reply with just the name on its own.
-- For "what is this document?" / "whose document is this?": identify the type from structure. A name + contact block + work experience sections = a résumé / CV. An executive summary + numbered sections = a report. Line items + total = an invoice. Name the person or entity from the header, not "the author".
-- For lists (tools, technologies, skills, dates): copy the names verbatim from the excerpts as a short comma-separated list. Do not add parenthetical descriptions ("Python (used for ML)") — only what the document literally says. Do not pad the list with common tools from general knowledge that aren't in the excerpts (e.g. don't add "Vue, Angular, Django, Kubernetes, Terraform" unless the document literally names them).
+- For "who is X?" / "tell me about X" / "describe X" where X is a person named in the header: write 1-3 sentences describing X's role, expertise, and key details from the header and excerpts. Lead with the person's full name followed by their role, taken verbatim from the header. Do not invent or substitute a name — if the header does not name a person, do not produce one. Do not reply with just the name on its own.
+- For "what is this document?" / "whose document is this?": identify the type from structure. A person's name plus a contact block plus work-experience sections is a résumé / CV. An executive summary plus numbered sections is a report. Line items plus a total is an invoice. Name the person or entity from the header — never "the author".
+- For lists (tools, technologies, skills, dates): copy the names verbatim from the excerpts as a short comma-separated list. Do not add parenthetical descriptions for any item. Do not pad the list with items the excerpts do not name.
 - Keep answers tight: one sentence for a single fact, up to three for overviews. Cite (page N) only for facts visible on that page.
 
 When the question asks about a specific topic, technology, or named entity:
@@ -152,7 +175,7 @@ When the question is unrelated to the document:
 
 Never use general knowledge. Never fabricate facts or citations. Treat the header as authoritative for identity, title, and contact information.`;
 
-const CHITCHAT_PROMPT =
+export const CHITCHAT_PROMPT =
   "You are a friendly assistant who helps a user explore a PDF document. Respond briefly to the user's greeting and invite them to ask something specific about the document.";
 
 /**
@@ -167,7 +190,7 @@ const CHITCHAT_PROMPT =
  * generation under ~80 tokens, capping the latency penalty per
  * question to a single chat-model forward pass.
  */
-const HYDE_PROMPT = `You are a helper that writes a single short hypothetical answer to a question. The answer will be used to search a document for relevant passages — it doesn't need to be correct, just plausible in shape and vocabulary.
+export const HYDE_PROMPT = `You are a helper that writes a single short hypothetical answer to a question. The answer will be used to search a document for relevant passages — it doesn't need to be correct, just plausible in shape and vocabulary.
 
 Rules:
 - Output exactly one sentence.
@@ -180,7 +203,7 @@ Rules:
  * but unambiguous about the scope — "I can only answer questions about
  * the uploaded document" is the entire contract.
  */
-const OFF_TOPIC_REFUSAL =
+export const OFF_TOPIC_REFUSAL =
   "I can only answer questions about the document you uploaded. Could you ask something about its contents instead?";
 
 /**
