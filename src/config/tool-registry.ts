@@ -348,7 +348,7 @@ export const tools: Tool[] = [
   // ── AI (on-device) ───────────────────────────────────────
   {
     id: "ask-pdf",
-    title: "Ask your PDF (AI)",
+    title: "Ask your PDF",
     description: "Ask questions and get answers extracted from the PDF — runs entirely on-device",
     icon: MessageSquare,
     category: "ai",
