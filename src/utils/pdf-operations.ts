@@ -68,6 +68,7 @@ import type {
   CropMargins,
   BatesNumberOptions,
 } from "../types.ts";
+import type { LayoutPage } from "./layout-extract.ts";
 /**
  * Merge multiple PDF files into a single document.
  *
@@ -999,6 +1000,67 @@ export async function createSearchablePdf(file: File, pageTexts: string[]): Prom
 }
 
 /**
+ * Create a searchable PDF whose invisible text layer is positioned at each
+ * text item's true bounding box.
+ *
+ * This is the layout-aware successor to {@link createSearchablePdf}: instead
+ * of stacking lines at a synthetic line height from the top of the page (which
+ * never aligned with the underlying image), every run from
+ * {@link extractLayout} is drawn at its own x/y so selecting text in a viewer
+ * highlights the right place — the prerequisite for word-accurate select and
+ * copy on scanned PDFs.
+ *
+ * liteparse reports item positions in PDF points with a top-left origin; we
+ * convert to pdf-lib's bottom-left space. Each `drawText` is wrapped because
+ * the standard Helvetica font can only encode WinAnsi — items with characters
+ * it can't represent (e.g. CJK OCR output) are skipped rather than failing the
+ * whole document; the original page image keeps them visible regardless.
+ *
+ * @param file  - The original PDF file.
+ * @param pages - Per-page layout from {@link extractLayout}.
+ * @returns Uint8Array of the new searchable PDF.
+ */
+export async function createSearchablePdfFromLayout(
+  file: File,
+  pages: LayoutPage[],
+): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const pageCount = pdfDoc.getPageCount();
+
+  const byNumber = new Map(pages.map((p) => [p.pageNumber, p]));
+
+  for (let i = 0; i < pageCount; i++) {
+    const layout = byNumber.get(i + 1);
+    if (!layout) continue;
+
+    const page = pdfDoc.getPage(i);
+    const { width: pdfW, height: pdfH } = page.getSize();
+    // liteparse coordinates are in the source page's point space; scale to the
+    // pdf-lib page in case the two differ (defensive — usually identical).
+    const sx = layout.width ? pdfW / layout.width : 1;
+    const sy = layout.height ? pdfH / layout.height : 1;
+
+    for (const item of layout.items) {
+      const text = item.text.trim();
+      if (!text) continue;
+      const size = Math.max(1, (item.fontSize || item.height) * sy);
+      // Baseline sits at the bottom of the item box; convert top-left → bottom-left.
+      const x = item.x * sx;
+      const y = pdfH - (item.y + item.height) * sy;
+      try {
+        page.drawText(text, { x, y, size, font, color: rgb(0, 0, 0), opacity: 0 });
+      } catch {
+        // Unencodable glyphs for Helvetica — skip this run, keep the rest.
+      }
+    }
+  }
+
+  return pdfDoc.save();
+}
+
+/**
  * Insert a blank page into a PDF at the specified position.
  *
  * The blank page dimensions are copied from the adjacent page so the new
@@ -1577,46 +1639,126 @@ export async function extractPages(file: File, pageIndices: number[]): Promise<U
   return result.save();
 }
 
+/** Encode a canvas to image bytes via `toBlob` (async, memory-friendly). */
+function canvasToImageBytes(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number,
+): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Failed to encode redacted page image"));
+          return;
+        }
+        blob
+          .arrayBuffer()
+          .then((buf) => resolve(new Uint8Array(buf)))
+          .catch(reject);
+      },
+      type,
+      quality,
+    );
+  });
+}
+
 /**
- * Permanently redact regions of a PDF by drawing filled black rectangles.
+ * Permanently redact regions of a PDF — destructively.
  *
- * Coordinates are expressed as fractions (0-1) of the page's width and height
- * measured from the top-left corner. They are converted to PDF user-space points
- * (origin at bottom-left) before drawing.
+ * A black rectangle drawn on top of a page is NOT a redaction: the text and
+ * images underneath survive in the byte stream and are trivially recovered by
+ * copy/paste or text extraction. So instead, any page that carries a redaction
+ * is **rasterised, has the black boxes burned into the pixels, and is rebuilt
+ * as an image-only page** — the original text/vectors under (and around) the
+ * boxes no longer exist in the output. Pages without redactions are copied
+ * through untouched, so they keep their crisp vector text and small size.
+ *
+ * Trade-off (surfaced in the UI): redacted pages become flattened images —
+ * their remaining text is no longer selectable and the file grows. That is the
+ * standard, defensible cost of true redaction.
+ *
+ * Coordinates are fractions (0-1) of page width/height from the top-left.
  *
  * @param file - The source PDF file.
  * @param redactions - Array of redaction regions per page.
- * @returns A new PDF with the redacted areas permanently blacked out.
+ * @returns A new PDF with the redacted areas permanently destroyed.
  */
 export async function redactPdf(
   file: File,
   redactions: Array<{ pageIndex: number; xPct: number; yPct: number; wPct: number; hPct: number }>,
 ): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await PDFDocument.load(arrayBuffer);
+  const src = await PDFDocument.load(arrayBuffer);
+  const pageCount = src.getPageCount();
 
+  // Group redaction rects by page.
+  const byPage = new Map<number, typeof redactions>();
   for (const r of redactions) {
-    if (r.pageIndex < 0 || r.pageIndex >= pdf.getPageCount()) continue;
-    const page = pdf.getPage(r.pageIndex);
-    const { width, height } = page.getSize();
-
-    // Convert from top-left fraction coords to PDF bottom-left points
-    const pdfX = r.xPct * width;
-    const pdfH = r.hPct * height;
-    const pdfY = height - r.yPct * height - pdfH;
-    const pdfW = r.wPct * width;
-
-    page.drawRectangle({
-      x: pdfX,
-      y: pdfY,
-      width: pdfW,
-      height: pdfH,
-      color: rgb(0, 0, 0),
-      opacity: 1,
-    });
+    if (r.pageIndex < 0 || r.pageIndex >= pageCount) continue;
+    const list = byPage.get(r.pageIndex) ?? [];
+    list.push(r);
+    byPage.set(r.pageIndex, list);
   }
+  if (byPage.size === 0) return src.save();
 
-  return pdf.save();
+  const pdfjsLib = await getPdfJs();
+  // PDF.js may detach the backing buffer — hand it its own copy so `src`
+  // (used for copying untouched pages) stays valid.
+  const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+  const REDACT_DPI = 150;
+  const scale = REDACT_DPI / 72;
+
+  const out = await PDFDocument.create();
+  try {
+    for (let i = 0; i < pageCount; i++) {
+      const rects = byPage.get(i);
+      if (!rects) {
+        const [copied] = await out.copyPages(src, [i]);
+        out.addPage(copied);
+        continue;
+      }
+
+      const page = await pdfjsDoc.getPage(i + 1);
+      try {
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Failed to acquire 2D canvas context");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+
+        // Burn the redaction boxes into the pixels.
+        ctx.fillStyle = "#000000";
+        for (const r of rects) {
+          ctx.fillRect(
+            r.xPct * canvas.width,
+            r.yPct * canvas.height,
+            r.wPct * canvas.width,
+            r.hPct * canvas.height,
+          );
+        }
+
+        const jpeg = await canvasToImageBytes(canvas, "image/jpeg", 0.92);
+        const img = await out.embedJpg(jpeg);
+        const ptW = viewport.width / scale;
+        const ptH = viewport.height / scale;
+        const outPage = out.addPage([ptW, ptH]);
+        outPage.drawImage(img, { x: 0, y: 0, width: ptW, height: ptH });
+
+        canvas.width = 0;
+        canvas.height = 0;
+      } finally {
+        page.cleanup();
+      }
+    }
+    return out.save();
+  } finally {
+    void pdfjsDoc.destroy();
+  }
 }
 
 /**

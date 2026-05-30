@@ -730,7 +730,7 @@ function AssistantMarkdown({ content }: { content: string }) {
             </code>
           ),
           pre: ({ children }) => (
-            <pre className="my-2 p-3 rounded-lg bg-slate-100 dark:bg-dark-bg text-xs font-mono overflow-x-auto">
+            <pre className="my-2 p-3 rounded-lg bg-slate-100 dark:bg-dark-bg text-xs font-mono overflow-x-auto thin-scrollbar">
               {children}
             </pre>
           ),
@@ -751,7 +751,7 @@ function AssistantMarkdown({ content }: { content: string }) {
           ),
           hr: () => <hr className="my-3 border-slate-200 dark:border-dark-border" />,
           table: ({ children }) => (
-            <div className="my-2 overflow-x-auto">
+            <div className="my-2 overflow-x-auto thin-scrollbar">
               <table className="text-xs border-collapse">{children}</table>
             </div>
           ),

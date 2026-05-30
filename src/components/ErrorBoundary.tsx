@@ -186,7 +186,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   )}
                 </button>
               </div>
-              <pre className="whitespace-pre-wrap text-xs bg-slate-50 dark:bg-dark-bg border border-slate-200 dark:border-dark-border rounded-lg p-3 text-slate-700 dark:text-dark-text font-mono overflow-x-auto max-h-40">
+              <pre className="whitespace-pre-wrap text-xs bg-slate-50 dark:bg-dark-bg border border-slate-200 dark:border-dark-border rounded-lg p-3 text-slate-700 dark:text-dark-text font-mono overflow-x-auto thin-scrollbar max-h-40">
                 {error.message}
               </pre>
               <p className="mt-2 text-tag text-slate-400 dark:text-dark-text-muted">

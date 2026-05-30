@@ -301,7 +301,7 @@ function Stepper({ steps, currentIndex, done }: StepperProps) {
       </div>
 
       {/* Desktop: numbered circles + connecting lines + labels */}
-      <ol className="hidden sm:flex items-start gap-0 overflow-x-auto px-1 py-1">
+      <ol className="hidden sm:flex items-start gap-0 overflow-x-auto thin-scrollbar px-1 py-1">
         {steps.map((toolId, i) => {
           const meta = findTool(toolId);
           const isCurrent = !done && i === currentIndex;

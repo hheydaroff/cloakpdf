@@ -627,7 +627,7 @@ export default function ComparePdf() {
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
           All Pages
         </p>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto thin-scrollbar pb-1">
           {comparisons.map((comp) => (
             <button
               type="button"

@@ -312,7 +312,7 @@ export const tools: Tool[] = [
   {
     id: "redact-pdf",
     title: "Redact PDF",
-    description: "Permanently black out sensitive text and images",
+    description: "Auto-detect emails, phones & IDs — or box regions — and permanently remove them",
     icon: EyeOff,
     category: "security",
   },

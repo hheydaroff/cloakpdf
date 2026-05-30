@@ -134,7 +134,7 @@ export default function PdfInspector() {
                   Page Dimensions
                 </p>
               </div>
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-dark-border">
+              <div className="max-h-64 overflow-y-auto thin-scrollbar divide-y divide-slate-100 dark:divide-dark-border">
                 {info.pages.map((dim, i) => (
                   <div key={i} className="flex items-center justify-between px-4 py-2.5">
                     <span className="text-sm text-slate-500 dark:text-dark-text-muted flex items-center gap-1.5">

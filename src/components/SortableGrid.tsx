@@ -109,7 +109,10 @@ export function SortableGrid({
   return (
     <>
       <div
-        className={className ?? "flex flex-wrap items-end gap-y-6 overflow-x-auto pb-2 min-h-28"}
+        className={
+          className ??
+          "flex flex-wrap items-end gap-y-6 overflow-x-auto thin-scrollbar pb-2 min-h-28"
+        }
       >
         {elements}
       </div>

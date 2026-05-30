@@ -428,7 +428,7 @@ export default function CropPages() {
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-dark-border p-2">
+                      <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto thin-scrollbar rounded-xl border border-slate-200 dark:border-dark-border p-2">
                         {allThumbs.map((thumb, i) => (
                           <PageThumbnail
                             key={thumb}
