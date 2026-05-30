@@ -44,6 +44,33 @@ describe("detectPii — phones", () => {
   });
 });
 
+describe("detectPii — URLs (web pages)", () => {
+  it("matches http(s) and www. links", () => {
+    expect(typesOf("see https://github.com/sumitsahoo here", ["url"])).toEqual([
+      "url:https://github.com/sumitsahoo",
+    ]);
+    expect(typesOf("visit www.example.com today", ["url"])).toEqual(["url:www.example.com"]);
+  });
+
+  it("matches a bare domain.tld/path link (no scheme)", () => {
+    expect(typesOf("portfolio github.com/sumitsahoo done", ["url"])).toEqual([
+      "url:github.com/sumitsahoo",
+    ]);
+  });
+
+  it("ignores file names, bare domains without a path, and email domains", () => {
+    expect(detectPii("the file report.pdf is attached", { types: ["url"] })).toEqual([]);
+    expect(detectPii("just example.com alone", { types: ["url"] })).toEqual([]);
+    expect(detectPii("mail me at a@b.com", { types: ["url"] })).toEqual([]);
+  });
+
+  it("an email is reported as email, not url, when both could match", () => {
+    const hits = detectPii("contact a.b@host.com now");
+    expect(hits).toHaveLength(1);
+    expect(hits[0].type).toBe("email");
+  });
+});
+
 describe("detectPii — SSN", () => {
   it("matches dashed and spaced US SSNs", () => {
     expect(typesOf("SSN 123-45-6789", ["ssn"])).toEqual(["ssn:123-45-6789"]);

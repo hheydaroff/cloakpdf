@@ -39,7 +39,7 @@ export const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 
 // ── detection taxonomy ──────────────────────────────────────────────────────
 
-export type PiiType = "email" | "phone" | "ssn" | "credit-card" | "iban" | "ip" | "date";
+export type PiiType = "email" | "url" | "phone" | "ssn" | "credit-card" | "iban" | "ip" | "date";
 
 export interface PiiMatch {
   type: PiiType;
@@ -52,11 +52,21 @@ export interface PiiMatch {
 }
 
 /** All detectable types, in the order a UI should present them. */
-export const PII_TYPES: PiiType[] = ["email", "phone", "ssn", "credit-card", "iban", "ip", "date"];
+export const PII_TYPES: PiiType[] = [
+  "email",
+  "url",
+  "phone",
+  "ssn",
+  "credit-card",
+  "iban",
+  "ip",
+  "date",
+];
 
 /** Human labels for the UI. */
 export const PII_LABELS: Record<PiiType, string> = {
   email: "Email",
+  url: "Web link",
   phone: "Phone",
   ssn: "SSN",
   "credit-card": "Credit card",
@@ -73,6 +83,10 @@ export const PII_LABELS: Record<PiiType, string> = {
  */
 const PATTERNS: Record<PiiType, RegExp> = {
   email: EMAIL_RE,
+  // Web address: an http(s)/www URL, or a bare "domain.tld/path" link. The bare
+  // form deliberately requires a trailing slash + path so it skips file names
+  // ("report.pdf"), sentence fragments ("U.S."), and bare email domains.
+  url: /\b(?:https?:\/\/|www\.)[^\s<>"')\]]+|\b(?:[a-z0-9][a-z0-9-]{0,62}\.)+[a-z]{2,24}\/[^\s<>"')\]]*/i,
   // International "+CC …" run, or a separated domestic number (needs ≥2 groups,
   // so bare ID runs like "12345678" don't match here).
   phone: /\+\d[\d\s\-.()]{6,}\d|(?:\(\d{1,4}\)[\s\-.]?)?\d{2,4}(?:[\s\-.]\d{2,4}){1,4}/,
@@ -91,12 +105,13 @@ const PATTERNS: Record<PiiType, RegExp> = {
 /** Lower number = more specific; wins when two matches overlap. */
 const PRIORITY: Record<PiiType, number> = {
   email: 0,
-  iban: 1,
-  "credit-card": 2,
-  ssn: 3,
-  ip: 4,
-  phone: 5,
-  date: 6,
+  url: 1,
+  iban: 2,
+  "credit-card": 3,
+  ssn: 4,
+  ip: 5,
+  phone: 6,
+  date: 7,
 };
 
 /** Luhn checksum — filters out digit runs that aren't valid card numbers. */

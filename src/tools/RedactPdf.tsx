@@ -363,7 +363,7 @@ export default function RedactPdf() {
           encryptedFile={pdf.encryptedFile}
           onClearEncrypted={pdf.reset}
           label="Drop a PDF file here"
-          hint="Auto-detect emails, phones & IDs — or draw boxes — then permanently remove them"
+          hint="Auto-detect emails, links, phones & IDs — or draw boxes — then permanently remove them"
         />
         {pdf.loadError && <AlertBox message={pdf.loadError} />}
       </div>

@@ -312,7 +312,8 @@ export const tools: Tool[] = [
   {
     id: "redact-pdf",
     title: "Redact PDF",
-    description: "Auto-detect emails, phones & IDs — or box regions — and permanently remove them",
+    description:
+      "Auto-detect emails, links, phones & IDs — or box regions — and permanently remove them",
     icon: EyeOff,
     category: "security",
   },
