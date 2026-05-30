@@ -12,7 +12,7 @@
  * - Copy per page / Copy all / Download .txt / Download Searchable PDF.
  */
 
-import { Check, ChevronLeft, ChevronRight, CloudDownload, Copy, Download } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, Download, FileText, ScanLine } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -30,12 +30,40 @@ import {
   type LayoutPage,
   layoutToReadingOrderText,
 } from "../utils/layout-extract.ts";
+import { classifyPdfPages } from "../utils/ocr-text.ts";
 import {
   createSearchablePdf,
   createSearchablePdfFromLayout,
   extractTextOcr,
 } from "../utils/pdf-operations.ts";
 import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
+
+/** Data derived once per uploaded file: page previews + digital/scanned split. */
+interface LoadedPdf {
+  thumbnails: string[];
+  /** Total page count. */
+  totalPages: number;
+  /** 1-based pages with no text layer (need Tesseract OCR). */
+  scannedPages: number[];
+}
+
+/**
+ * Render previews and classify pages (digital vs scanned) in one load pass.
+ * The classification drives the upfront detection banner and lets us hide the
+ * Tesseract engine/language download UI entirely for fully-digital PDFs —
+ * liteparse reads those with no model download.
+ */
+async function loadPdf(file: File): Promise<LoadedPdf> {
+  const [thumbnails, classification] = await Promise.all([
+    renderAllThumbnails(file, PREVIEW_SCALE),
+    classifyPdfPages(file),
+  ]);
+  return {
+    thumbnails,
+    totalPages: classification.total,
+    scannedPages: classification.scannedPages,
+  };
+}
 
 /** Language options displayed as pill buttons. "auto" uses Tesseract OSD. */
 const LANGUAGES = [
@@ -82,10 +110,10 @@ export default function OcrPdf() {
 
   // Render page thumbnails up-front so the source-page preview is ready as soon
   // as extraction finishes.
-  const pdf = usePdfFile<string[]>({
-    load: (file) => renderAllThumbnails(file, PREVIEW_SCALE),
-    onReset: (thumbs) => {
-      revokeThumbnails(thumbs ?? []);
+  const pdf = usePdfFile<LoadedPdf>({
+    load: loadPdf,
+    onReset: (data) => {
+      revokeThumbnails(data?.thumbnails ?? []);
       extractIdRef.current++;
       setPages([]);
       setLayout(null);
@@ -100,8 +128,16 @@ export default function OcrPdf() {
   const processing = task.processing;
   const error = task.error;
 
-  const thumbnails = pdf.data ?? [];
+  const thumbnails = pdf.data?.thumbnails ?? [];
   const pageCount = pages.length;
+
+  // Digital/scanned split from the load-time probe. Drives the upfront
+  // detection banner and whether the OCR engine/language download UI shows.
+  const scannedPages = pdf.data?.scannedPages ?? [];
+  const totalPages = pdf.data?.totalPages ?? 0;
+  const scannedCount = scannedPages.length;
+  const needsOcr = scannedCount > 0;
+  const analyzed = !!pdf.data;
 
   /**
    * Extract text with layout-aware parsing (liteparse): digital pages are read
@@ -269,35 +305,62 @@ export default function OcrPdf() {
 
       {pages.length === 0 ? (
         <div className="space-y-4">
-          {/* First-run download notice */}
-          <InfoCallout icon={CloudDownload} title="First-run download" accent="transform">
-            The OCR engine (<span className="font-medium">~2 MB</span>) and the selected language
-            data (<span className="font-medium">~10–15 MB</span>) are fetched once from a public
-            CDN, then cached locally for offline reuse.
-          </InfoCallout>
-
-          {/* Language pill selector */}
-          <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-3">
-              OCR Language
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {LANGUAGES.map((lang) => (
-                <button
-                  key={lang.code}
-                  onClick={() => setLanguage(lang.code)}
-                  disabled={processing}
-                  className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-[transform,opacity,color,background-color,border-color,box-shadow] ${
-                    language === lang.code
-                      ? "bg-primary-600 text-white shadow-sm"
-                      : "bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted border border-slate-200 dark:border-dark-border hover:bg-slate-200 dark:hover:bg-dark-border"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {lang.label}
-                </button>
-              ))}
+          {/* Upfront detection: tell the user what they uploaded, and only
+              surface the Tesseract engine/language download UI when pages
+              actually need OCR. A fully digital PDF is read by liteparse with
+              no model download at all. */}
+          {!analyzed ? (
+            <div className="flex items-center gap-3 py-4">
+              <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+              <span className="text-sm text-slate-600 dark:text-dark-text-muted">
+                Analyzing document…
+              </span>
             </div>
-          </div>
+          ) : !needsOcr ? (
+            <InfoCallout icon={FileText} title="Digital PDF — no OCR needed" accent="transform">
+              All {totalPages} page{totalPages !== 1 ? "s" : ""} have a text layer, so text is read
+              directly and extracts instantly — no OCR engine or language download.
+            </InfoCallout>
+          ) : scannedCount === totalPages ? (
+            <InfoCallout icon={ScanLine} title="Scanned PDF — OCR required" accent="transform">
+              No text layer found, so all {totalPages} page{totalPages !== 1 ? "s" : ""} are read
+              with OCR. The engine (<span className="font-medium">~2 MB</span>) and the selected
+              language data (<span className="font-medium">~10–15 MB</span>) download once, then
+              cache offline.
+            </InfoCallout>
+          ) : (
+            <InfoCallout icon={ScanLine} title="Mixed PDF — partial OCR" accent="transform">
+              {scannedCount} of {totalPages} page{totalPages !== 1 ? "s" : ""} are scanned and need
+              OCR; the rest have a text layer. Only the scanned pages use the OCR engine (
+              <span className="font-medium">~2 MB</span> +{" "}
+              <span className="font-medium">~10–15 MB</span> language data, downloaded once).
+            </InfoCallout>
+          )}
+
+          {/* Language pill selector — only meaningful when pages need OCR. */}
+          {needsOcr && (
+            <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-3">
+                OCR Language
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {LANGUAGES.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => setLanguage(lang.code)}
+                    disabled={processing}
+                    className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-[transform,opacity,color,background-color,border-color,box-shadow] ${
+                      language === lang.code
+                        ? "bg-primary-600 text-white shadow-sm"
+                        : "bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted border border-slate-200 dark:border-dark-border hover:bg-slate-200 dark:hover:bg-dark-border"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Progress section */}
           {processing && progress && progress.total > 0 && (
@@ -321,7 +384,8 @@ export default function OcrPdf() {
           <ActionButton
             onClick={handleExtract}
             processing={processing}
-            label="Extract Text"
+            disabled={processing || !analyzed}
+            label={needsOcr ? "Extract Text (OCR)" : "Extract Text"}
             processingLabel="Extracting Text…"
           />
         </div>

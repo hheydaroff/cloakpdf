@@ -230,6 +230,123 @@ export function layoutToReadingOrderText(page: LayoutPage, rowTolerance = 3): st
     .trim();
 }
 
+/** A heading detected from the document's visual structure. */
+export interface DetectedHeading {
+  /** Heading text (whitespace-collapsed). */
+  text: string;
+  /** 1-based page the heading appears on. */
+  pageNumber: number;
+  /** Nesting level: 1 = largest/top-level, 2, 3 … by font-size band. */
+  level: number;
+}
+
+/** Max item glyph height in a visual row — our dependable font-size proxy. */
+function rowMaxHeight(row: LayoutItem[]): number {
+  let m = 0;
+  for (const it of row) m = Math.max(m, it.height || it.fontSize || 0);
+  return m;
+}
+
+function rowToText(row: LayoutItem[]): string {
+  return row
+    .map((i) => i.text.trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Detect section headings from a document's visual structure — used to
+ * auto-generate a bookmark outline.
+ *
+ * Heuristic (validated across digital + scanned fixtures): a row is a heading
+ * when it is short and set noticeably larger than the body text, or a short
+ * ALL-CAPS label at/above body size (résumés/reports label sections in caps).
+ * Size is taken from the item bbox **height**, not liteparse's `fontSize` —
+ * the latter is reliable on some PDFs but degenerate (~1) on many others,
+ * whereas height tracks the real glyph size everywhere.
+ *
+ * Headings keep document order; `level` is assigned by font-size band (largest
+ * = 1). Pure-numeric rows (page numbers) and runs of dot-leaders (a table of
+ * contents) are skipped. Pure — no wasm; operates on extracted {@link LayoutPage}s.
+ */
+export function detectHeadings(
+  pages: LayoutPage[],
+  options: { maxHeadings?: number; rowTolerance?: number } = {},
+): DetectedHeading[] {
+  const maxHeadings = options.maxHeadings ?? 60;
+  const rowTolerance = options.rowTolerance ?? 3;
+
+  // Group every page into visual rows (y-baseline), keeping page + order.
+  const rows: { page: number; text: string; size: number }[] = [];
+  const bodyVotes = new Map<number, number>();
+  for (const page of pages) {
+    const items = page.items.filter((i) => i.text.trim().length > 0);
+    const grouped: LayoutItem[][] = [];
+    for (const item of [...items].sort((a, b) => a.y - b.y)) {
+      const row = grouped[grouped.length - 1];
+      if (row && Math.abs(row[0].y - item.y) <= rowTolerance) row.push(item);
+      else grouped.push([item]);
+    }
+    for (const row of grouped) {
+      const text = rowToText([...row].sort((a, b) => a.x - b.x));
+      if (!text) continue;
+      const size = rowMaxHeight(row);
+      rows.push({ page: page.pageNumber, text, size });
+      // Only long lines vote for body size (headings are short).
+      if (text.length >= 25) {
+        const k = Math.round(size * 2) / 2;
+        bodyVotes.set(k, (bodyVotes.get(k) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Body font = the most common rounded height among long lines.
+  let bodyFont = 0;
+  let bestN = -1;
+  for (const [size, n] of bodyVotes) {
+    if (n > bestN) {
+      bestN = n;
+      bodyFont = size;
+    }
+  }
+  if (!bodyFont) bodyFont = 11;
+
+  const isAllCaps = (t: string): boolean => {
+    const letters = t.replace(/[^A-Za-z]/g, "");
+    return letters.length >= 2 && letters === letters.toUpperCase();
+  };
+
+  // Candidate headings, with their size (for level banding).
+  const candidates: { page: number; text: string; size: number }[] = [];
+  const sizes = new Set<number>();
+  let lastKey = "";
+  for (const row of rows) {
+    const { text, size, page } = row;
+    if (text.length < 2 || text.length > 80) continue;
+    if (!/[A-Za-z]/.test(text)) continue; // skip page numbers / pure punctuation
+    if (/\.{4,}/.test(text)) continue; // skip TOC dot-leaders
+    const isHeading =
+      size >= bodyFont * 1.15 || (isAllCaps(text) && text.length <= 40 && size >= bodyFont * 0.98);
+    if (!isHeading) continue;
+    const key = `${page}:${text.toLowerCase()}`;
+    if (key === lastKey) continue; // collapse immediate repeats
+    lastKey = key;
+    const banded = Math.round(size * 2) / 2;
+    candidates.push({ page, text, size: banded });
+    sizes.add(banded);
+  }
+
+  // Level = rank of the heading's size band (largest size → level 1, capped at 3).
+  const orderedSizes = [...sizes].sort((a, b) => b - a);
+  const levelOf = (size: number): number => Math.min(3, orderedSizes.indexOf(size) + 1) || 1;
+
+  return candidates
+    .slice(0, maxHeadings)
+    .map((c) => ({ text: c.text, pageNumber: c.page, level: levelOf(c.size) }));
+}
+
 /** A detected PII span resolved to a redaction rectangle on a specific page. */
 export interface PiiRect extends FractionRect {
   /** 0-based page index (matches RedactPdf's `pageIndex`). */

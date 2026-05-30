@@ -1495,6 +1495,36 @@ export async function cropPages(
 }
 
 /**
+ * Crop each page to its own crop box — the per-page counterpart of
+ * {@link cropPages}, used by auto-crop where every page is trimmed to fit its
+ * own content. `marginsByIndex` maps a 0-based page index to the margins (in
+ * PDF points) to hide on that page; pages absent from the map are left as-is.
+ *
+ * Rotated pages (/Rotate 90/180/270) are skipped: the caller computes margins
+ * in the rendered (rotated) frame while the crop box lives in unrotated user
+ * space, so applying them there would mis-place the box. Leaving rotated pages
+ * untouched is the safe choice (the manual margin tool still handles them).
+ */
+export async function cropPagesIndividual(
+  file: File,
+  marginsByIndex: Map<number, CropMargins>,
+): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await PDFDocument.load(arrayBuffer);
+  const pages = pdf.getPages();
+  for (const [index, m] of marginsByIndex) {
+    const page = pages[index];
+    if (!page) continue;
+    if (page.getRotation().angle % 360 !== 0) continue;
+    const { width, height } = page.getSize();
+    const w = width - m.left - m.right;
+    const h = height - m.top - m.bottom;
+    if (w > 0 && h > 0) page.setCropBox(m.left, m.bottom, w, h);
+  }
+  return pdf.save();
+}
+
+/**
  * Remove the crop box from pages to restore the full visible area. Because
  * cropping is non-destructive (the original content is never removed), this
  * effectively reverses any crop applied by `cropPages` or any other tool.

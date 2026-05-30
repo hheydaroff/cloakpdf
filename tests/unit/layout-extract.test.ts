@@ -10,6 +10,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  detectHeadings,
   detectPiiRects,
   itemFractionRect,
   type LayoutItem,
@@ -140,6 +141,74 @@ describe("layoutToReadingOrderText", () => {
 
   it("falls back to liteparse page text when there are no items", () => {
     expect(layoutToReadingOrderText(page({ items: [], text: "  raw text  " }))).toBe("raw text");
+  });
+});
+
+describe("detectHeadings", () => {
+  // A long body line (≥25 chars) so it votes for the body font size.
+  const body = (y: number) =>
+    item({
+      text: "This is an ordinary paragraph line of body copy, well over twenty-five characters.",
+      x: 0,
+      y,
+      width: 400,
+      height: 11,
+    });
+
+  it("detects large + ALL-CAPS headings and excludes body lines", () => {
+    const p = page({
+      items: [
+        item({ text: "Annual Report 2025", x: 0, y: 10, width: 200, height: 24 }),
+        item({ text: "FINANCIAL OVERVIEW", x: 0, y: 60, width: 180, height: 14 }),
+        body(90),
+        body(110),
+        body(130),
+      ],
+    });
+    expect(detectHeadings([p]).map((h) => h.text)).toEqual([
+      "Annual Report 2025",
+      "FINANCIAL OVERVIEW",
+    ]);
+  });
+
+  it("bands nesting levels by font size (largest = level 1)", () => {
+    const p = page({
+      items: [
+        item({ text: "Big Title", x: 0, y: 10, width: 200, height: 24 }),
+        item({ text: "SECTION", x: 0, y: 60, width: 120, height: 14 }),
+        body(90),
+        body(110),
+        body(130),
+      ],
+    });
+    const heads = detectHeadings([p]);
+    expect(heads.find((h) => h.text === "Big Title")?.level).toBe(1);
+    expect(heads.find((h) => h.text === "SECTION")?.level).toBe(2);
+  });
+
+  it("detects a short ALL-CAPS label even at body size", () => {
+    const p = page({
+      items: [
+        item({ text: "CONTACT", x: 0, y: 10, width: 60, height: 11 }),
+        body(40),
+        body(60),
+        body(80),
+      ],
+    });
+    expect(detectHeadings([p]).map((h) => h.text)).toContain("CONTACT");
+  });
+
+  it("skips page numbers + TOC dot-leaders and returns nothing for body-only pages", () => {
+    const p = page({
+      items: [
+        item({ text: "12", x: 0, y: 10, width: 10, height: 11 }), // no letters → skipped
+        item({ text: "Introduction......... 3", x: 0, y: 30, width: 200, height: 14 }), // dot-leaders → skipped
+        body(60),
+        body(80),
+        body(100),
+      ],
+    });
+    expect(detectHeadings([p])).toHaveLength(0);
   });
 });
 

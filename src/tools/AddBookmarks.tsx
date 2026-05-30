@@ -11,7 +11,7 @@
  * clicking a bookmark row jumps the preview to its target page.
  */
 
-import { CheckCircle2, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Plus, Sparkles, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -24,6 +24,7 @@ import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useToolOutput } from "../hooks/useToolOutput.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
+import { detectHeadings, extractLayout } from "../utils/layout-extract.ts";
 import { addPdfBookmarks } from "../utils/pdf-operations.ts";
 import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 
@@ -49,6 +50,8 @@ export default function AddBookmarks() {
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>(initialBookmarks);
   const [selectedPage, setSelectedPage] = useState(0);
   const [done, setDone] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [autoNote, setAutoNote] = useState<string | null>(null);
 
   const pdf = usePdfFile<LoadedPdf>({
     load: loadPdf,
@@ -57,6 +60,8 @@ export default function AddBookmarks() {
       setDone(false);
       setSelectedPage(0);
       setBookmarks(initialBookmarks());
+      setDetecting(false);
+      setAutoNote(null);
     },
     loadErrorMessage: "Failed to load PDF.",
   });
@@ -95,6 +100,40 @@ export default function AddBookmarks() {
     },
     [pageCount],
   );
+
+  /**
+   * Auto-build the bookmark list from the document's visual structure
+   * (liteparse layout → heading detection). Replaces the current list with one
+   * row per detected heading; the user can still edit/remove before applying.
+   */
+  const handleAutoDetect = useCallback(async () => {
+    if (!pdf.file || detecting) return;
+    setDetecting(true);
+    setAutoNote(null);
+    task.setError(null);
+    try {
+      const layoutPages = await extractLayout(pdf.file, { ocr: true });
+      const headings = detectHeadings(layoutPages);
+      if (headings.length === 0) {
+        setAutoNote("No headings detected — add bookmarks manually using the preview.");
+        return;
+      }
+      setBookmarks(
+        headings.map((h) => ({
+          id: nextId++,
+          title: h.text,
+          pageNumber: String(h.pageNumber),
+        })),
+      );
+      setAutoNote(
+        `Detected ${headings.length} heading${headings.length !== 1 ? "s" : ""} — review and edit below, then add them.`,
+      );
+    } catch {
+      task.setError("Couldn't auto-detect headings. Add bookmarks manually instead.");
+    } finally {
+      setDetecting(false);
+    }
+  }, [pdf.file, detecting, task]);
 
   const handleApply = useCallback(async () => {
     if (!pdf.file) return;
@@ -146,7 +185,7 @@ export default function AddBookmarks() {
               <div className="grid md:grid-cols-2 gap-6">
                 {/* ── Left column: bookmark list editor ── */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
                       Bookmarks
                       {validCount > 0 && (
@@ -155,7 +194,31 @@ export default function AddBookmarks() {
                         </span>
                       )}
                     </p>
+                    <button
+                      type="button"
+                      onClick={handleAutoDetect}
+                      disabled={detecting || task.processing}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-800/60 hover:bg-primary-100 dark:hover:bg-primary-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {detecting ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+                          Detecting…
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                          Auto-detect headings
+                        </>
+                      )}
+                    </button>
                   </div>
+
+                  {autoNote && (
+                    <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
+                      {autoNote}
+                    </p>
+                  )}
 
                   <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border overflow-hidden">
                     <div className="grid grid-cols-[1fr_auto_auto] px-3 py-2 bg-slate-50 dark:bg-dark-surface-alt border-b border-slate-100 dark:border-dark-border">

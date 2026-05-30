@@ -8,7 +8,7 @@
  * rendered or printed.
  */
 
-import { Check, Scissors } from "lucide-react";
+import { Check, Scissors, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -23,7 +23,8 @@ import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useToolOutput } from "../hooks/useToolOutput.ts";
 import type { CropMargins } from "../types.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
-import { cropPages, uncropPages } from "../utils/pdf-operations.ts";
+import { extractTextGeometry } from "../utils/layout-extract.ts";
+import { cropPages, cropPagesIndividual, uncropPages } from "../utils/pdf-operations.ts";
 import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 
 const MM_TO_PT = 2.83465;
@@ -160,6 +161,49 @@ export default function CropPages() {
     }, "Failed to crop pages. Please try again.");
   }, [pdf.file, marginsInPt, applyToAll, selectedPages, isValid, task, output]);
 
+  /**
+   * Auto-crop: trim each page to its own content bounding box. We pull the
+   * text-layer geometry (no OCR — crop is a visual trim, not a re-read), union
+   * each page's item boxes into a content rect, and convert the surrounding
+   * whitespace to per-page margins. Pages with no detectable text (e.g. pure
+   * scans) are left untouched.
+   */
+  const AUTO_PAD_PT = 6; // a little breathing room so glyphs aren't clipped
+  const handleAutoCrop = useCallback(async () => {
+    if (!pdf.file) return;
+    const file = pdf.file;
+    await task.run(async () => {
+      const layoutPages = await extractTextGeometry(file, { ocr: false });
+      const marginsByIndex = new Map<number, CropMargins>();
+      layoutPages.forEach((p, i) => {
+        const items = p.items.filter((it) => it.text.trim());
+        if (items.length === 0 || !p.width || !p.height) return;
+        let xMin = Infinity;
+        let yMin = Infinity;
+        let xMax = 0;
+        let yMax = 0;
+        for (const it of items) {
+          if (it.x < xMin) xMin = it.x;
+          if (it.y < yMin) yMin = it.y;
+          if (it.x + it.width > xMax) xMax = it.x + it.width;
+          if (it.y + it.height > yMax) yMax = it.y + it.height;
+        }
+        const m: CropMargins = {
+          top: Math.max(0, yMin - AUTO_PAD_PT),
+          bottom: Math.max(0, p.height - yMax - AUTO_PAD_PT),
+          left: Math.max(0, xMin - AUTO_PAD_PT),
+          right: Math.max(0, p.width - xMax - AUTO_PAD_PT),
+        };
+        if (m.top + m.bottom + m.left + m.right > 2) marginsByIndex.set(i, m);
+      });
+      if (marginsByIndex.size === 0) {
+        throw new Error("Pages already fit their content — nothing to trim.");
+      }
+      const result = await cropPagesIndividual(file, marginsByIndex);
+      output.deliver(result, "_cropped", file);
+    }, "Failed to auto-crop. Please try again.");
+  }, [pdf.file, task, output]);
+
   const handleUncrop = useCallback(async () => {
     if (!pdf.file) return;
     const file = pdf.file;
@@ -212,6 +256,40 @@ export default function CropPages() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Left: controls */}
                 <div className="space-y-4">
+                  {/* Auto-crop — one click trims every page to its own content
+                      box (text-layer geometry via pdf.js / liteparse). */}
+                  <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 w-9 h-9 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 dark:text-dark-text">
+                          Auto-crop to content
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
+                          Trims the whitespace around the text on every page, fitting each one to
+                          its own content.
+                        </p>
+                      </div>
+                    </div>
+                    <ActionButton
+                      onClick={handleAutoCrop}
+                      processing={processing}
+                      disabled={processing}
+                      label={`Auto-crop & ${output.deliveryWord}`}
+                      processingLabel="Analyzing pages…"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-slate-200 dark:bg-dark-border" />
+                    <span className="text-xs text-slate-400 dark:text-dark-text-muted">
+                      or set margins manually
+                    </span>
+                    <div className="h-px flex-1 bg-slate-200 dark:bg-dark-border" />
+                  </div>
+
                   <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted">
