@@ -152,58 +152,6 @@ export async function extractPdfText(
   return results;
 }
 
-/** Result of {@link classifyPdfPages}: which pages lack a usable text layer. */
-export interface PdfPageClassification {
-  /** Total page count. */
-  total: number;
-  /**
-   * 1-based page numbers with no usable text layer (below `minTextChars`
-   * non-whitespace chars) — i.e. the pages that would need Tesseract OCR.
-   * Empty array ⇒ a fully digital PDF that liteparse can read with no
-   * model download at all.
-   */
-  scannedPages: number[];
-}
-
-/**
- * Cheaply classify each page as digital (has a text layer) or scanned (needs
- * OCR), without rendering or OCR. Used by the OCR tool to be upfront about what
- * the user uploaded and to hide the Tesseract engine/language download UI when
- * the document is fully digital (liteparse reads it directly — see CLAUDE.md).
- *
- * Reads only the native text layer via pdf.js `getTextContent`, so it's fast
- * even on large documents and never triggers a weight download.
- */
-export async function classifyPdfPages(
-  file: File,
-  minTextChars = 16,
-): Promise<PdfPageClassification> {
-  const pdfjsLib = await getPdfJs();
-  const arrayBuffer = await file.arrayBuffer();
-  const pdf: PDFDocumentProxy = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const total = pdf.numPages;
-  const scannedPages: number[] = [];
-  try {
-    for (let i = 1; i <= total; i++) {
-      const page = await pdf.getPage(i);
-      try {
-        const content = await page.getTextContent();
-        let chars = 0;
-        for (const raw of content.items as Array<{ str?: string }>) {
-          chars += (raw.str ?? "").replace(/\s+/g, "").length;
-          if (chars >= minTextChars) break;
-        }
-        if (chars < minTextChars) scannedPages.push(i);
-      } finally {
-        page.cleanup();
-      }
-    }
-  } finally {
-    void pdf.destroy();
-  }
-  return { total, scannedPages };
-}
-
 // ── Internal helpers ──────────────────────────────────────────────
 
 /**

@@ -244,6 +244,74 @@ export async function renderAllThumbnails(
   return thumbnails;
 }
 
+/** Result of {@link renderThumbnailsAndScan}: previews + digital/scanned split. */
+export interface ThumbnailsScanResult {
+  thumbnails: string[];
+  /** Total page count. */
+  total: number;
+  /** 1-based page numbers with no usable text layer (need Tesseract OCR). */
+  scannedPages: number[];
+}
+
+/**
+ * Render thumbnails AND classify each page (digital vs scanned) in a single
+ * pass over one decoded document.
+ *
+ * Used by the OCR tool so it can be upfront about what was uploaded and hide
+ * the Tesseract engine/language download UI for fully-digital PDFs — without
+ * paying a second `getDocument()` decode (the previous "render, then classify
+ * separately" path opened the file twice). Per-page work is wrapped so a single
+ * page that fails to render or whose text layer can't be read degrades that one
+ * page (blank thumbnail / treated as scanned) instead of failing the whole
+ * load. A document that won't open at all still rejects — it can't be OCR'd
+ * either way.
+ */
+export async function renderThumbnailsAndScan(
+  file: File,
+  scale = 0.4,
+  minTextChars = 16,
+  onProgress?: (rendered: number, total: number) => void,
+): Promise<ThumbnailsScanResult> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const total = pdf.numPages;
+  const thumbnails: string[] = [];
+  const scannedPages: number[] = [];
+  try {
+    for (let i = 1; i <= total; i++) {
+      try {
+        const { canvas } = await renderPage(pdf, i, scale);
+        thumbnails.push(await canvasToBlobUrl(canvas));
+        canvas.width = 0;
+        canvas.height = 0;
+      } catch {
+        // One unrenderable page shouldn't blank the whole preview strip.
+        thumbnails.push("");
+      }
+      try {
+        // pdf.js caches getPage, so this re-uses the page renderPage just fetched.
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        let chars = 0;
+        for (const raw of content.items as Array<{ str?: string }>) {
+          chars += (raw.str ?? "").replace(/\s+/g, "").length;
+          if (chars >= minTextChars) break;
+        }
+        if (chars < minTextChars) scannedPages.push(i);
+        page.cleanup();
+      } catch {
+        // Unreadable text layer → treat the page as scanned (conservative: the
+        // user gets the OCR controls rather than a wrong "digital" banner).
+        scannedPages.push(i);
+      }
+      onProgress?.(i, total);
+    }
+  } finally {
+    void pdf.destroy();
+  }
+  return { thumbnails, total, scannedPages };
+}
+
 /**
  * Render every page of a PDF and return both thumbnails and per-page whiteness scores.
  *

@@ -30,13 +30,12 @@ import {
   type LayoutPage,
   layoutToReadingOrderText,
 } from "../utils/layout-extract.ts";
-import { classifyPdfPages } from "../utils/ocr-text.ts";
 import {
   createSearchablePdf,
   createSearchablePdfFromLayout,
   extractTextOcr,
 } from "../utils/pdf-operations.ts";
-import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
+import { PREVIEW_SCALE, renderThumbnailsAndScan, revokeThumbnails } from "../utils/pdf-renderer.ts";
 
 /** Data derived once per uploaded file: page previews + digital/scanned split. */
 interface LoadedPdf {
@@ -48,21 +47,15 @@ interface LoadedPdf {
 }
 
 /**
- * Render previews and classify pages (digital vs scanned) in one load pass.
- * The classification drives the upfront detection banner and lets us hide the
- * Tesseract engine/language download UI entirely for fully-digital PDFs —
- * liteparse reads those with no model download.
+ * Render previews and classify pages (digital vs scanned) in one pass over a
+ * single decoded document. The classification drives the upfront detection
+ * banner and lets us hide the Tesseract engine/language download UI entirely
+ * for fully-digital PDFs — liteparse reads those with no model download. A
+ * single bad page degrades gracefully (see {@link renderThumbnailsAndScan}).
  */
 async function loadPdf(file: File): Promise<LoadedPdf> {
-  const [thumbnails, classification] = await Promise.all([
-    renderAllThumbnails(file, PREVIEW_SCALE),
-    classifyPdfPages(file),
-  ]);
-  return {
-    thumbnails,
-    totalPages: classification.total,
-    scannedPages: classification.scannedPages,
-  };
+  const { thumbnails, total, scannedPages } = await renderThumbnailsAndScan(file, PREVIEW_SCALE);
+  return { thumbnails, totalPages: total, scannedPages };
 }
 
 /** Language options displayed as pill buttons. "auto" uses Tesseract OSD. */
@@ -385,7 +378,9 @@ export default function OcrPdf() {
             onClick={handleExtract}
             processing={processing}
             disabled={processing || !analyzed}
-            label={needsOcr ? "Extract Text (OCR)" : "Extract Text"}
+            label={
+              !analyzed ? "Analyzing document…" : needsOcr ? "Extract Text (OCR)" : "Extract Text"
+            }
             processingLabel="Extracting Text…"
           />
         </div>
@@ -456,7 +451,11 @@ export default function OcrPdf() {
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums px-1">
+                <span
+                  role="status"
+                  aria-live="polite"
+                  className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums px-1"
+                >
                   Page {selectedPage + 1} / {pageCount}
                 </span>
                 <button

@@ -16,6 +16,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { ResetButton } from "../components/ResetButton.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -58,6 +59,8 @@ export default function CropPages() {
   const [margins, setMargins] = useState<CropMargins>({ top: 0, right: 0, bottom: 0, left: 0 });
   const [applyToAll, setApplyToAll] = useState(true);
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
+  // Determinate progress for the auto-crop geometry pass on large documents.
+  const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
   const pdf = usePdfFile<LoadedPdf>({
@@ -68,6 +71,7 @@ export default function CropPages() {
       setAllSides(0);
       setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
       setSelectedPages(new Set());
+      setAutoProgress(null);
     },
   });
   const task = useAsyncProcess();
@@ -172,12 +176,18 @@ export default function CropPages() {
   const handleAutoCrop = useCallback(async () => {
     if (!pdf.file) return;
     const file = pdf.file;
+    setAutoProgress(null);
     await task.run(async () => {
-      const layoutPages = await extractTextGeometry(file, { ocr: false });
+      const layoutPages = await extractTextGeometry(file, {
+        ocr: false,
+        onProgress: (done, total) => setAutoProgress({ current: done, total }),
+      });
+      let anyText = false;
       const marginsByIndex = new Map<number, CropMargins>();
       layoutPages.forEach((p, i) => {
         const items = p.items.filter((it) => it.text.trim());
         if (items.length === 0 || !p.width || !p.height) return;
+        anyText = true;
         let xMin = Infinity;
         let yMin = Infinity;
         let xMax = 0;
@@ -197,11 +207,26 @@ export default function CropPages() {
         if (m.top + m.bottom + m.left + m.right > 2) marginsByIndex.set(i, m);
       });
       if (marginsByIndex.size === 0) {
-        throw new Error("Pages already fit their content — nothing to trim.");
+        // Be precise about why nothing happened — a scanned PDF (no text layer)
+        // is a different story from one whose pages already fill the sheet.
+        throw new Error(
+          anyText
+            ? "Pages already fit their content — nothing to trim."
+            : "No text layer found to auto-crop (this PDF looks scanned) — use the manual margins below instead.",
+        );
       }
-      const result = await cropPagesIndividual(file, marginsByIndex);
-      output.deliver(result, "_cropped", file);
+      const { bytes, croppedCount } = await cropPagesIndividual(file, marginsByIndex);
+      if (croppedCount === 0) {
+        // The only candidate pages were rotated, which cropPagesIndividual skips
+        // (its margins live in a different coordinate frame). Don't hand back an
+        // unchanged file pretending it was cropped.
+        throw new Error(
+          "These pages are rotated — auto-crop can't trim them safely. Use the manual margins below instead.",
+        );
+      }
+      output.deliver(bytes, "_cropped", file);
     }, "Failed to auto-crop. Please try again.");
+    setAutoProgress(null);
   }, [pdf.file, task, output]);
 
   const handleUncrop = useCallback(async () => {
@@ -273,6 +298,13 @@ export default function CropPages() {
                         </p>
                       </div>
                     </div>
+                    {processing && autoProgress && autoProgress.total > 0 && (
+                      <ProgressBar
+                        current={autoProgress.current}
+                        total={autoProgress.total}
+                        label={`Reading page ${autoProgress.current} of ${autoProgress.total}…`}
+                      />
+                    )}
                     <ActionButton
                       onClick={handleAutoCrop}
                       processing={processing}

@@ -19,6 +19,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
@@ -52,6 +53,10 @@ export default function AddBookmarks() {
   const [done, setDone] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [autoNote, setAutoNote] = useState<string | null>(null);
+  // Determinate OCR progress shown while auto-detecting headings on scanned PDFs.
+  const [detectProgress, setDetectProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
 
   const pdf = usePdfFile<LoadedPdf>({
     load: loadPdf,
@@ -62,6 +67,7 @@ export default function AddBookmarks() {
       setBookmarks(initialBookmarks());
       setDetecting(false);
       setAutoNote(null);
+      setDetectProgress(null);
     },
     loadErrorMessage: "Failed to load PDF.",
   });
@@ -110,9 +116,15 @@ export default function AddBookmarks() {
     if (!pdf.file || detecting) return;
     setDetecting(true);
     setAutoNote(null);
+    setDetectProgress(null);
     task.setError(null);
     try {
-      const layoutPages = await extractLayout(pdf.file, { ocr: true });
+      const layoutPages = await extractLayout(pdf.file, {
+        ocr: true,
+        // Fires per scanned page that goes through OCR — on a scanned PDF this
+        // turns the indefinite "Detecting…" spinner into a real progress bar.
+        onOcrPage: (done, total) => setDetectProgress({ current: done, total }),
+      });
       const headings = detectHeadings(layoutPages);
       if (headings.length === 0) {
         setAutoNote("No headings detected — add bookmarks manually using the preview.");
@@ -132,6 +144,7 @@ export default function AddBookmarks() {
       task.setError("Couldn't auto-detect headings. Add bookmarks manually instead.");
     } finally {
       setDetecting(false);
+      setDetectProgress(null);
     }
   }, [pdf.file, detecting, task]);
 
@@ -182,7 +195,7 @@ export default function AddBookmarks() {
             <LoadingSpinner />
           ) : (
             <>
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* ── Left column: bookmark list editor ── */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
@@ -198,6 +211,7 @@ export default function AddBookmarks() {
                       type="button"
                       onClick={handleAutoDetect}
                       disabled={detecting || task.processing}
+                      title="First use downloads a ~4 MB layout engine, then works offline"
                       className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-800/60 hover:bg-primary-100 dark:hover:bg-primary-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       {detecting ? (
@@ -213,6 +227,14 @@ export default function AddBookmarks() {
                       )}
                     </button>
                   </div>
+
+                  {detecting && detectProgress && detectProgress.total > 0 && (
+                    <ProgressBar
+                      current={detectProgress.current}
+                      total={detectProgress.total}
+                      label={`OCR'ing scanned page ${detectProgress.current} of ${detectProgress.total}…`}
+                    />
+                  )}
 
                   {autoNote && (
                     <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
@@ -293,11 +315,15 @@ export default function AddBookmarks() {
                   </button>
 
                   <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
-                    Use the preview on the right to find the page you want, then click{" "}
+                    Use the page preview to find the page you want, then click{" "}
                     <span className="font-medium text-slate-700 dark:text-dark-text">
                       Add bookmark
                     </span>{" "}
-                    and give it a title.
+                    and give it a title — or{" "}
+                    <span className="font-medium text-slate-700 dark:text-dark-text">
+                      Auto-detect headings
+                    </span>{" "}
+                    to build the list automatically.
                   </p>
                 </div>
 
@@ -318,7 +344,11 @@ export default function AddBookmarks() {
                         >
                           <ChevronLeft className="w-4 h-4" />
                         </button>
-                        <span className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1">
+                        <span
+                          role="status"
+                          aria-live="polite"
+                          className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1"
+                        >
                           {selectedPage + 1} / {pageCount}
                         </span>
                         <button

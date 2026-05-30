@@ -1504,14 +1504,20 @@ export async function cropPages(
  * in the rendered (rotated) frame while the crop box lives in unrotated user
  * space, so applying them there would mis-place the box. Leaving rotated pages
  * untouched is the safe choice (the manual margin tool still handles them).
+ *
+ * Returns the new bytes plus `croppedCount` — how many pages actually got a
+ * crop box — so the caller can tell the user when nothing was trimmable (e.g.
+ * every candidate page was rotated) instead of silently handing back an
+ * unchanged file.
  */
 export async function cropPagesIndividual(
   file: File,
   marginsByIndex: Map<number, CropMargins>,
-): Promise<Uint8Array> {
+): Promise<{ bytes: Uint8Array; croppedCount: number }> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await PDFDocument.load(arrayBuffer);
   const pages = pdf.getPages();
+  let croppedCount = 0;
   for (const [index, m] of marginsByIndex) {
     const page = pages[index];
     if (!page) continue;
@@ -1519,9 +1525,12 @@ export async function cropPagesIndividual(
     const { width, height } = page.getSize();
     const w = width - m.left - m.right;
     const h = height - m.top - m.bottom;
-    if (w > 0 && h > 0) page.setCropBox(m.left, m.bottom, w, h);
+    if (w > 0 && h > 0) {
+      page.setCropBox(m.left, m.bottom, w, h);
+      croppedCount++;
+    }
   }
-  return pdf.save();
+  return { bytes: await pdf.save(), croppedCount };
 }
 
 /**

@@ -275,7 +275,10 @@ export function detectHeadings(
   pages: LayoutPage[],
   options: { maxHeadings?: number; rowTolerance?: number } = {},
 ): DetectedHeading[] {
-  const maxHeadings = options.maxHeadings ?? 60;
+  // Safety bound on pathological inputs. 150 comfortably covers real documents
+  // (a 30-page guide has ~10-15 headings) so it effectively never truncates;
+  // it only caps a degenerate PDF that would emit hundreds of false headings.
+  const maxHeadings = options.maxHeadings ?? 150;
   const rowTolerance = options.rowTolerance ?? 3;
 
   // Group every page into visual rows (y-baseline), keeping page + order.
