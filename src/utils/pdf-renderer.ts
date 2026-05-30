@@ -218,18 +218,26 @@ export async function renderPagesToBlobs(
  *
  * @param file - The PDF file whose pages should be rendered.
  * @param scale - Render scale factor (default 0.4 for lighter thumbnails).
+ * @param onProgress - Optional callback invoked after each page: (rendered, total).
+ *   Lets tools show a determinate progress bar while a large PDF renders.
  * @returns An ordered array of `blob:…` URLs, one per page. Caller must revoke when done.
  */
-export async function renderAllThumbnails(file: File, scale = 0.4): Promise<string[]> {
+export async function renderAllThumbnails(
+  file: File,
+  scale = 0.4,
+  onProgress?: (rendered: number, total: number) => void,
+): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const thumbnails: string[] = [];
+  const total = pdf.numPages;
 
-  for (let i = 1; i <= pdf.numPages; i++) {
+  for (let i = 1; i <= total; i++) {
     const { canvas } = await renderPage(pdf, i, scale);
     thumbnails.push(await canvasToBlobUrl(canvas));
     canvas.width = 0;
     canvas.height = 0;
+    onProgress?.(i, total);
   }
 
   void pdf.destroy();

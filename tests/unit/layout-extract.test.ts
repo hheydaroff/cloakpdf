@@ -99,6 +99,19 @@ describe("substringFractionRect", () => {
     expect(full.xPct).toBe(0);
     expect(full.wPct).toBeCloseTo(1, 5);
   });
+
+  it("floors to a visible box when item.width is 0 (would otherwise leave PII exposed)", () => {
+    const p = page({ width: 100, height: 200 });
+    // A bogus width:0 item must not collapse the redaction box to zero area.
+    const r = substringFractionRect(
+      item({ text: "0123456789", x: 0, y: 50, width: 0, height: 10 }),
+      p,
+      2,
+      5,
+    );
+    expect(r.wPct).toBeGreaterThan(0);
+    expect(r.hPct).toBeGreaterThan(0);
+  });
 });
 
 describe("layoutToReadingOrderText", () => {
@@ -174,5 +187,53 @@ describe("detectPiiRects", () => {
     });
     expect(detectPiiRects([p], ["email"])).toHaveLength(0);
     expect(detectPiiRects([p], ["phone"])).toHaveLength(1);
+  });
+
+  it("covers a phone split across word-items on one row (OCR/PDF.js word split)", () => {
+    // Tesseract emits one item per word, so "123 456 7890" arrives split. Per-item
+    // detection would miss it entirely; row-based detection must catch it and the
+    // box must span all three words.
+    const p = page({
+      width: 600,
+      height: 800,
+      items: [
+        item({ text: "123", x: 0, y: 100, width: 30, height: 12 }),
+        item({ text: "456", x: 40, y: 100, width: 30, height: 12 }),
+        item({ text: "7890", x: 80, y: 100, width: 40, height: 12 }),
+      ],
+    });
+    const rects = detectPiiRects([p], ["phone"]);
+    expect(rects).toHaveLength(1);
+    expect(rects[0].type).toBe("phone");
+    expect(rects[0].xPct).toBeLessThan(0.05); // starts at the first word (x≈0)
+    const right = rects[0].xPct + rects[0].wPct;
+    expect(right).toBeGreaterThan(80 / 600); // extends across to the last word
+    expect(right).toBeLessThanOrEqual(1);
+  });
+
+  it("does not merge values that sit on different rows", () => {
+    // Two unrelated numbers on different lines must not be joined into one match.
+    const p = page({
+      width: 600,
+      height: 800,
+      items: [
+        item({ text: "555", x: 0, y: 100, width: 30, height: 12 }),
+        item({ text: "999", x: 0, y: 400, width: 30, height: 12 }),
+      ],
+    });
+    // Neither lone 3-digit token is a phone (needs ≥7 digits across ≥2 groups).
+    expect(detectPiiRects([p], ["phone"])).toHaveLength(0);
+  });
+
+  it("never emits a zero-area box for a detected match on a width-0 item", () => {
+    const p = page({
+      width: 600,
+      height: 800,
+      items: [item({ text: "admin@slicedinvoices.com", x: 60, y: 200, width: 0, height: 10 })],
+    });
+    const [rect] = detectPiiRects([p], ["email"]);
+    expect(rect).toBeDefined();
+    expect(rect.wPct).toBeGreaterThan(0);
+    expect(rect.hPct).toBeGreaterThan(0);
   });
 });

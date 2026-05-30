@@ -894,48 +894,54 @@ export async function extractTextOcr(
     }
   }
 
-  // Create Tesseract worker once, reuse across all pages
-  const worker = await createWorker(resolvedLang);
-  await worker.setParameters({
-    tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-    preserve_interword_spaces: "1",
-  });
-
   const pageTexts: string[] = [];
 
+  // `worker` is created inside the try so that a createWorker / setParameters
+  // rejection still runs the finally that destroys the PDF.js document; the
+  // finally only terminates a worker that was actually created.
+  let worker: Awaited<ReturnType<typeof createWorker>> | undefined;
   try {
+    // Create Tesseract worker once, reuse across all pages
+    worker = await createWorker(resolvedLang);
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      preserve_interword_spaces: "1",
+    });
+
     for (let i = 1; i <= totalPages; i++) {
       onProgress?.(i, totalPages, `Extracting page ${i} of ${totalPages}…`);
 
       const canvas = await renderPageToCanvas(pdfDoc, i, OCR_SCALE);
-      const { data } = await worker.recognize(canvas);
+      try {
+        const { data } = await worker.recognize(canvas);
 
-      // Build spatially-aware text from the block hierarchy
-      let pageText = "";
-      if (data.blocks && data.blocks.length > 0) {
-        for (const block of data.blocks) {
-          for (const paragraph of block.paragraphs) {
-            for (const line of paragraph.lines) {
-              pageText += `${line.text}\n`;
+        // Build spatially-aware text from the block hierarchy
+        let pageText = "";
+        if (data.blocks && data.blocks.length > 0) {
+          for (const block of data.blocks) {
+            for (const paragraph of block.paragraphs) {
+              for (const line of paragraph.lines) {
+                pageText += `${line.text}\n`;
+              }
+              pageText += "\n"; // paragraph break
             }
-            pageText += "\n"; // paragraph break
           }
+        } else {
+          // Fallback to raw text if blocks aren't available
+          pageText = data.text;
         }
-      } else {
-        // Fallback to raw text if blocks aren't available
-        pageText = data.text;
+
+        pageTexts.push(pageText.trim());
+      } finally {
+        // Release canvas memory even if recognition throws.
+        canvas.width = 0;
+        canvas.height = 0;
       }
-
-      pageTexts.push(pageText.trim());
-
-      // Release canvas memory
-      canvas.width = 0;
-      canvas.height = 0;
 
       onProgress?.(i, totalPages);
     }
   } finally {
-    await worker.terminate();
+    await worker?.terminate();
     void pdfDoc.destroy();
   }
 
@@ -953,7 +959,11 @@ export async function extractTextOcr(
  * @param pageTexts - Array of per-page OCR text strings.
  * @returns Uint8Array of the new searchable PDF.
  */
-export async function createSearchablePdf(file: File, pageTexts: string[]): Promise<Uint8Array> {
+export async function createSearchablePdf(
+  file: File,
+  pageTexts: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -961,7 +971,10 @@ export async function createSearchablePdf(file: File, pageTexts: string[]): Prom
 
   for (let i = 0; i < pageCount && i < pageTexts.length; i++) {
     const text = pageTexts[i];
-    if (!text) continue;
+    if (!text) {
+      onProgress?.(i + 1, pageCount);
+      continue;
+    }
 
     const page = pdfDoc.getPage(i);
     const { height } = page.getSize();
@@ -994,6 +1007,8 @@ export async function createSearchablePdf(file: File, pageTexts: string[]): Prom
 
       y -= lineHeight;
     }
+    onProgress?.(i + 1, pageCount);
+    if (i % 16 === 15) await new Promise<void>((r) => setTimeout(r, 0));
   }
 
   return pdfDoc.save();
@@ -1023,6 +1038,7 @@ export async function createSearchablePdf(file: File, pageTexts: string[]): Prom
 export async function createSearchablePdfFromLayout(
   file: File,
   pages: LayoutPage[],
+  onProgress?: (done: number, total: number) => void,
 ): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfDoc = await PDFDocument.load(arrayBuffer);
@@ -1033,7 +1049,10 @@ export async function createSearchablePdfFromLayout(
 
   for (let i = 0; i < pageCount; i++) {
     const layout = byNumber.get(i + 1);
-    if (!layout) continue;
+    if (!layout) {
+      onProgress?.(i + 1, pageCount);
+      continue;
+    }
 
     const page = pdfDoc.getPage(i);
     const { width: pdfW, height: pdfH } = page.getSize();
@@ -1055,6 +1074,9 @@ export async function createSearchablePdfFromLayout(
         // Unencodable glyphs for Helvetica — skip this run, keep the rest.
       }
     }
+    onProgress?.(i + 1, pageCount);
+    // Yield every 16 pages so React can repaint the progress bar on big docs.
+    if (i % 16 === 15) await new Promise<void>((r) => setTimeout(r, 0));
   }
 
   return pdfDoc.save();
@@ -1687,6 +1709,7 @@ function canvasToImageBytes(
 export async function redactPdf(
   file: File,
   redactions: Array<{ pageIndex: number; xPct: number; yPct: number; wPct: number; hPct: number }>,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
   const src = await PDFDocument.load(arrayBuffer);
@@ -1708,6 +1731,11 @@ export async function redactPdf(
   const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
   const REDACT_DPI = 150;
   const scale = REDACT_DPI / 72;
+
+  // Only the box-carrying pages do real (slow) rasterisation work — report
+  // progress over those, since the copy-through pages are near-instant.
+  const total = byPage.size;
+  let done = 0;
 
   const out = await PDFDocument.create();
   try {
@@ -1754,6 +1782,7 @@ export async function redactPdf(
       } finally {
         page.cleanup();
       }
+      onProgress?.(++done, total);
     }
     return out.save();
   } finally {

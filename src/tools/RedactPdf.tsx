@@ -21,6 +21,7 @@ import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { canvas as canvasColors, categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
@@ -48,22 +49,52 @@ export default function RedactPdf() {
   // Smart-redaction (auto-detect PII) state.
   const [detecting, setDetecting] = useState(false);
   const [detectSummary, setDetectSummary] = useState<string | null>(null);
+  // Determinate progress for the (potentially minutes-long) PII scan on a big
+  // PDF: "read" while pulling text geometry, "ocr" while OCR'ing scanned pages.
+  const [scanProgress, setScanProgress] = useState<{
+    current: number;
+    total: number;
+    phase: "read" | "ocr";
+  } | null>(null);
+  // Determinate progress while rasterising redacted pages on apply.
+  const [applyProgress, setApplyProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+  // Determinate progress while rendering page thumbnails after upload — the one
+  // blocking step before the editor appears, slow on a big PDF.
+  const [thumbProgress, setThumbProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
   // Date is off by default — it's the noisiest category on real documents.
   const [piiTypes, setPiiTypes] = useState<Set<PiiType>>(
     () => new Set(PII_TYPES.filter((t) => t !== "date")),
   );
 
   const pdf = usePdfFile<string[]>({
-    load: (file) => renderAllThumbnails(file, PREVIEW_SCALE),
+    load: (file) =>
+      renderAllThumbnails(file, PREVIEW_SCALE, (rendered, total) =>
+        setThumbProgress({ current: rendered, total }),
+      ),
     onReset: (thumbs) => {
       revokeThumbnails(thumbs ?? []);
       setRedactions(new Map());
       setUndoHistory([]);
       setSelectedPage(0);
       setDetectSummary(null);
+      setScanProgress(null);
+      setApplyProgress(null);
+      setThumbProgress(null);
     },
   });
   const task = useAsyncProcess();
+
+  // Latch the live file + redaction map in refs so async handlers can detect a
+  // mid-run file swap and merge against the freshest state (closures captured
+  // at call time go stale across an await).
+  const fileRef = useRef(pdf.file);
+  fileRef.current = pdf.file;
+  const redactionsRef = useRef(redactions);
+  redactionsRef.current = redactions;
 
   const thumbnails = pdf.data ?? [];
   const pageCount = thumbnails.length;
@@ -102,6 +133,11 @@ export default function RedactPdf() {
     },
     [selectedPage, redactions],
   );
+
+  // Latch the latest redraw closure so the ResizeObserver effect below doesn't
+  // have to depend on its identity (which changes on every box add / page nav).
+  const redrawCanvasRef = useRef(redrawCanvas);
+  redrawCanvasRef.current = redrawCanvas;
 
   // Re-render canvas whenever saved rects or the selected page changes.
   useEffect(() => {
@@ -215,18 +251,29 @@ export default function RedactPdf() {
     const file = pdf.file;
     setDetecting(true);
     setDetectSummary(null);
+    setScanProgress(null);
     task.setError(null);
     try {
-      const pages = await extractTextGeometry(file, { ocr: true });
+      const pages = await extractTextGeometry(file, {
+        ocr: true,
+        onProgress: (current, total) => setScanProgress({ current, total, phase: "read" }),
+        onOcrPage: (current, total) => setScanProgress({ current, total, phase: "ocr" }),
+      });
+      // Bail if the user swapped files mid-scan — otherwise we'd merge the old
+      // file's hits into the new file's (wrong-coordinate) redaction map.
+      if (fileRef.current !== file) return;
       const found = detectPiiRects(pages, [...piiTypes]);
       if (found.length === 0) {
         setDetectSummary("No matching sensitive data found — draw boxes manually if needed.");
         return;
       }
 
-      // Merge into a fresh map *outside* setState so the updater stays pure
-      // (StrictMode double-invokes updaters; side effects there corrupt counts).
-      const next = new Map(redactions);
+      // Merge against the freshest map (via ref) so boxes the user drew *during*
+      // the async scan aren't clobbered. Computed outside setState so the
+      // updater stays pure (StrictMode double-invokes updaters; the synchronous
+      // ref read after the only await can't race a concurrent React update).
+      const base = redactionsRef.current;
+      const next = new Map(base);
       let added = 0;
       let firstPage = -1;
       const counts = new Map<PiiType, number>();
@@ -252,7 +299,7 @@ export default function RedactPdf() {
       if (added === 0) {
         setDetectSummary("Already covered — detected data is already in the boxes.");
       } else {
-        setUndoHistory((h) => [...h, redactions]);
+        setUndoHistory((h) => [...h, base]);
         setRedactions(next);
         if (firstPage >= 0) setSelectedPage(firstPage); // jump to the first hit
         const parts = [...counts].map(
@@ -264,21 +311,26 @@ export default function RedactPdf() {
       task.setError(e instanceof Error ? e.message : "Failed to scan for sensitive data.");
     } finally {
       setDetecting(false);
+      setScanProgress(null);
     }
-  }, [pdf.file, piiTypes, redactions, task]);
+  }, [pdf.file, piiTypes, task]);
 
   const handleApply = useCallback(async () => {
     if (!pdf.file || totalRedactions === 0) return;
     const file = pdf.file;
+    setApplyProgress(null);
     await task.run(async () => {
       const flat: { pageIndex: number; xPct: number; yPct: number; wPct: number; hPct: number }[] =
         [];
       for (const [pageIndex, rects] of redactions) {
         for (const r of rects) flat.push({ pageIndex, ...r });
       }
-      const result = await redactPdf(file, flat);
+      const result = await redactPdf(file, flat, (current, total) =>
+        setApplyProgress({ current, total }),
+      );
       downloadPdf(result, pdfFilename(file, "_redacted"));
     }, "Failed to apply redactions. Please try again.");
+    setApplyProgress(null);
   }, [pdf.file, redactions, totalRedactions, task]);
 
   // Keep the drawing canvas sized to the preview image as it loads / resizes.
@@ -292,13 +344,13 @@ export default function RedactPdf() {
       if (!width || !height) return;
       canvas.width = width;
       canvas.height = height;
-      redrawCanvas();
+      redrawCanvasRef.current();
     };
     sync();
     const ro = new ResizeObserver(sync);
     ro.observe(container);
     return () => ro.disconnect();
-  }, [redrawCanvas, pdf.loading]);
+  }, [pdf.loading]);
 
   if (!pdf.file) {
     return (
@@ -341,7 +393,17 @@ export default function RedactPdf() {
       </div>
 
       {pdf.loading ? (
-        <LoadingSpinner />
+        thumbProgress && thumbProgress.total > 0 ? (
+          <div className="py-8">
+            <ProgressBar
+              current={thumbProgress.current}
+              total={thumbProgress.total}
+              label={`Rendering page ${thumbProgress.current} of ${thumbProgress.total}…`}
+            />
+          </div>
+        ) : (
+          <LoadingSpinner />
+        )
       ) : (
         <>
           <div className="grid md:grid-cols-2 gap-6">
@@ -400,6 +462,17 @@ export default function RedactPdf() {
                     </>
                   )}
                 </button>
+                {detecting && scanProgress && scanProgress.total > 0 && (
+                  <ProgressBar
+                    current={scanProgress.current}
+                    total={scanProgress.total}
+                    label={
+                      scanProgress.phase === "ocr"
+                        ? `OCR’ing scanned page ${scanProgress.current} of ${scanProgress.total}…`
+                        : `Reading page ${scanProgress.current} of ${scanProgress.total}…`
+                    }
+                  />
+                )}
                 {detectSummary && (
                   <p className="text-xs text-slate-600 dark:text-dark-text-muted">
                     {detectSummary}
@@ -523,6 +596,14 @@ export default function RedactPdf() {
           {/* Apply — below the grid, full-width primary action */}
           {totalRedactions > 0 && (
             <div className="space-y-2">
+              {task.processing && applyProgress && applyProgress.total > 0 && (
+                <ProgressBar
+                  current={applyProgress.current}
+                  total={applyProgress.total}
+                  label={`Rasterising page ${applyProgress.current} of ${applyProgress.total}…`}
+                  color="bg-red-600"
+                />
+              )}
               <p className="text-xs text-slate-500 dark:text-dark-text-muted text-center">
                 Redacted pages are flattened to images so the hidden text is permanently removed —
                 those pages become non-selectable and the file may grow. Other pages are left

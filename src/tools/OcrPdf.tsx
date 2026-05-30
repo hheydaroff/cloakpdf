@@ -13,13 +13,14 @@
  */
 
 import { Check, ChevronLeft, ChevronRight, CloudDownload, Copy, Download } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
@@ -70,6 +71,14 @@ export default function OcrPdf() {
   const [copiedPage, setCopiedPage] = useState(false);
   const [copiedAll, setCopiedAll] = useState(false);
   const [creatingPdf, setCreatingPdf] = useState(false);
+  // Determinate progress while building the searchable PDF on big documents.
+  const [savingProgress, setSavingProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+
+  // Monotonic id so a mid-run file swap can't let a stale extraction clobber the
+  // new file's state (which would then export a mismatched searchable PDF).
+  const extractIdRef = useRef(0);
 
   // Render page thumbnails up-front so the source-page preview is ready as soon
   // as extraction finishes.
@@ -77,12 +86,14 @@ export default function OcrPdf() {
     load: (file) => renderAllThumbnails(file, PREVIEW_SCALE),
     onReset: (thumbs) => {
       revokeThumbnails(thumbs ?? []);
+      extractIdRef.current++;
       setPages([]);
       setLayout(null);
       setViewMode("layout");
       setSelectedPage(0);
       setProgress(null);
       setProgressStatus(null);
+      setSavingProgress(null);
     },
   });
   const task = useAsyncProcess();
@@ -102,6 +113,7 @@ export default function OcrPdf() {
   const handleExtract = useCallback(async () => {
     if (!pdf.file) return;
     const file = pdf.file;
+    const reqId = ++extractIdRef.current;
     setPages([]);
     setLayout(null);
     setSelectedPage(0);
@@ -114,26 +126,41 @@ export default function OcrPdf() {
         // fallback path below retains full Tesseract OSD auto-detection.
         const layoutPages = await extractLayout(file, {
           language: language === "auto" ? "eng" : language,
-          onOcrPage: (count) => {
-            setProgress({ current: 0, total: 0 });
-            setProgressStatus(`Running OCR on scanned pages… (${count})`);
+          onOcrPage: (done, total) => {
+            if (extractIdRef.current !== reqId) return;
+            setProgress({ current: done, total });
+            setProgressStatus("Running OCR on scanned pages…");
           },
         });
+        const layoutTexts = layoutPages.map((p) => layoutToReadingOrderText(p));
+        // liteparse can resolve with no usable text (e.g. an image-only page it
+        // didn't flag as scanned). Treat "succeeded but empty" like a failure so
+        // the proven Tesseract-only path (every page, OSD auto-detect) still runs
+        // instead of leaving the user with blank output.
+        if (layoutTexts.join("").replace(/\s+/g, "").length === 0) {
+          throw new Error("empty-layout-result");
+        }
+        if (extractIdRef.current !== reqId) return;
         setLayout(layoutPages);
-        setPages(layoutPages.map((p) => layoutToReadingOrderText(p)));
+        setPages(layoutTexts);
       } catch {
+        if (extractIdRef.current !== reqId) return;
         setProgressStatus("Extracting text…");
         const pageTexts = await extractTextOcr(file, language, (current, total, status) => {
+          if (extractIdRef.current !== reqId) return;
           setProgress({ current, total });
           if (status) setProgressStatus(status);
         });
+        if (extractIdRef.current !== reqId) return;
         setLayout(null);
         setPages(pageTexts);
       }
     }, "Failed to extract text. Please try again.");
     void ok;
-    setProgress(null);
-    setProgressStatus(null);
+    if (extractIdRef.current === reqId) {
+      setProgress(null);
+      setProgressStatus(null);
+    }
   }, [pdf.file, language, task]);
 
   // Whether a layout-preserving view is available (liteparse path succeeded).
@@ -141,10 +168,16 @@ export default function OcrPdf() {
   const effectiveMode: "layout" | "text" = hasLayout ? viewMode : "text";
   // Per-page text for the active view: liteparse's layout-preserved spacing or
   // clean reading order. Copy/Download follow whatever the user is viewing.
-  const displayPages = pages.map((text, i) =>
-    effectiveMode === "layout" && layout?.[i] ? layout[i].text : text,
+  // Memoised so a big document isn't re-joined on every unrelated re-render.
+  const displayPages = useMemo(
+    () =>
+      pages.map((text, i) => (effectiveMode === "layout" && layout?.[i] ? layout[i].text : text)),
+    [pages, layout, effectiveMode],
   );
-  const fullText = displayPages.map((t, i) => `--- Page ${i + 1} ---\n\n${t}`).join("\n\n");
+  const fullText = useMemo(
+    () => displayPages.map((t, i) => `--- Page ${i + 1} ---\n\n${t}`).join("\n\n"),
+    [displayPages],
+  );
   const currentText = displayPages[selectedPage] ?? "";
 
   const handleCopyAll = useCallback(async () => {
@@ -181,30 +214,32 @@ export default function OcrPdf() {
     if (!pdf.file || pages.length === 0) return;
     const file = pdf.file;
     setCreatingPdf(true);
+    setSavingProgress(null);
     task.setError(null);
     try {
+      const onProg = (current: number, total: number) => setSavingProgress({ current, total });
       // Prefer the layout-positioned text layer (aligned with the page); fall
       // back to the line-stacked layer when we only have plain text.
       const pdfBytes = layout
-        ? await createSearchablePdfFromLayout(file, layout)
-        : await createSearchablePdf(file, pages);
+        ? await createSearchablePdfFromLayout(file, layout, onProg)
+        : await createSearchablePdf(file, pages, onProg);
       const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
       downloadBlob(blob, pdfFilename(file, "_searchable"));
     } catch (e) {
       task.setError(e instanceof Error ? e.message : "Failed to create searchable PDF.");
     } finally {
       setCreatingPdf(false);
+      setSavingProgress(null);
     }
   }, [pdf.file, pages, layout, task]);
 
-  const totalWords = pages.reduce(
-    (sum, text) => sum + text.split(/\s+/).filter((w) => w.length > 0).length,
-    0,
+  const totalWords = useMemo(
+    () =>
+      pages.reduce((sum, text) => sum + text.split(/\s+/).filter((w) => w.length > 0).length, 0),
+    [pages],
   );
-  const totalChars = pages.reduce((sum, text) => sum + text.length, 0);
+  const totalChars = useMemo(() => pages.reduce((sum, text) => sum + text.length, 0), [pages]);
   const pageWords = currentText.split(/\s+/).filter((w) => w.length > 0).length;
-  const progressPercent =
-    progress && progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
 
   if (!pdf.file) {
     return (
@@ -266,20 +301,11 @@ export default function OcrPdf() {
 
           {/* Progress section */}
           {processing && progress && progress.total > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-slate-600 dark:text-dark-text-muted">
-                  {progressStatus || `Processing page ${progress.current} of ${progress.total}`}
-                </span>
-                <span className="font-medium text-primary-600">{progressPercent}%</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-dark-border rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="bg-primary-600 h-full rounded-full transition-[width] duration-300"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </div>
+            <ProgressBar
+              current={progress.current}
+              total={progress.total}
+              label={progressStatus || `Processing page ${progress.current} of ${progress.total}`}
+            />
           )}
 
           {/* Initializing spinner */}
@@ -476,6 +502,13 @@ export default function OcrPdf() {
           </div>
 
           {/* Primary action — produce a searchable PDF */}
+          {creatingPdf && savingProgress && savingProgress.total > 0 && (
+            <ProgressBar
+              current={savingProgress.current}
+              total={savingProgress.total}
+              label={`Adding text layer to page ${savingProgress.current} of ${savingProgress.total}…`}
+            />
+          )}
           <ActionButton
             onClick={handleDownloadSearchablePdf}
             processing={creatingPdf}
