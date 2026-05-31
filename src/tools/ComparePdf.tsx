@@ -18,6 +18,7 @@ import { canvas as canvasColors, categoryAccent, categoryGlow } from "../config/
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
 import { pdfjsLib } from "../utils/pdf-renderer.ts";
+import { PDFJS_WASM_URL } from "../utils/pdfjs-config.ts";
 import { isPdfEncrypted } from "../utils/pdf-security.ts";
 
 /**
@@ -276,17 +277,16 @@ export default function ComparePdf() {
 
     const ok = await task.run(async () => {
       const [bufA, bufB] = await Promise.all([fileA.arrayBuffer(), fileB.arrayBuffer()]);
-      const [pdfA, pdfB] = await Promise.all([
-        pdfjsLib.getDocument({ data: bufA }).promise,
-        pdfjsLib.getDocument({ data: bufB }).promise,
-      ]);
+      const taskA = pdfjsLib.getDocument({ data: bufA, wasmUrl: PDFJS_WASM_URL });
+      const taskB = pdfjsLib.getDocument({ data: bufB, wasmUrl: PDFJS_WASM_URL });
+      const [pdfA, pdfB] = await Promise.all([taskA.promise, taskB.promise]);
 
       const results = await comparePdfs(pdfA, pdfB, 1.5, (done, total) =>
         setProgress({ done, total }),
       );
 
-      void pdfA.destroy();
-      void pdfB.destroy();
+      void taskA.destroy();
+      void taskB.destroy();
 
       setComparisons(results);
     }, "Failed to compare PDFs. One of the files may be corrupted or password-protected.");

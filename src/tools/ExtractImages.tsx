@@ -18,6 +18,7 @@ import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { downloadBlob, formatFileSize } from "../utils/file-helpers.ts";
 import { pdfjsLib } from "../utils/pdf-renderer.ts";
+import { PDFJS_WASM_URL } from "../utils/pdfjs-config.ts";
 
 /** Metadata for a single extracted image. */
 interface ExtractedImage {
@@ -232,7 +233,8 @@ export default function ExtractImages() {
     load: async (file) => {
       setProgress(null);
       const arrayBuffer = await file.arrayBuffer();
-      const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+      const doc = await loadingTask.promise;
       try {
         const extracted = await extractImagesFromPdf(doc, (done, total) =>
           setProgress({ done, total }),
@@ -244,7 +246,7 @@ export default function ExtractImages() {
         }
         return extracted;
       } finally {
-        void doc.destroy();
+        void loadingTask.destroy();
         setProgress(null);
       }
     },

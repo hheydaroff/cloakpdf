@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -10,6 +12,47 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
   version: string;
 };
 
+// pdfjs-dist v6 fetches WASM image decoders (jbig2 / openjpeg / qcms, plus JS
+// fallbacks and the quickjs scripting runtime) on demand to decode CCITT-fax,
+// JBIG2, JPEG2000 and ICC-colour images. Without them, such images — common in
+// scanned documents — render as black boxes. They live in node_modules, so we
+// serve them at /pdfjs-wasm/ in dev and copy them into the build output; the
+// matching `wasmUrl` getDocument option lives in src/utils/pdfjs-config.ts.
+const pdfjsWasmDir = fileURLToPath(new URL("./node_modules/pdfjs-dist/wasm/", import.meta.url));
+const pdfjsWasmFiles = readdirSync(pdfjsWasmDir).filter((f) => /\.(wasm|js)$/.test(f));
+
+function pdfjsWasmAssets() {
+  return {
+    name: "pdfjs-wasm-assets",
+    // Dev: stream the decoder files straight from node_modules.
+    configureServer(server: { middlewares: { use: (fn: unknown) => void } }) {
+      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
+        const path = (req.url ?? "").split("?")[0];
+        const prefix = "/pdfjs-wasm/";
+        if (!path.startsWith(prefix)) return next();
+        const name = path.slice(prefix.length);
+        if (!pdfjsWasmFiles.includes(name)) return next();
+        res.setHeader(
+          "Content-Type",
+          name.endsWith(".wasm") ? "application/wasm" : "text/javascript",
+        );
+        res.end(readFileSync(pdfjsWasmDir + name));
+      });
+    },
+    // Build: emit them as static assets under dist/pdfjs-wasm/.
+    generateBundle() {
+      for (const name of pdfjsWasmFiles) {
+        // @ts-ignore — Rollup plugin context provides emitFile at build time.
+        this.emitFile({
+          type: "asset",
+          fileName: `pdfjs-wasm/${name}`,
+          source: readFileSync(pdfjsWasmDir + name),
+        });
+      }
+    },
+  };
+}
+
 export default defineConfig({
   base: process.env.VITE_APP_BASE_PATH || "/",
   define: {
@@ -19,6 +62,7 @@ export default defineConfig({
     allowedHosts: true,
   },
   plugins: [
+    pdfjsWasmAssets(),
     react(),
     tailwindcss(),
     VitePWA({
@@ -80,10 +124,29 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        // The pdfjs WASM decoders + JS fallbacks are large and only needed for
+        // scanned CCITT/JBIG2/JPEG2000 images; cache them on demand via
+        // runtimeCaching below rather than bloating every install's precache.
+        globIgnores: ["**/pdfjs-wasm/**"],
         skipWaiting: false,
         cleanupOutdatedCaches: true,
         navigationPreload: true,
         runtimeCaching: [
+          {
+            // pdfjs WASM image decoders — immutable per pdfjs version, fetched
+            // on demand. CacheFirst so scanned-document decoding keeps working
+            // offline after the first use.
+            urlPattern: /\/pdfjs-wasm\/.*/,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "pdfjs-wasm-cache",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 365,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
           {
             urlPattern: /^https:\/\/unpkg\.com\/.*/i,
             handler: "StaleWhileRevalidate",

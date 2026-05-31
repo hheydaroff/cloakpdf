@@ -32,7 +32,8 @@
  * {@link layoutToReadingOrderText}, {@link detectPiiRects}) so they unit-test
  * without a browser.
  */
-import type { PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
+import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 import { detectPii, type PiiType } from "./pii.ts";
 
 /** A single positioned text run. Coordinates are PDF points, top-left origin. */
@@ -531,13 +532,16 @@ async function ocrScannedPages(
   // second full decode + parse of the same file); otherwise open our own and
   // destroy it when done.
   let pdf: PDFDocumentProxy;
-  const ownPdf = !existingPdf;
+  // When we open our own document (no caller-provided one) we must tear it down
+  // via its loading task — pdf.js v6 removed PDFDocumentProxy.destroy().
+  let ownLoadingTask: PDFDocumentLoadingTask | null = null;
   if (existingPdf) {
     pdf = existingPdf;
   } else {
     const pdfjsLib = await getPdfJs();
     const arrayBuffer = await file.arrayBuffer();
-    pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    ownLoadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+    pdf = await ownLoadingTask.promise;
   }
   const scale = dpi / 72;
   const total = pageNumbers.length;
@@ -605,7 +609,7 @@ async function ocrScannedPages(
       await worker.terminate();
     }
   } finally {
-    if (ownPdf) void pdf.destroy();
+    if (ownLoadingTask) void ownLoadingTask.destroy();
   }
 }
 
@@ -677,7 +681,8 @@ export async function extractTextGeometry(
   const dpi = options.dpi ?? 200;
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
 
   const pages: LayoutPage[] = [];
   try {
@@ -739,7 +744,7 @@ export async function extractTextGeometry(
       }
     }
   } finally {
-    void pdf.destroy();
+    void loadingTask.destroy();
   }
   for (const p of pages) if (!p.text) p.text = layoutToReadingOrderText(p);
   return pages;

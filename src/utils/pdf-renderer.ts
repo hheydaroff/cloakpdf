@@ -13,6 +13,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import * as pdfjsLib from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?worker&url";
+import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 
 // PDF.js requires a Web Worker for parsing. The `?worker&url` Vite suffix
 // ensures the worker file is emitted as a standalone asset with the correct
@@ -98,9 +99,10 @@ async function renderPage(
  */
 export async function getPageCount(file: File): Promise<number> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const count = pdf.numPages;
-  void pdf.destroy();
+  void loadingTask.destroy();
   return count;
 }
 
@@ -117,12 +119,13 @@ export async function renderPageThumbnail(
   pageNum: number,
   scale = 0.5,
 ): Promise<string> {
-  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const { canvas } = await renderPage(pdf, pageNum, scale);
   const url = await canvasToBlobUrl(canvas);
   canvas.width = 0;
   canvas.height = 0;
-  void pdf.destroy();
+  void loadingTask.destroy();
   return url;
 }
 
@@ -143,7 +146,8 @@ export async function renderSpecificThumbnails(
   scale = 0.4,
 ): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const results: string[] = [];
 
   for (const pageNum of pageNums) {
@@ -153,7 +157,7 @@ export async function renderSpecificThumbnails(
     canvas.height = 0;
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return results;
 }
 
@@ -181,7 +185,8 @@ export async function renderPagesToBlobs(
 ): Promise<{ pageIndex: number; blob: Blob }[]> {
   const arrayBuffer = await file.arrayBuffer();
   const scale = dpi / 72;
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const results: { pageIndex: number; blob: Blob }[] = [];
 
   for (let i = 0; i < pageIndices.length; i++) {
@@ -206,7 +211,7 @@ export async function renderPagesToBlobs(
     onProgress?.(i + 1, pageIndices.length);
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return results;
 }
 
@@ -228,7 +233,8 @@ export async function renderAllThumbnails(
   onProgress?: (rendered: number, total: number) => void,
 ): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const thumbnails: string[] = [];
   const total = pdf.numPages;
 
@@ -240,7 +246,7 @@ export async function renderAllThumbnails(
     onProgress?.(i, total);
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return thumbnails;
 }
 
@@ -273,7 +279,8 @@ export async function renderThumbnailsAndScan(
   onProgress?: (rendered: number, total: number) => void,
 ): Promise<ThumbnailsScanResult> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const total = pdf.numPages;
   const thumbnails: string[] = [];
   const scannedPages: number[] = [];
@@ -307,7 +314,7 @@ export async function renderThumbnailsAndScan(
       onProgress?.(i, total);
     }
   } finally {
-    void pdf.destroy();
+    void loadingTask.destroy();
   }
   return { thumbnails, total, scannedPages };
 }
@@ -328,7 +335,8 @@ export async function renderThumbnailsAndScores(
   scale = 0.3,
 ): Promise<{ thumbnails: string[]; scores: number[] }> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const thumbnails: string[] = [];
   const scores: number[] = [];
 
@@ -358,6 +366,6 @@ export async function renderThumbnailsAndScores(
     canvas.height = 0;
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return { thumbnails, scores };
 }

@@ -20,6 +20,7 @@ import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { downloadBlob, formatFileSize } from "../utils/file-helpers.ts";
 import { pdfjsLib, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
+import { PDFJS_WASM_URL } from "../utils/pdfjs-config.ts";
 
 type GridLayout = "2x2" | "3x3" | "4x4" | "5x5";
 type OutputFormat = "png" | "pdf";
@@ -91,7 +92,8 @@ export default function ContactSheet() {
 
       // Use the shared PDF.js instance (worker already configured)
       const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+      const pdfDoc = await loadingTask.promise;
 
       // Decide thumbnail render scale based on grid density
       const thumbScale = cols <= 2 ? 1.5 : cols <= 3 ? 1.0 : cols <= 4 ? 0.8 : 0.6;
@@ -191,7 +193,7 @@ export default function ContactSheet() {
         canvas.height = 0;
       }
 
-      void pdfDoc.destroy();
+      void loadingTask.destroy();
 
       const baseName = file.name.replace(/\.pdf$/i, "");
 

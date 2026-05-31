@@ -41,6 +41,7 @@ export interface PdfInfo {
   pages: Array<{ width: number; height: number }>;
 }
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 
 /**
  * Lazily load PDF.js and configure its Web Worker exactly once.
@@ -161,7 +162,8 @@ export async function compressPdf(
 
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const sourcePdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const sourcePdf = await loadingTask.promise;
   const newPdf = await PDFDocument.create();
 
   for (let i = 1; i <= sourcePdf.numPages; i++) {
@@ -208,7 +210,7 @@ export async function compressPdf(
     await new Promise((r) => setTimeout(r, 0));
   }
 
-  void sourcePdf.destroy();
+  void loadingTask.destroy();
 
   return newPdf.save({
     useObjectStreams: true,
@@ -234,7 +236,8 @@ export async function grayscalePdf(
 
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const sourcePdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const sourcePdf = await loadingTask.promise;
   const newPdf = await PDFDocument.create();
 
   for (let i = 1; i <= sourcePdf.numPages; i++) {
@@ -285,7 +288,7 @@ export async function grayscalePdf(
     await new Promise((r) => setTimeout(r, 0));
   }
 
-  void sourcePdf.destroy();
+  void loadingTask.destroy();
 
   return newPdf.save({ useObjectStreams: true });
 }
@@ -909,7 +912,8 @@ export async function extractTextOcr(
   const { createWorker, PSM } = await import("tesseract.js");
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdfDoc = await loadingTask.promise;
   const totalPages = pdfDoc.numPages;
   const OCR_SCALE = 3; // 3× ≈ 216 DPI for typical 72-DPI PDFs
 
@@ -983,7 +987,7 @@ export async function extractTextOcr(
     }
   } finally {
     await worker?.terminate();
-    void pdfDoc.destroy();
+    void loadingTask.destroy();
   }
 
   return pageTexts;
@@ -1866,7 +1870,8 @@ export async function redactPdf(
   const pdfjsLib = await getPdfJs();
   // PDF.js may detach the backing buffer — hand it its own copy so `src`
   // (used for copying untouched pages) stays valid.
-  const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0), wasmUrl: PDFJS_WASM_URL });
+  const pdfjsDoc = await loadingTask.promise;
   const REDACT_DPI = 150;
   const scale = REDACT_DPI / 72;
 
@@ -1924,7 +1929,7 @@ export async function redactPdf(
     }
     return out.save();
   } finally {
-    void pdfjsDoc.destroy();
+    void loadingTask.destroy();
   }
 }
 
