@@ -73,7 +73,7 @@ export default function RepairPdf() {
                   <button
                     type="button"
                     onClick={pdf.reset}
-                    className="text-xs text-primary-600 hover:text-primary-700 shrink-0"
+                    className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 shrink-0"
                   >
                     Change
                   </button>
@@ -84,7 +84,7 @@ export default function RepairPdf() {
               <span className="text-sm font-medium text-slate-600 dark:text-dark-text-muted">
                 Original size
               </span>
-              <span className="text-sm text-slate-800 dark:text-dark-text">
+              <span className="text-sm text-slate-800 dark:text-dark-text tabular-nums">
                 {formatFileSize(pdf.file.size)}
               </span>
             </div>
@@ -93,7 +93,7 @@ export default function RepairPdf() {
                 <span className="text-sm font-medium text-slate-600 dark:text-dark-text-muted">
                   Repaired size
                 </span>
-                <span className="text-sm text-slate-800 dark:text-dark-text">
+                <span className="text-sm text-slate-800 dark:text-dark-text tabular-nums">
                   {formatFileSize(sizeAfter)}
                 </span>
               </div>
@@ -107,9 +107,22 @@ export default function RepairPdf() {
             processingLabel="Repairing…"
           />
 
+          {task.processing && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-center text-xs text-slate-500 dark:text-dark-text-muted"
+            >
+              Rebuilding the document — this can take a few seconds on large or damaged files, and
+              the page may briefly freeze.
+            </p>
+          )}
+
           {done && (
             <InfoCallout icon={CheckCircle2} accent="transform">
-              PDF repaired successfully. The file has been downloaded.
+              {output.inWorkflow && !output.isLastStep
+                ? "PDF repaired successfully. Passed to the next step."
+                : "PDF repaired successfully. The file has been downloaded."}
             </InfoCallout>
           )}
         </>

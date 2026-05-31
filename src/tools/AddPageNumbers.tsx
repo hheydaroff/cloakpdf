@@ -199,14 +199,20 @@ export default function AddPageNumbers() {
                   <Move className="w-3.5 h-3.5" />
                   Position
                 </p>
-                <div className="grid grid-cols-3 gap-2 max-w-45">
+                <div
+                  className="grid grid-cols-3 gap-2 max-w-45"
+                  role="group"
+                  aria-label="Page number position"
+                >
                   {POSITIONS.map(({ value, label, title }) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setOpt("position", value)}
                       title={title}
-                      className={`h-10 rounded-lg text-base font-bold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                      aria-label={title}
+                      aria-pressed={options.position === value}
+                      className={`h-10 rounded-lg text-base font-semibold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
                         options.position === value
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300"
                           : "border-slate-200 dark:border-dark-border text-slate-400 dark:text-dark-text-muted hover:border-slate-300 dark:hover:border-slate-500 bg-white dark:bg-dark-surface"
@@ -344,7 +350,8 @@ export default function AddPageNumbers() {
                       type="button"
                       disabled={selectedPage === 0}
                       onClick={() => setSelectedPage((p) => p - 1)}
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Previous page"
+                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     >
                       <ChevronLeft className="w-4 h-4" />
                     </button>
@@ -355,7 +362,8 @@ export default function AddPageNumbers() {
                       type="button"
                       disabled={selectedPage === pageCount - 1}
                       onClick={() => setSelectedPage((p) => p + 1)}
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      aria-label="Next page"
+                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     >
                       <ChevronRight className="w-4 h-4" />
                     </button>

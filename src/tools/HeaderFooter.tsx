@@ -148,7 +148,7 @@ export default function HeaderFooter() {
   }, [pdf.file, options, task, output]);
 
   const slotClass =
-    "w-full border border-slate-300 dark:border-dark-border rounded-lg px-2.5 py-1.5 text-sm bg-white dark:bg-dark-surface text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus:border-primary-400 placeholder:text-slate-300 dark:placeholder:text-dark-text-muted transition-colors";
+    "w-full border border-slate-300 dark:border-dark-border rounded-lg px-2.5 py-1.5 text-sm bg-white dark:bg-dark-surface text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus:border-primary-400 placeholder:text-slate-500 dark:placeholder:text-dark-text-muted transition-colors";
 
   const makeInputProps = (field: keyof HeaderFooterOptions) => ({
     onFocus: (e: React.FocusEvent<HTMLInputElement>) => {
@@ -216,6 +216,7 @@ export default function HeaderFooter() {
                     <input
                       type="text"
                       placeholder="Left"
+                      aria-label="Header left text"
                       value={options.headerLeft}
                       onChange={(e) => setOpt("headerLeft", e.target.value)}
                       className={slotClass}
@@ -224,6 +225,7 @@ export default function HeaderFooter() {
                     <input
                       type="text"
                       placeholder="Centre"
+                      aria-label="Header centre text"
                       value={options.headerCenter}
                       onChange={(e) => setOpt("headerCenter", e.target.value)}
                       className={slotClass}
@@ -232,6 +234,7 @@ export default function HeaderFooter() {
                     <input
                       type="text"
                       placeholder="Right"
+                      aria-label="Header right text"
                       value={options.headerRight}
                       onChange={(e) => setOpt("headerRight", e.target.value)}
                       className={slotClass}
@@ -254,6 +257,7 @@ export default function HeaderFooter() {
                     <input
                       type="text"
                       placeholder="Left"
+                      aria-label="Footer left text"
                       value={options.footerLeft}
                       onChange={(e) => setOpt("footerLeft", e.target.value)}
                       className={slotClass}
@@ -262,6 +266,7 @@ export default function HeaderFooter() {
                     <input
                       type="text"
                       placeholder="Centre"
+                      aria-label="Footer centre text"
                       value={options.footerCenter}
                       onChange={(e) => setOpt("footerCenter", e.target.value)}
                       className={slotClass}
@@ -270,6 +275,7 @@ export default function HeaderFooter() {
                     <input
                       type="text"
                       placeholder="Right"
+                      aria-label="Footer right text"
                       value={options.footerRight}
                       onChange={(e) => setOpt("footerRight", e.target.value)}
                       className={slotClass}

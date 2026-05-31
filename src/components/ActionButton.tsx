@@ -1,4 +1,4 @@
-import { ArrowRight, Download } from "lucide-react";
+import { ArrowRight, Download, Loader2 } from "lucide-react";
 import { useWorkflowSlot } from "../workflow/WorkflowContext.tsx";
 
 interface ActionButtonProps {
@@ -42,11 +42,13 @@ export function ActionButton({
         type="button"
         onClick={onClick}
         disabled={disabled ?? processing}
-        className={`inline-flex items-center justify-center gap-1.5 w-full sm:w-auto sm:min-w-55 ${color} text-white py-3 px-8 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors`}
+        aria-busy={processing}
+        className={`inline-flex items-center justify-center gap-1.5 w-full sm:w-auto sm:min-w-55 ${color} text-white py-3 px-8 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg`}
       >
         <span>{processing ? processingLabel : label}</span>
-        {trailingIcon === "continue" && <ArrowRight className="w-4 h-4" />}
-        {trailingIcon === "download" && <Download className="w-4 h-4" />}
+        {processing && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+        {trailingIcon === "continue" && <ArrowRight className="w-4 h-4" aria-hidden="true" />}
+        {trailingIcon === "download" && <Download className="w-4 h-4" aria-hidden="true" />}
       </button>
     </div>
   );

@@ -20,6 +20,7 @@ import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LabeledSlider } from "../components/LabeledSlider.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
+import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { SignaturePad } from "../components/SignaturePad.tsx";
 import { categoryAccent, categoryGlow, colorPresets } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -132,6 +133,13 @@ export default function AddSignature() {
   const error = pdf.loadError ?? task.error;
   const [isDragging, setIsDragging] = useState(false);
   const [applyToAllPages, setApplyToAllPages] = useState(false);
+
+  // A single-page PDF hides the page-selection UI (it only renders for
+  // multi-page docs), so seed page 0 as selected. Without this, the per-page
+  // apply path iterates zero pages and silently delivers an UNSIGNED file.
+  useEffect(() => {
+    if (thumbnails.length === 1) setSelectedPages(new Set([0]));
+  }, [thumbnails.length]);
 
   // Centralised colour (drives both SignaturePad ink & image tint)
   const [color, setColor] = useState<string>(colorPresets[0].hex);
@@ -273,6 +281,11 @@ export default function AddSignature() {
         ? Array.from({ length: pdfDoc.getPageCount() }, (_, i) => i)
         : [...selectedPages].sort((a, b) => a - b);
 
+      // Defence-in-depth: never deliver an unchanged file as "signed".
+      if (pageIndices.length === 0) {
+        throw new Error("Select at least one page to place the signature on.");
+      }
+
       if (applyToAllPages) {
         // Single shared position
         const page = pdfDoc.getPage(0);
@@ -357,36 +370,19 @@ export default function AddSignature() {
                 custom image (PNG/JPEG).
               </p>
               {/* ---- Mode toggle ---- */}
-              <div className="inline-flex rounded-lg border border-slate-200 dark:border-dark-border p-0.5 bg-slate-100 dark:bg-dark-surface-alt">
-                <button
-                  onClick={() => {
-                    setMode("draw");
-                    setSignatureDataUrl("");
-                  }}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    mode === "draw"
-                      ? "bg-white dark:bg-dark-surface text-slate-900 dark:text-dark-text shadow-sm"
-                      : "text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text"
-                  }`}
-                >
-                  <PenLine className="w-3.5 h-3.5" />
-                  Draw
-                </button>
-                <button
-                  onClick={() => {
-                    setMode("upload");
-                    setSignatureDataUrl(uploadedImageUrl);
-                  }}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    mode === "upload"
-                      ? "bg-white dark:bg-dark-surface text-slate-900 dark:text-dark-text shadow-sm"
-                      : "text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text"
-                  }`}
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Upload
-                </button>
-              </div>
+              <SegmentedControl
+                ariaLabel="Signature mode"
+                value={mode}
+                onChange={(next) => {
+                  setMode(next);
+                  // Draw mode starts blank; Upload restores the last uploaded image.
+                  setSignatureDataUrl(next === "draw" ? "" : uploadedImageUrl);
+                }}
+                options={[
+                  { value: "draw", label: "Draw", icon: PenLine },
+                  { value: "upload", label: "Upload", icon: Upload },
+                ]}
+              />
 
               {/* ---- Draw mode ---- */}
               {mode === "draw" && (
@@ -421,7 +417,7 @@ export default function AddSignature() {
                     >
                       <Upload className="w-8 h-8" strokeWidth={1.5} />
                       <span className="text-sm font-medium">Click to upload PNG or JPEG</span>
-                      <span className="text-xs text-slate-400 dark:text-dark-text-muted">
+                      <span className="text-xs text-slate-500 dark:text-dark-text-muted">
                         Max 5 MB — transparent PNG recommended
                       </span>
                     </button>
@@ -440,13 +436,13 @@ export default function AddSignature() {
                           setSignatureDataUrl("");
                           if (uploadInputRef.current) uploadInputRef.current.value = "";
                         }}
-                        className="text-xs text-slate-500 hover:text-red-500 transition-colors"
+                        className="rounded px-2 py-1.5 text-xs text-slate-500 hover:text-red-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                       >
                         Remove
                       </button>
                       <button
                         onClick={() => uploadInputRef.current?.click()}
-                        className="text-xs text-primary-600 hover:text-primary-700 transition-colors"
+                        className="rounded px-2 py-1.5 text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                       >
                         Change
                       </button>

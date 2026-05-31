@@ -202,7 +202,7 @@ export default function AddBookmarks() {
                     <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
                       Bookmarks
                       {validCount > 0 && (
-                        <span className="text-primary-600 dark:text-primary-400 ml-1.5">
+                        <span className="text-primary-600 dark:text-primary-400 ml-1.5 tabular-nums">
                           ({validCount})
                         </span>
                       )}
@@ -270,6 +270,7 @@ export default function AddBookmarks() {
                               placeholder={`Bookmark ${idx + 1}`}
                               onChange={(e) => updateRow(bm.id, "title", e.target.value)}
                               onFocus={() => jumpToBookmark(bm.pageNumber)}
+                              aria-label={`Title for bookmark ${idx + 1}`}
                               className="w-full px-3 py-1.5 border border-slate-200 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text rounded-lg text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent"
                             />
                             <input
@@ -388,7 +389,9 @@ export default function AddBookmarks() {
 
               {done && (
                 <InfoCallout icon={CheckCircle2} accent="organise">
-                  Bookmarks added successfully. The PDF has been downloaded.
+                  {output.inWorkflow && !output.isLastStep
+                    ? "Bookmarks added — passed to the next step."
+                    : "Bookmarks added successfully. The PDF has been downloaded."}
                 </InfoCallout>
               )}
             </>

@@ -12,6 +12,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { type SortMode, SortByNameButton } from "../components/SortByNameButton.tsx";
 import { TouchDragOverlay } from "../components/TouchDragOverlay.tsx";
@@ -32,18 +33,22 @@ interface ImageItem {
 interface ImageRowProps {
   item: ImageItem;
   slot: number;
+  total: number;
   isSortActive: boolean;
   isSource: boolean;
   getItemProps: SortableDrag["getItemProps"];
+  getKeyboardProps: SortableDrag["getKeyboardProps"];
   onRemove: (id: string) => void;
 }
 
 const ImageRow = memo(function ImageRow({
   item,
   slot,
+  total,
   isSortActive,
   isSource,
   getItemProps,
+  getKeyboardProps,
   onRemove,
 }: ImageRowProps) {
   return (
@@ -53,14 +58,21 @@ const ImageRow = memo(function ImageRow({
         isSortActive ? "cursor-default" : "cursor-grab active:cursor-grabbing"
       } ${isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"}`}
     >
-      <GripVertical
-        className={`w-4 h-4 shrink-0 ${
-          isSortActive
-            ? "text-slate-200 dark:text-dark-border opacity-50"
-            : "text-slate-300 dark:text-dark-text-muted"
-        }`}
-      />
-      <span className="w-7 h-7 bg-primary-50 text-primary-600 rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+      {isSortActive ? (
+        <GripVertical className="w-4 h-4 shrink-0 text-slate-200 dark:text-dark-border opacity-50" />
+      ) : (
+        // Keyboard-accessible reorder handle (drag alone has no keyboard path).
+        // The grip is its own button so the row's nested Remove button isn't
+        // wrapped in a second interactive element.
+        <button
+          type="button"
+          {...getKeyboardProps(slot, total, item.file.name)}
+          className="shrink-0 -m-1 p-1 rounded text-slate-300 dark:text-dark-text-muted cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        >
+          <GripVertical className="w-4 h-4" aria-hidden="true" />
+        </button>
+      )}
+      <span className="w-7 h-7 bg-primary-50 text-primary-600 rounded-full flex items-center justify-center text-sm font-medium shrink-0 tabular-nums">
         {slot + 1}
       </span>
       <img
@@ -75,7 +87,7 @@ const ImageRow = memo(function ImageRow({
         <p className="text-sm font-medium text-slate-700 dark:text-dark-text truncate">
           {item.file.name}
         </p>
-        <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+        <p className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums">
           {formatFileSize(item.file.size)}
         </p>
       </div>
@@ -86,10 +98,10 @@ const ImageRow = memo(function ImageRow({
           onRemove(item.id);
         }}
         onPointerDown={(e) => e.stopPropagation()}
-        className="p-1.5 rounded hover:bg-red-50 transition-colors"
-        aria-label="Remove"
+        className="p-2.5 min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        aria-label={`Remove ${item.file.name}`}
       >
-        <X className="w-4 h-4 text-slate-400 dark:text-dark-text-muted hover:text-red-500" />
+        <X className="w-4 h-4 text-slate-500 dark:text-dark-text-muted hover:text-red-500" />
       </button>
     </div>
   );
@@ -99,6 +111,7 @@ export default function ImagesToPdf() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [pageSize, setPageSize] = useState<"a4" | "letter" | "fit">("a4");
   const [sortMode, setSortMode] = useState<SortMode>("off");
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const task = useAsyncProcess();
 
   const displayedImages = useMemo(() => {
@@ -152,10 +165,12 @@ export default function ImagesToPdf() {
 
   const handleConvert = useCallback(async () => {
     if (displayedImages.length === 0) return;
+    setProgress({ done: 0, total: displayedImages.length });
     await task.run(async () => {
       const result = await imagesToPdf(
         displayedImages.map((i) => i.file),
         pageSize,
+        (done, total) => setProgress({ done, total }),
       );
       downloadPdf(result, "images.pdf");
     }, "Failed to create PDF from images. Please try again.");
@@ -213,9 +228,11 @@ export default function ImagesToPdf() {
           key={item.id}
           item={item}
           slot={slot}
+          total={displayedImages.length}
           isSortActive={isSortActive}
           isSource={drag.dragIndex === slot}
           getItemProps={drag.getItemProps}
+          getKeyboardProps={drag.getKeyboardProps}
           onRemove={removeImage}
         />,
       );
@@ -270,6 +287,10 @@ export default function ImagesToPdf() {
             {rows}
           </div>
 
+          <div aria-live="polite" className="sr-only">
+            {drag.liveMessage}
+          </div>
+
           {dragged && drag.dragIndex !== null && drag.touchPos !== null && (
             <TouchDragOverlay touchPos={drag.touchPos}>
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-lg px-4 py-3 flex items-center gap-3 min-w-65 max-w-80">
@@ -287,6 +308,10 @@ export default function ImagesToPdf() {
                 </p>
               </div>
             </TouchDragOverlay>
+          )}
+
+          {task.processing && progress.total > 1 && (
+            <ProgressBar current={progress.done} total={progress.total} label="Creating PDF…" />
           )}
 
           <ActionButton

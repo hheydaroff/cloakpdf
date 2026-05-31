@@ -116,14 +116,14 @@ export default function MergePdf() {
           <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
             {displayedFiles.map((item, index) => (
               <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-                <span className="w-7 h-7 bg-primary-50 text-primary-600 rounded-full flex items-center justify-center text-sm font-medium shrink-0">
+                <span className="w-7 h-7 bg-primary-50 text-primary-600 rounded-full flex items-center justify-center text-sm font-medium shrink-0 tabular-nums">
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-700 dark:text-dark-text truncate">
                     {item.file.name}
                   </p>
-                  <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+                  <p className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums">
                     {formatFileSize(item.file.size)}
                   </p>
                 </div>
@@ -132,7 +132,7 @@ export default function MergePdf() {
                     onClick={() => moveFile(index, -1)}
                     disabled={isSortActive || index === 0}
                     title={isSortActive ? "Clear sort to reorder manually" : "Move up"}
-                    className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                     aria-label="Move up"
                   >
                     <ChevronUp className="w-4 h-4 text-slate-500 dark:text-dark-text-muted" />
@@ -141,15 +141,15 @@ export default function MergePdf() {
                     onClick={() => moveFile(index, 1)}
                     disabled={isSortActive || index === displayedFiles.length - 1}
                     title={isSortActive ? "Clear sort to reorder manually" : "Move down"}
-                    className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
                     aria-label="Move down"
                   >
                     <ChevronDown className="w-4 h-4 text-slate-500 dark:text-dark-text-muted" />
                   </button>
                   <button
                     onClick={() => removeFile(item.id)}
-                    className="p-1.5 rounded hover:bg-red-50 transition-colors"
-                    aria-label="Remove file"
+                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    aria-label={`Remove ${item.file.name}`}
                   >
                     <X className="w-4 h-4 text-slate-400 dark:text-dark-text-muted hover:text-red-500" />
                   </button>

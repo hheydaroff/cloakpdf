@@ -214,8 +214,8 @@ export default function FillPdfForm() {
 
                 {totalFields === 0 ? (
                   <InfoCallout icon={FileX} title="No fillable fields" accent="annotate">
-                    This PDF does not contain interactive form fields. Use the Add Watermark or Add
-                    Signature tools to annotate it instead.
+                    This PDF does not contain interactive form fields. Use the Stamp & Watermark or
+                    Add Signature tools to annotate it instead.
                   </InfoCallout>
                 ) : (
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
@@ -227,7 +227,9 @@ export default function FillPdfForm() {
                           key={thumbnailIds[i] ?? i}
                           type="button"
                           onClick={() => setSelectedPage(i)}
-                          className={`flex flex-col items-center gap-1 p-1 rounded-lg border-2 transition-colors ${
+                          aria-pressed={isSelected}
+                          aria-label={`Page ${i + 1}, ${count} field${count !== 1 ? "s" : ""}`}
+                          className={`flex flex-col items-center gap-1 p-1 rounded-lg border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                             isSelected
                               ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
                               : "border-transparent hover:border-slate-200 dark:hover:border-dark-border"
@@ -240,12 +242,12 @@ export default function FillPdfForm() {
                               alt={`Page ${i + 1}`}
                             />
                             {count > 0 && (
-                              <span className="absolute top-0.5 right-0.5 bg-primary-600 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                              <span className="absolute top-0.5 right-0.5 bg-primary-600 text-white text-xxs font-bold tabular-nums rounded-full w-4 h-4 flex items-center justify-center leading-none">
                                 {count}
                               </span>
                             )}
                           </div>
-                          <span className="text-tag text-slate-400 dark:text-dark-text-muted">
+                          <span className="text-tag tabular-nums text-slate-500 dark:text-dark-text-muted">
                             {i + 1}
                           </span>
                         </button>

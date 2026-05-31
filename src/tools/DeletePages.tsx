@@ -82,8 +82,9 @@ export default function DeletePages() {
             onChangeFile={pdf.reset}
             extra={
               selectedPages.size > 0 ? (
-                <span className="text-red-500 ml-2">
-                  ({selectedPages.size} selected for removal)
+                <span className="text-red-500 dark:text-red-400 ml-2 inline-flex items-center gap-1 font-medium">
+                  <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />(
+                  <span className="tabular-nums">{selectedPages.size}</span> selected for removal)
                 </span>
               ) : undefined
             }
@@ -131,7 +132,7 @@ export default function DeletePages() {
           )}
 
           {selectedPages.size >= thumbnails.length && (
-            <p className="text-center text-sm text-red-500">
+            <p className="text-center text-sm text-red-500 dark:text-red-400">
               Cannot delete all pages. Deselect at least one page.
             </p>
           )}

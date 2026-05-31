@@ -96,11 +96,18 @@ export default function NupPages() {
                   <LayoutGrid className="w-3.5 h-3.5" />
                   Layout
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div
+                  className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+                  role="radiogroup"
+                  aria-label="Layout"
+                >
                   {LAYOUTS.map((l) => (
                     <button
                       key={l.value}
                       type="button"
+                      role="radio"
+                      aria-checked={layout === l.value}
+                      aria-label={l.label}
                       onClick={() => setLayout(l.value)}
                       className={`border-2 rounded-xl p-3 text-center transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
                         layout === l.value
@@ -126,7 +133,7 @@ export default function NupPages() {
                       >
                         {l.label}
                       </p>
-                      <p className="text-xs text-slate-400 dark:text-dark-text-muted leading-snug">
+                      <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-snug">
                         {l.desc}
                       </p>
                     </button>
@@ -151,7 +158,9 @@ export default function NupPages() {
 
               {done && (
                 <InfoCallout icon={CheckCircle2} accent="transform">
-                  N-up PDF created and downloaded successfully.
+                  {output.inWorkflow && !output.isLastStep
+                    ? "N-up PDF created. Sent to the next step."
+                    : "N-up PDF created and downloaded successfully."}
                 </InfoCallout>
               )}
             </>

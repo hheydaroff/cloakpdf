@@ -12,8 +12,9 @@ export function LoadingSpinner({
 }: LoadingSpinnerProps) {
   const sizeClass = size === "sm" ? "w-6 h-6 border-2" : "w-8 h-8 border-3";
   return (
-    <div className={className}>
+    <div className={className} role="status" aria-live="polite">
       <div className={`${sizeClass} ${color} rounded-full animate-spin`} />
+      <span className="sr-only">Loading…</span>
     </div>
   );
 }

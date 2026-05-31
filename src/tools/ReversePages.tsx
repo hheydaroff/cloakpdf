@@ -106,10 +106,10 @@ export default function ReversePages() {
                       alt="First page"
                       className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
                     />
-                    <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1">Page 1</p>
+                    <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">Page 1</p>
                   </div>
                   {pageCount > 2 && (
-                    <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+                    <p className="text-xs text-slate-500 dark:text-dark-text-muted">
                       … {pageCount - 2} more …
                     </p>
                   )}
@@ -120,7 +120,7 @@ export default function ReversePages() {
                         alt="Last page"
                         className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
                       />
-                      <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1">
+                      <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">
                         Page {pageCount}
                       </p>
                     </div>
@@ -137,13 +137,13 @@ export default function ReversePages() {
                         alt="Was last, now first"
                         className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
                       />
-                      <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1">
+                      <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">
                         Page 1
                       </p>
                     </div>
                   )}
                   {pageCount > 2 && (
-                    <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+                    <p className="text-xs text-slate-500 dark:text-dark-text-muted">
                       … {pageCount - 2} more …
                     </p>
                   )}
@@ -153,7 +153,7 @@ export default function ReversePages() {
                       alt="Was first, now last"
                       className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
                     />
-                    <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1">
+                    <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">
                       Page {pageCount}
                     </p>
                   </div>
@@ -171,14 +171,16 @@ export default function ReversePages() {
           />
 
           {pageCount === 1 && (
-            <p className="text-center text-sm text-slate-400 dark:text-dark-text-muted">
+            <p className="text-center text-sm text-slate-500 dark:text-dark-text-muted">
               This PDF only has one page — nothing to reverse.
             </p>
           )}
 
           {done && (
             <InfoCallout icon={CheckCircle2} accent="organise">
-              Pages reversed successfully. The PDF has been downloaded.
+              {output.inWorkflow && !output.isLastStep
+                ? "Pages reversed. Sent to the next step."
+                : "Pages reversed successfully. The PDF has been downloaded."}
             </InfoCallout>
           )}
         </>

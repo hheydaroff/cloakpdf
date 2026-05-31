@@ -38,6 +38,9 @@ export default function RotatePages() {
 
   const thumbnails = pdf.data ?? [];
 
+  /** Pages whose accumulated angle is non-zero (mod 360) — i.e. actually rotated. */
+  const rotatedCount = [...rotations.values()].filter((angle) => angle % 360 !== 0).length;
+
   /** Accumulate rotation for a single page (angles are additive, mod 360). */
   const rotatePage = useCallback((pageIndex: number, angle: number) => {
     setRotations((prev) => {
@@ -91,17 +94,6 @@ export default function RotatePages() {
             fileName={pdf.file.name}
             details={`${thumbnails.length} pages`}
             onChangeFile={pdf.reset}
-            extra={
-              thumbnails.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => rotateAll(90)}
-                  className="ml-2 text-sm px-3 py-1 bg-slate-100 dark:bg-dark-surface-alt dark:text-dark-text hover:bg-slate-200 dark:hover:bg-dark-border rounded-lg transition-colors"
-                >
-                  Rotate All 90° →
-                </button>
-              ) : undefined
-            }
           />
 
           {pdf.loading ? (
@@ -109,10 +101,23 @@ export default function RotatePages() {
           ) : (
             <>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
-                  Click rotation buttons on each page to adjust
+                <p className="text-sm font-medium text-slate-700 dark:text-dark-text tabular-nums">
+                  {thumbnails.length} {thumbnails.length === 1 ? "page" : "pages"}
+                  {rotatedCount > 0 && ` • ${rotatedCount} rotated`}
                 </p>
-                {rotations.size > 0 && <ResetButton onClick={handleReset} />}
+                <div className="flex items-center gap-2">
+                  {thumbnails.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => rotateAll(90)}
+                      aria-label="Rotate all pages 90° right"
+                      className="text-sm px-3 py-1.5 bg-slate-100 dark:bg-dark-surface-alt dark:text-dark-text hover:bg-slate-200 dark:hover:bg-dark-border rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg"
+                    >
+                      Rotate All 90° →
+                    </button>
+                  )}
+                  {rotations.size > 0 && <ResetButton onClick={handleReset} />}
+                </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {thumbnails.map((thumb, i) => (
@@ -121,26 +126,33 @@ export default function RotatePages() {
                       src={thumb}
                       pageNumber={i + 1}
                       rotation={rotations.get(i) ?? 0}
+                      onClick={() => rotatePage(i, 90)}
                     />
                     <div className="flex justify-center gap-1">
                       <button
+                        type="button"
                         onClick={() => rotatePage(i, -90)}
-                        className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted transition-colors"
+                        className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg"
                         title="Rotate 90° left"
+                        aria-label={`Rotate page ${i + 1} 90° left`}
                       >
                         <RotateCcw className="w-4 h-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => rotatePage(i, 90)}
-                        className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted transition-colors"
+                        className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg"
                         title="Rotate 90° right"
+                        aria-label={`Rotate page ${i + 1} 90° right`}
                       >
                         <RotateCw className="w-4 h-4" />
                       </button>
                       <button
+                        type="button"
                         onClick={() => rotatePage(i, 180)}
-                        className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted transition-colors"
+                        className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg"
                         title="Rotate 180°"
+                        aria-label={`Rotate page ${i + 1} 180°`}
                       >
                         <FlipVertical2 className="w-4 h-4" />
                       </button>

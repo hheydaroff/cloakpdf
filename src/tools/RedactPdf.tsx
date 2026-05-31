@@ -386,7 +386,7 @@ export default function RedactPdf() {
         <button
           type="button"
           onClick={pdf.reset}
-          className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 shrink-0"
+          className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
         >
           Change file
         </button>
@@ -433,7 +433,7 @@ export default function RedactPdf() {
                         onClick={() => togglePiiType(t)}
                         disabled={detecting}
                         aria-pressed={on}
-                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 ${
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-surface ${
                           on
                             ? "bg-primary-600 text-white"
                             : "bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted border border-slate-200 dark:border-dark-border hover:bg-slate-200 dark:hover:bg-dark-border"
@@ -448,7 +448,7 @@ export default function RedactPdf() {
                   type="button"
                   onClick={handleDetectPii}
                   disabled={detecting || piiTypes.size === 0}
-                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex w-full sm:w-auto items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-surface"
                 >
                   {detecting ? (
                     <>
@@ -474,7 +474,11 @@ export default function RedactPdf() {
                   />
                 )}
                 {detectSummary && (
-                  <p className="text-xs text-slate-600 dark:text-dark-text-muted">
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="text-xs text-slate-600 dark:text-dark-text-muted"
+                  >
                     {detectSummary}
                   </p>
                 )}
@@ -492,7 +496,7 @@ export default function RedactPdf() {
                         type="button"
                         onClick={globalUndo}
                         disabled={undoHistory.length === 0}
-                        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-40 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-40 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                       >
                         <Undo2 className="w-4 h-4" />
                         Undo
@@ -500,7 +504,7 @@ export default function RedactPdf() {
                       <button
                         type="button"
                         onClick={clearAllRects}
-                        className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                        className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                       >
                         <Trash2 className="w-4 h-4" />
                         Clear all
@@ -532,7 +536,7 @@ export default function RedactPdf() {
                     <button
                       type="button"
                       onClick={clearPageRects}
-                      className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                      className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       Clear page
@@ -545,11 +549,11 @@ export default function RedactPdf() {
                         aria-label="Previous page"
                         disabled={selectedPage === 0}
                         onClick={() => setSelectedPage((p) => Math.max(0, p - 1))}
-                        className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="inline-flex min-w-11 min-h-11 items-center justify-center rounded text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </button>
-                      <span className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1">
+                      <span className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums px-1">
                         {selectedPage + 1} / {pageCount}
                       </span>
                       <button
@@ -557,7 +561,7 @@ export default function RedactPdf() {
                         aria-label="Next page"
                         disabled={selectedPage === pageCount - 1}
                         onClick={() => setSelectedPage((p) => Math.min(pageCount - 1, p + 1))}
-                        className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        className="inline-flex min-w-11 min-h-11 items-center justify-center rounded text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
@@ -579,6 +583,9 @@ export default function RedactPdf() {
                 />
                 <canvas
                   ref={canvasRef}
+                  role="application"
+                  aria-label={`Redaction drawing surface for page ${selectedPage + 1} — drag with a pointer to cover sensitive content`}
+                  aria-describedby="redact-canvas-hint"
                   className="absolute inset-0 w-full h-full touch-none"
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
@@ -587,8 +594,12 @@ export default function RedactPdf() {
                   onPointerLeave={cancelDrag}
                 />
               </div>
-              <p className="text-xs text-slate-400 dark:text-dark-text-muted text-center">
-                Drag on the page to draw a redaction box
+              <p
+                id="redact-canvas-hint"
+                className="text-xs text-slate-500 dark:text-dark-text-muted text-center"
+              >
+                Drag on the page to draw a redaction box. Manual drawing requires a pointer; use
+                Auto-detect to add boxes for sensitive data with the keyboard.
               </p>
             </div>
           </div>

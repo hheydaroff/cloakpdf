@@ -254,7 +254,10 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .animate-popover-in,
+  .animate-popover-in-above,
   .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-scale-in,
   .animate-slide-up-in {
     animation: none;
   }

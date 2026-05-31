@@ -53,27 +53,40 @@ interface LoadedPdf {
  * for fully-digital PDFs — liteparse reads those with no model download. A
  * single bad page degrades gracefully (see {@link renderThumbnailsAndScan}).
  */
-async function loadPdf(file: File): Promise<LoadedPdf> {
-  const { thumbnails, total, scannedPages } = await renderThumbnailsAndScan(file, PREVIEW_SCALE);
+async function loadPdf(
+  file: File,
+  onProgress?: (rendered: number, total: number) => void,
+): Promise<LoadedPdf> {
+  const { thumbnails, total, scannedPages } = await renderThumbnailsAndScan(
+    file,
+    PREVIEW_SCALE,
+    undefined,
+    onProgress,
+  );
   return { thumbnails, totalPages: total, scannedPages };
 }
 
-/** Language options displayed as pill buttons. "auto" uses Tesseract OSD. */
+/**
+ * Language options displayed as pill buttons. "auto" uses Tesseract OSD.
+ * Plain language names only — emoji flags misrepresent a language by its
+ * country (e.g. one flag for many regions) and render inconsistently on
+ * Windows. The 🌐 on Auto Detect is fine since it denotes "any", not a country.
+ */
 const LANGUAGES = [
   { code: "auto", label: "🌐 Auto Detect" },
-  { code: "ara", label: "🇸🇦 Arabic" },
-  { code: "chi_sim", label: "🇨🇳 Chinese" },
-  { code: "nld", label: "🇳🇱 Dutch" },
-  { code: "eng", label: "🇬🇧 English" },
-  { code: "fra", label: "🇫🇷 French" },
-  { code: "deu", label: "🇩🇪 German" },
-  { code: "hin", label: "🇮🇳 Hindi" },
-  { code: "ita", label: "🇮🇹 Italian" },
-  { code: "jpn", label: "🇯🇵 Japanese" },
-  { code: "kor", label: "🇰🇷 Korean" },
-  { code: "por", label: "🇵🇹 Portuguese" },
-  { code: "rus", label: "🇷🇺 Russian" },
-  { code: "spa", label: "🇪🇸 Spanish" },
+  { code: "ara", label: "Arabic" },
+  { code: "chi_sim", label: "Chinese" },
+  { code: "nld", label: "Dutch" },
+  { code: "eng", label: "English" },
+  { code: "fra", label: "French" },
+  { code: "deu", label: "German" },
+  { code: "hin", label: "Hindi" },
+  { code: "ita", label: "Italian" },
+  { code: "jpn", label: "Japanese" },
+  { code: "kor", label: "Korean" },
+  { code: "por", label: "Portuguese" },
+  { code: "rus", label: "Russian" },
+  { code: "spa", label: "Spanish" },
 ] as const;
 
 export default function OcrPdf() {
@@ -103,8 +116,15 @@ export default function OcrPdf() {
 
   // Render page thumbnails up-front so the source-page preview is ready as soon
   // as extraction finishes.
+  // Determinate progress for the analyze phase (rendering every page +
+  // classifying digital/scanned) so the initial load isn't an opaque spinner.
+  const [analyzeProgress, setAnalyzeProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
+
   const pdf = usePdfFile<LoadedPdf>({
-    load: loadPdf,
+    load: (file) => loadPdf(file, (current, total) => setAnalyzeProgress({ current, total })),
     onReset: (data) => {
       revokeThumbnails(data?.thumbnails ?? []);
       extractIdRef.current++;
@@ -115,6 +135,7 @@ export default function OcrPdf() {
       setProgress(null);
       setProgressStatus(null);
       setSavingProgress(null);
+      setAnalyzeProgress(null);
     },
   });
   const task = useAsyncProcess();
@@ -303,12 +324,20 @@ export default function OcrPdf() {
               actually need OCR. A fully digital PDF is read by liteparse with
               no model download at all. */}
           {!analyzed ? (
-            <div className="flex items-center gap-3 py-4">
-              <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-              <span className="text-sm text-slate-600 dark:text-dark-text-muted">
-                Analyzing document…
-              </span>
-            </div>
+            analyzeProgress && analyzeProgress.total > 0 ? (
+              <ProgressBar
+                current={analyzeProgress.current}
+                total={analyzeProgress.total}
+                label="Analyzing document…"
+              />
+            ) : (
+              <div role="status" aria-live="polite" className="flex items-center gap-3 py-4">
+                <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+                <span className="text-sm text-slate-600 dark:text-dark-text-muted">
+                  Analyzing document…
+                </span>
+              </div>
+            )
           ) : !needsOcr ? (
             <InfoCallout icon={FileText} title="Digital PDF — no OCR needed" accent="transform">
               All {totalPages} page{totalPages !== 1 ? "s" : ""} have a text layer, so text is read
@@ -333,13 +362,23 @@ export default function OcrPdf() {
           {/* Language pill selector — only meaningful when pages need OCR. */}
           {needsOcr && (
             <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4">
-              <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-3">
+              <p
+                id="ocr-language-label"
+                className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-3"
+              >
                 OCR Language
               </p>
-              <div className="flex flex-wrap gap-2">
+              <div
+                role="radiogroup"
+                aria-labelledby="ocr-language-label"
+                className="flex flex-wrap gap-2"
+              >
                 {LANGUAGES.map((lang) => (
                   <button
                     key={lang.code}
+                    type="button"
+                    role="radio"
+                    aria-checked={language === lang.code}
                     onClick={() => setLanguage(lang.code)}
                     disabled={processing}
                     className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-[transform,opacity,color,background-color,border-color,box-shadow] ${
@@ -366,7 +405,7 @@ export default function OcrPdf() {
 
           {/* Initializing spinner */}
           {processing && (!progress || progress.total === 0) && (
-            <div className="flex items-center gap-3 py-4">
+            <div role="status" aria-live="polite" className="flex items-center gap-3 py-4">
               <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
               <span className="text-sm text-slate-600 dark:text-dark-text-muted">
                 {progressStatus || "Initializing OCR engine…"}
@@ -391,17 +430,19 @@ export default function OcrPdf() {
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-sm text-slate-500 dark:text-dark-text-muted">Pages</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-dark-text">{pageCount}</p>
+                <p className="text-xl font-semibold tabular-nums text-slate-800 dark:text-dark-text">
+                  {pageCount}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-slate-500 dark:text-dark-text-muted">Words</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-dark-text">
+                <p className="text-xl font-semibold tabular-nums text-slate-800 dark:text-dark-text">
                   {totalWords.toLocaleString()}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-slate-500 dark:text-dark-text-muted">Characters</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-dark-text">
+                <p className="text-xl font-semibold tabular-nums text-slate-800 dark:text-dark-text">
                   {totalChars.toLocaleString()}
                 </p>
               </div>

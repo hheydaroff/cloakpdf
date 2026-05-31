@@ -100,9 +100,13 @@ export default function ContactSheet() {
       const sheetW = 2480;
       const sheetH = 3508;
       const pad = 40;
-      const genLabelH = showLabels ? 28 : 0;
       const genCellW = Math.floor((sheetW - pad * (cols + 1)) / cols);
       const genCellH = Math.floor((sheetH - pad * (cols + 1)) / cols);
+      // Derive label size from cell width (mirrors the preview's labelFontSize =
+      // cellSize * 0.09) so labels stay proportional across 2×2…5×5 instead of a
+      // fixed 20px font + 28px band. The preview's sizing model is the source of truth.
+      const genLabelFont = Math.max(20, Math.round(genCellW * 0.09));
+      const genLabelH = showLabels ? genLabelFont + 12 : 0;
 
       const sheets: Blob[] = [];
 
@@ -162,7 +166,7 @@ export default function ContactSheet() {
           // Page label
           if (showLabels) {
             ctx.fillStyle = canvasColors.label;
-            ctx.font = "bold 20px sans-serif";
+            ctx.font = `bold ${genLabelFont}px sans-serif`;
             ctx.textAlign = "center";
             ctx.fillText(`Page ${pageIdx + 1}`, cellX + genCellW / 2, cellY + genCellH - 6);
           }
@@ -271,7 +275,7 @@ export default function ContactSheet() {
                   options={GRID_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                 />
                 {pageCount > 0 && (
-                  <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1.5">
+                  <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1.5 tabular-nums">
                     {perSheet} pages per sheet · {sheetsNeeded}{" "}
                     {sheetsNeeded === 1 ? "sheet" : "sheets"} total
                   </p>
@@ -391,7 +395,7 @@ export default function ContactSheet() {
                 </div>
               )}
               {sheetsNeeded > 1 && !loading && (
-                <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-2 text-center">
+                <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-2 text-center tabular-nums">
                   {pageCount - perSheet} more {pageCount - perSheet === 1 ? "page" : "pages"} on{" "}
                   {sheetsNeeded - 1} additional {sheetsNeeded - 1 === 1 ? "sheet" : "sheets"}
                 </p>
@@ -411,7 +415,7 @@ export default function ContactSheet() {
             onClick={handleGenerate}
             processing={processing}
             disabled={processing || loading || pageCount === 0}
-            label={`Generate Contact Sheet${sheetsNeeded > 1 ? "s" : ""}`}
+            label={`Generate Contact Sheet${output === "png" && sheetsNeeded > 1 ? "s" : ""}`}
             processingLabel="Generating…"
           />
         </>

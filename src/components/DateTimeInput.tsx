@@ -373,7 +373,7 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
           className={
             displayText
               ? "text-slate-800 dark:text-dark-text"
-              : "text-slate-400 dark:text-slate-500"
+              : "text-slate-500 dark:text-slate-400"
           }
         >
           {displayText || "Not set"}

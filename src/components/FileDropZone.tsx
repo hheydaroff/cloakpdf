@@ -183,7 +183,7 @@ export function FileDropZone({
         {label}
       </p>
       {hint && (
-        <p className="relative z-10 text-sm text-slate-400 dark:text-dark-text-muted mt-1">
+        <p className="relative z-10 text-sm text-slate-500 dark:text-dark-text-muted mt-1">
           {hint}
         </p>
       )}

@@ -129,7 +129,7 @@ export default function ExtractPages() {
               <button
                 type="button"
                 onClick={selectAll}
-                className="inline-flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+                className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <CheckSquare className="w-4 h-4" />
                 Select all
@@ -137,7 +137,7 @@ export default function ExtractPages() {
               <button
                 type="button"
                 onClick={clearAll}
-                className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors"
+                className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <X className="w-4 h-4" />
                 Clear
@@ -146,7 +146,7 @@ export default function ExtractPages() {
                 <button
                   type="button"
                   onClick={pdf.reset}
-                  className="text-sm text-primary-600 hover:text-primary-700"
+                  className="px-2 py-1.5 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 >
                   Change file
                 </button>
@@ -167,9 +167,13 @@ export default function ExtractPages() {
               value={rangeInput}
               onChange={(e) => setRangeInput(e.target.value)}
               placeholder="e.g., 1-3, 5, 7-9"
+              aria-describedby="range-input-hint"
               className="w-full px-3 py-2 border border-slate-300 dark:border-dark-border dark:bg-dark-surface dark:text-dark-text rounded-lg text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent"
             />
-            <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1">
+            <p
+              id="range-input-hint"
+              className="text-xs text-slate-500 dark:text-dark-text-muted mt-1"
+            >
               Or click pages below to select them
             </p>
           </div>

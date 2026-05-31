@@ -771,9 +771,13 @@ follows hierarchy and motion, not hue.
 Two invariants to preserve in any future revision:
 
 1. **One accent.** Per-tool / per-category colour stays out of
-   interactive surfaces. The only exception is the nine
-   illustrative chips in the "Why CloakPDF" grid, which appear
-   once and below the fold.
+   interactive surfaces. Two sanctioned exceptions: the nine
+   illustrative chips in the "Why CloakPDF" grid (which appear
+   once, below the fold), and **destructive primary actions**,
+   which may use `bg-red-600 / hover:bg-red-700` (e.g. the Delete
+   Pages, Redact, and "Redact all metadata" CTAs) — red is the
+   danger signal, not a second brand accent, and is reserved for
+   irreversible actions only.
 2. **Slate-200 borders, no resting shadow.** Cards earn elevation
    on hover, never at rest. Adding a default shadow would push
    the system from *quiet* to *busy* and break the bento footer's

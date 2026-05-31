@@ -35,6 +35,8 @@ function nextBlankId() {
 
 export default function AddBlankPage() {
   const [items, setItems] = useState<PageItem[]>([]);
+  // Polite announcement for screen readers after a standalone insert+download.
+  const [announcement, setAnnouncement] = useState("");
 
   const pdf = usePdfFile<string[]>({
     load: async (file) => {
@@ -72,6 +74,7 @@ export default function AddBlankPage() {
 
   const handleAddBlank = useCallback(() => {
     setItems((prev) => [{ type: "blank", id: nextBlankId() }, ...prev]);
+    setAnnouncement("");
   }, []);
 
   const handleReset = useCallback(() => {
@@ -97,6 +100,12 @@ export default function AddBlankPage() {
       }
       const result = await addBlankPages(file, positions);
       output.deliver(result, "_blank_added", file);
+      // Standalone success isn't otherwise voiced (file just downloads), so
+      // announce it. In a workflow the runner owns the transition messaging.
+      if (!output.inWorkflow) {
+        const n = positions.length;
+        setAnnouncement(`Inserted ${n} blank ${n === 1 ? "page" : "pages"}.`);
+      }
     }, "Failed to insert blank pages. Please try again.");
   }, [pdf.file, hasBlankPages, items, task, output]);
 
@@ -137,7 +146,7 @@ export default function AddBlankPage() {
                     <button
                       type="button"
                       onClick={handleAddBlank}
-                      className="inline-flex items-center gap-1.5 text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors"
+                      className="inline-flex items-center gap-1.5 rounded text-sm text-primary-600 hover:text-primary-700 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                     >
                       <Plus className="w-4 h-4" />
                       Add blank page
@@ -157,7 +166,8 @@ export default function AddBlankPage() {
                         <div
                           key={item.id}
                           {...drag.getItemProps(slot)}
-                          className={`shrink-0 pt-2 pr-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
+                          {...drag.getKeyboardProps(slot, items.length, "Blank page")}
+                          className={`shrink-0 pt-2 pr-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
                             isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"
                           }`}
                         >
@@ -172,7 +182,7 @@ export default function AddBlankPage() {
                               <span className="text-primary-500 text-2xl font-light">+</span>
                             </div>
                             <div
-                              className={`absolute -top-1.5 -right-1.5 text-white text-xxs font-bold px-1.5 h-5 rounded-full flex items-center justify-center shadow-md z-10 transition-opacity duration-200 ${
+                              className={`absolute -top-1.5 -right-1.5 text-white text-xxs font-semibold px-1.5 h-5 rounded-full flex items-center justify-center shadow-md z-10 transition-opacity duration-200 ${
                                 isSource
                                   ? "bg-slate-400 dark:bg-slate-600 opacity-50"
                                   : "bg-primary-600"
@@ -190,7 +200,8 @@ export default function AddBlankPage() {
                       <div
                         key={`page-${item.index}`}
                         {...drag.getItemProps(slot)}
-                        className={`shrink-0 pt-2 pr-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
+                        {...drag.getKeyboardProps(slot, items.length, `Page ${item.index + 1}`)}
+                        className={`shrink-0 pt-2 pr-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
                           isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"
                         }`}
                       >
@@ -210,7 +221,7 @@ export default function AddBlankPage() {
                             />
                           </div>
                           <div
-                            className={`absolute -top-1.5 -right-1.5 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md z-10 transition-opacity duration-200 ${
+                            className={`absolute -top-1.5 -right-1.5 text-white text-xs font-semibold tabular-nums w-6 h-6 rounded-full flex items-center justify-center shadow-md z-10 transition-opacity duration-200 ${
                               isSource
                                 ? "bg-slate-400 dark:bg-slate-600 opacity-50"
                                 : "bg-primary-600"
@@ -233,7 +244,7 @@ export default function AddBlankPage() {
                           <div className="w-20 sm:w-24 md:w-28 aspect-[3/4] rounded-lg border-2 border-dashed border-primary-400 bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center shadow-sm">
                             <span className="text-primary-500 text-2xl font-light">+</span>
                           </div>
-                          <div className="absolute top-0 right-0 text-white text-xxs font-bold px-1.5 h-5 rounded-full flex items-center justify-center shadow-md bg-primary-600">
+                          <div className="absolute top-0 right-0 text-white text-xxs font-semibold px-1.5 h-5 rounded-full flex items-center justify-center shadow-md bg-primary-600">
                             New
                           </div>
                         </div>
@@ -250,7 +261,7 @@ export default function AddBlankPage() {
                             draggable={false}
                           />
                         </div>
-                        <div className="absolute top-0 right-0 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md bg-primary-600">
+                        <div className="absolute top-0 right-0 text-white text-xs font-semibold tabular-nums w-6 h-6 rounded-full flex items-center justify-center shadow-md bg-primary-600">
                           {pageIndex + 1}
                         </div>
                       </div>
@@ -258,13 +269,28 @@ export default function AddBlankPage() {
                   }}
                 />
 
-                {hasBlankPages && (
-                  <p className="text-xs text-primary-600 dark:text-primary-400 font-medium">
-                    {items.filter((it) => it.type === "blank").length} blank page(s) added — click
-                    below to apply
-                  </p>
-                )}
+                <div aria-live="polite" className="sr-only">
+                  {drag.liveMessage}
+                </div>
+
+                <div aria-live="polite">
+                  {hasBlankPages &&
+                    (() => {
+                      const blankCount = items.filter((it) => it.type === "blank").length;
+                      return (
+                        <p className="text-xs text-primary-600 dark:text-primary-400 font-medium">
+                          {blankCount} blank {blankCount === 1 ? "page" : "pages"} added — click
+                          below to apply
+                        </p>
+                      );
+                    })()}
+                </div>
               </div>
+
+              {/* Voices a standalone insert+download, which otherwise has no on-screen status. */}
+              <p className="sr-only" role="status" aria-live="polite">
+                {announcement}
+              </p>
 
               {hasBlankPages && (
                 <ActionButton

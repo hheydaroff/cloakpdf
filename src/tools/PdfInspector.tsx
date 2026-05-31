@@ -90,9 +90,21 @@ export default function PdfInspector() {
               </p>
             </div>
             <InfoRow icon={FileText} label="File name" value={fileName} />
-            <InfoRow icon={HardDrive} label="File size" value={formatFileSize(info.fileSize)} />
-            <InfoRow icon={FileCode2} label="PDF version" value={info.version} />
-            <InfoRow icon={BookOpen} label="Page count" value={info.pageCount} />
+            <InfoRow
+              icon={HardDrive}
+              label="File size"
+              value={<span className="tabular-nums">{formatFileSize(info.fileSize)}</span>}
+            />
+            <InfoRow
+              icon={FileCode2}
+              label="PDF version"
+              value={<span className="tabular-nums">{info.version}</span>}
+            />
+            <InfoRow
+              icon={BookOpen}
+              label="Page count"
+              value={<span className="tabular-nums">{info.pageCount}</span>}
+            />
             <InfoRow
               icon={info.isEncrypted ? Lock : LockOpen}
               label="Encrypted"
@@ -141,9 +153,9 @@ export default function PdfInspector() {
                       <FileText className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />
                       Page {i + 1}
                     </span>
-                    <span className="text-sm text-slate-800 dark:text-dark-text font-mono">
+                    <span className="text-sm text-slate-800 dark:text-dark-text tabular-nums">
                       {dim.width.toFixed(0)} × {dim.height.toFixed(0)} pt
-                      <span className="text-slate-400 dark:text-dark-text-muted ml-2 text-xs">
+                      <span className="text-slate-500 dark:text-dark-text-muted ml-2 text-xs">
                         ({(dim.width * PT_TO_MM).toFixed(1)} × {(dim.height * PT_TO_MM).toFixed(1)}{" "}
                         mm)
                       </span>

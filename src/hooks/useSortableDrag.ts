@@ -25,6 +25,13 @@ export function useSortableDrag(onMove: (fromIndex: number, toSlot: number) => v
   const [dragOverSlot, setDragOverSlot] = useState<number | null>(null);
   /** Current touch position — non-null only during an active touch drag. */
   const [touchPos, setTouchPos] = useState<{ x: number; y: number } | null>(null);
+  /**
+   * Polite-live announcement of the last keyboard reorder, e.g.
+   * "Page 3 moved to position 5 of 10." Render it in a visually-hidden
+   * `aria-live="polite"` node so screen-reader users hear the result of an
+   * arrow-key move (drag-and-drop alone has no keyboard path — WCAG 2.1.1).
+   */
+  const [liveMessage, setLiveMessage] = useState("");
 
   // Refs so the document-level listeners don't need to be re-registered
   const touchStartSlot = useRef<number | null>(null);
@@ -73,6 +80,46 @@ export function useSortableDrag(onMove: (fromIndex: number, toSlot: number) => v
       ...getTouchHandlers(slot),
     }),
     [getTouchHandlers],
+  );
+
+  /**
+   * Keyboard reorder props for a draggable item — the accessible counterpart
+   * to the pointer drag. Spread onto a self-contained item card (or a dedicated
+   * grip button when the item nests its own interactive controls):
+   *   {...getKeyboardProps(slot, total, `Page ${n}`)}
+   *
+   * Arrow Left/Up move the item one slot earlier, Arrow Right/Down one slot
+   * later, Home to the start, End to the end — each via the same `onMove(from,
+   * toSlot)` contract the pointer path uses. The new position is announced via
+   * `liveMessage`. `label` names the item (its identity, not its position).
+   */
+  const getKeyboardProps = useCallback(
+    (slot: number, total: number, label: string) => ({
+      tabIndex: 0,
+      role: "button" as const,
+      "aria-label": `${label}. Position ${slot + 1} of ${total}. Use arrow keys to move.`,
+      onKeyDown(e: React.KeyboardEvent) {
+        let toSlot: number | null = null;
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+          if (slot > 0) toSlot = slot - 1;
+        } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+          if (slot < total - 1) toSlot = slot + 2;
+        } else if (e.key === "Home") {
+          if (slot > 0) toSlot = 0;
+        } else if (e.key === "End") {
+          if (slot < total - 1) toSlot = total;
+        } else {
+          return;
+        }
+        e.preventDefault();
+        if (toSlot === null) return;
+        onMoveRef.current(slot, toSlot);
+        // Convert the insertion slot to the resulting 1-based position.
+        const newPos = toSlot === 0 ? 1 : toSlot > slot ? toSlot : toSlot + 1;
+        setLiveMessage(`${label} moved to position ${newPos} of ${total}.`);
+      },
+    }),
+    [],
   );
 
   useEffect(() => {
@@ -156,9 +203,11 @@ export function useSortableDrag(onMove: (fromIndex: number, toSlot: number) => v
     dragIndex,
     dragOverSlot,
     touchPos,
+    liveMessage,
     setDragIndex,
     setDragOverSlot,
     getItemProps,
+    getKeyboardProps,
     getTouchHandlers,
   };
 }

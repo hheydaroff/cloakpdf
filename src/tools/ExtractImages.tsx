@@ -209,6 +209,10 @@ async function extractImagesFromPdf(
 
     page.cleanup();
     onProgress?.(p, pdf.numPages);
+    // Yield so the progress counter repaints between pages instead of the
+    // whole extraction pinning the main thread (matches the compress/grayscale
+    // per-page-yield pattern in pdf-operations.ts).
+    await new Promise((r) => setTimeout(r, 0));
   }
 
   // Release canvas memory
@@ -389,8 +393,8 @@ export default function ExtractImages() {
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
                       <span className="text-xs text-white font-medium block">Page {img.page}</span>
-                      <span className="text-xs text-white/70">
-                        {img.width} x {img.height}
+                      <span className="text-xs text-white/70 tabular-nums">
+                        {img.width} × {img.height}
                       </span>
                     </div>
                   </button>
@@ -398,9 +402,9 @@ export default function ExtractImages() {
               </div>
 
               {selected.size > 0 && (
-                <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4">
+                <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm text-slate-600 dark:text-dark-text-muted">
+                    <div className="text-sm text-slate-600 dark:text-dark-text-muted tabular-nums">
                       <span className="font-medium text-slate-800 dark:text-dark-text">
                         {selected.size}
                       </span>{" "}

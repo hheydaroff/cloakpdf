@@ -494,9 +494,14 @@ export default function DigitalSignature() {
             </h3>
 
             {/* Tabs */}
-            <div className="flex rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden">
+            <div
+              role="group"
+              aria-label="Certificate source"
+              className="flex rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden"
+            >
               <button
                 type="button"
+                aria-pressed={certSource === "upload"}
                 onClick={() => {
                   setCertSource("upload");
                   setCertFile(null);
@@ -519,6 +524,7 @@ export default function DigitalSignature() {
               </button>
               <button
                 type="button"
+                aria-pressed={certSource === "generate"}
                 onClick={() => {
                   setCertSource("generate");
                   setCertFile(null);
@@ -580,7 +586,7 @@ export default function DigitalSignature() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-dark-text-muted hover:text-slate-600 dark:hover:text-dark-text transition-colors"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-dark-text-muted hover:text-slate-600 dark:hover:text-dark-text transition-colors"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -593,7 +599,7 @@ export default function DigitalSignature() {
                     type="button"
                     onClick={handleLoadCert}
                     disabled={certLoading || !certPassword}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50"
                   >
                     {certLoading ? (
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -641,19 +647,31 @@ export default function DigitalSignature() {
                 </div>
 
                 {!certInfo && (
-                  <button
-                    type="button"
-                    onClick={handleGenerateCert}
-                    disabled={certLoading || !commonName.trim()}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {certLoading ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <KeyRound className="w-4 h-4" />
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleGenerateCert}
+                      disabled={certLoading || !commonName.trim()}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50"
+                    >
+                      {certLoading ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <KeyRound className="w-4 h-4" />
+                      )}
+                      {certLoading ? "Generating…" : "Generate Certificate"}
+                    </button>
+                    {certLoading && (
+                      <p
+                        role="status"
+                        aria-live="polite"
+                        className="mt-2 text-xs text-slate-500 dark:text-dark-text-muted"
+                      >
+                        Generating a 2048-bit RSA key — this can take a few seconds and may briefly
+                        freeze the page.
+                      </p>
                     )}
-                    {certLoading ? "Generating…" : "Generate Certificate"}
-                  </button>
+                  </>
                 )}
               </div>
             )}

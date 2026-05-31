@@ -367,20 +367,52 @@ export async function reorderPages(file: File, newOrder: number[]): Promise<Uint
 }
 
 /**
- * Convert one or more image files (PNG / JPEG) into a single PDF document.
+ * Decode an image the browser can render but pdf-lib can't embed natively
+ * (e.g. WebP) into PNG bytes via an off-screen canvas, so it can be passed to
+ * `embedPng`. Prefers `OffscreenCanvas`; falls back to a DOM canvas.
+ */
+async function decodeImageToPngBytes(file: File): Promise<Uint8Array> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    if (typeof OffscreenCanvas !== "undefined") {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error(`Could not decode image "${file.name}".`);
+      ctx.drawImage(bitmap, 0, 0);
+      const blob = await canvas.convertToBlob({ type: "image/png" });
+      return new Uint8Array(await blob.arrayBuffer());
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error(`Could not decode image "${file.name}".`);
+    ctx.drawImage(bitmap, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error(`Could not encode image "${file.name}" as PNG.`);
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * Convert one or more image files (PNG / JPEG / WebP) into a single PDF.
  *
  * Each image is placed on its own page. When `pageSize` is "a4" or "letter",
  * the image is scaled to fit within the standard page dimensions while
  * preserving its aspect ratio and centred on the page. When "fit" is
  * selected, the page dimensions match the image exactly.
  *
- * @param images - Array of image File objects (PNG or JPEG).
+ * @param images - Array of image File objects (PNG, JPEG, or WebP).
  * @param pageSize - Target page size: "a4" (595×842pt), "letter" (612×792pt), or "fit".
+ * @param onProgress - Optional callback invoked with (completed, total) after each image.
  * @returns PDF bytes containing all images, one per page.
  */
 export async function imagesToPdf(
   images: File[],
   pageSize: "a4" | "letter" | "fit" = "a4",
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
 
@@ -389,17 +421,22 @@ export async function imagesToPdf(
     letter: [612, 792],
   };
 
-  for (const imageFile of images) {
-    const imageBytes = await imageFile.arrayBuffer();
-    const uint8 = new Uint8Array(imageBytes);
+  for (let i = 0; i < images.length; i++) {
+    const imageFile = images[i];
+    const uint8 = new Uint8Array(await imageFile.arrayBuffer());
 
-    if (!["image/png", "image/jpeg", "image/jpg"].includes(imageFile.type)) {
-      throw new Error(
-        `Unsupported image type "${imageFile.type}" (${imageFile.name}). Only PNG and JPEG images are supported.`,
-      );
+    // pdf-lib embeds PNG and JPEG directly. WebP (and any other format the
+    // dropzone accepts) isn't natively embeddable, so decode it to PNG via a
+    // canvas first — the tool advertises WebP, so honour it instead of
+    // throwing at Create-PDF time.
+    let image: Awaited<ReturnType<typeof pdf.embedPng>>;
+    if (imageFile.type === "image/png") {
+      image = await pdf.embedPng(uint8);
+    } else if (imageFile.type === "image/jpeg" || imageFile.type === "image/jpg") {
+      image = await pdf.embedJpg(uint8);
+    } else {
+      image = await pdf.embedPng(await decodeImageToPngBytes(imageFile));
     }
-    const image =
-      imageFile.type === "image/png" ? await pdf.embedPng(uint8) : await pdf.embedJpg(uint8);
 
     let pageWidth: number;
     let pageHeight: number;
@@ -424,6 +461,10 @@ export async function imagesToPdf(
       width: scaledWidth,
       height: scaledHeight,
     });
+
+    onProgress?.(i + 1, images.length);
+    // Yield so the main thread can paint progress between (often multi-MB) images.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   return pdf.save();
@@ -1459,14 +1500,36 @@ export async function addHeaderFooter(
 }
 
 /**
+ * Remap edge margins expressed against the *displayed* (rotated) page into the
+ * page's unrotated user space, so a crop box set with `setCropBox` trims the
+ * edge the user actually sees in the preview. `angle` is the page's `/Rotate`
+ * (clockwise degrees). Without this, cropping a 90/270 page trims the wrong
+ * side because the preview applies `/Rotate` but the crop box does not.
+ */
+function rotateCropMargins(m: CropMargins, angle: number): CropMargins {
+  switch (((angle % 360) + 360) % 360) {
+    case 90:
+      return { left: m.top, right: m.bottom, top: m.right, bottom: m.left };
+    case 180:
+      return { left: m.right, right: m.left, top: m.bottom, bottom: m.top };
+    case 270:
+      return { left: m.bottom, right: m.top, top: m.left, bottom: m.right };
+    default:
+      return m;
+  }
+}
+
+/**
  * Crop pages by setting a crop box that hides the specified margins.
  *
  * The crop box is a non-destructive trim — the hidden content remains in the
  * file but won't be rendered or printed. At least one target page must have
- * positive remaining dimensions for the operation to succeed.
+ * positive remaining dimensions for the operation to succeed. Margins are
+ * interpreted against the displayed (rotated) page and remapped per page so
+ * rotated pages crop the edge the user selected, not a transposed one.
  *
  * @param file - The source PDF file.
- * @param margins - Margin values in PDF points to hide on each edge.
+ * @param margins - Margin values in PDF points to hide on each displayed edge.
  * @param pageIndices - Optional 0-based indices to crop; defaults to all pages.
  * @returns New PDF bytes with crop boxes applied.
  */
@@ -1482,10 +1545,11 @@ export async function cropPages(
 
   for (const page of targets) {
     const { width, height } = page.getSize();
-    const x = margins.left;
-    const y = margins.bottom;
-    const w = width - margins.left - margins.right;
-    const h = height - margins.top - margins.bottom;
+    const m = rotateCropMargins(margins, page.getRotation().angle);
+    const x = m.left;
+    const y = m.bottom;
+    const w = width - m.left - m.right;
+    const h = height - m.top - m.bottom;
     if (w > 0 && h > 0) {
       page.setCropBox(x, y, w, h);
     }
@@ -1657,6 +1721,13 @@ export async function flattenPdf(file: File): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await PDFDocument.load(arrayBuffer);
   pdf.getForm().flatten();
+  // flatten() bakes form-field widgets into page content and drops them from
+  // each page's /Annots. Remove any remaining annotations — sticky-note
+  // comments, highlights, text markup, links — so the output truly carries no
+  // annotation layer, which is what "removes annotations" promises.
+  for (const page of pdf.getPages()) {
+    page.node.delete(PDFName.of("Annots"));
+  }
   return pdf.save();
 }
 
@@ -1698,6 +1769,34 @@ export async function extractPages(file: File, pageIndices: number[]): Promise<U
     result.addPage(page);
   }
   return result.save();
+}
+
+/**
+ * Split a PDF into multiple parts in a single pass.
+ *
+ * Parses the source document exactly once, then copies the page ranges for
+ * each part — equivalent to calling {@link extractPages} per part but without
+ * re-reading and re-parsing the whole source for every output (an N-part
+ * split previously parsed the source N times).
+ *
+ * @param file - The source PDF.
+ * @param parts - One array of 0-based page indices per output part, in order.
+ * @returns One PDF (as bytes) per part, in the same order as `parts`.
+ */
+export async function splitPdfIntoParts(file: File, parts: number[][]): Promise<Uint8Array[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const source = await PDFDocument.load(arrayBuffer);
+  const pageCount = source.getPageCount();
+  const out: Uint8Array[] = [];
+  for (const indices of parts) {
+    const valid = indices.filter((i) => i >= 0 && i < pageCount);
+    if (valid.length === 0) throw new Error("No valid pages selected.");
+    const result = await PDFDocument.create();
+    const copied = await result.copyPages(source, valid);
+    for (const page of copied) result.addPage(page);
+    out.push(await result.save());
+  }
+  return out;
 }
 
 /** Encode a canvas to image bytes via `toBlob` (async, memory-friendly). */

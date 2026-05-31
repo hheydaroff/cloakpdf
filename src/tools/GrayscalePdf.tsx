@@ -145,10 +145,10 @@ export default function GrayscalePdf() {
             <div className="space-y-4">
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-6 text-center">
                 <p className="text-sm text-slate-500 dark:text-dark-text-muted">Output size</p>
-                <p className="text-2xl font-bold text-slate-800 dark:text-dark-text mt-1">
+                <p className="text-2xl font-semibold tabular-nums text-slate-800 dark:text-dark-text mt-1">
                   {formatFileSize(result.length)}
                 </p>
-                <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-2">
+                <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-2">
                   All colour has been removed — the PDF is ready to download
                 </p>
               </div>

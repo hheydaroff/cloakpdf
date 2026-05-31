@@ -6,6 +6,7 @@
  * All items are draggable so the user can reposition copies, then download.
  */
 
+import { X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -73,6 +74,10 @@ export default function DuplicatePage() {
       next.splice(afterSlot + 1, 0, { type: "copy", sourceIndex: pageIndex, id: nextCopyId() });
       return next;
     });
+  }, []);
+
+  const handleRemoveCopy = useCallback((id: string) => {
+    setItems((prev) => prev.filter((it) => !(it.type === "copy" && it.id === id)));
   }, []);
 
   const handleReset = useCallback(() => {
@@ -149,6 +154,7 @@ export default function DuplicatePage() {
                       return (
                         <div
                           key={item.id}
+                          aria-roledescription="draggable copy"
                           {...drag.getItemProps(slot)}
                           className={`shrink-0 p-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
                             isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"
@@ -179,6 +185,19 @@ export default function DuplicatePage() {
                             >
                               Copy
                             </div>
+                            <button
+                              type="button"
+                              draggable={false}
+                              aria-label={`Remove copy of page ${item.sourceIndex + 1}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveCopy(item.id);
+                              }}
+                              onDragStart={(e) => e.preventDefault()}
+                              className="absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full flex items-center justify-center bg-white dark:bg-dark-surface text-slate-500 dark:text-dark-text-muted border border-slate-200 dark:border-dark-border shadow-md z-10 hover:text-red-600 hover:border-red-300 dark:hover:text-red-400 dark:hover:border-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg"
+                            >
+                              <X className="w-3 h-3" strokeWidth={2.5} />
+                            </button>
                           </div>
                           <span className="text-xs font-medium text-primary-500">
                             Copy of {item.sourceIndex + 1}
@@ -192,9 +211,19 @@ export default function DuplicatePage() {
                     return (
                       <div
                         key={`page-${item.index}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Duplicate page ${item.index + 1}`}
+                        aria-roledescription={hasCopies ? "draggable page" : undefined}
                         draggable={hasCopies}
                         onClick={() => {
                           if (!isDragging) handleDuplicatePage(item.index, slot);
+                        }}
+                        onKeyDown={(e) => {
+                          if ((e.key === "Enter" || e.key === " ") && !isDragging) {
+                            e.preventDefault();
+                            handleDuplicatePage(item.index, slot);
+                          }
                         }}
                         onDragStart={(e) => {
                           if (!hasCopies) return;
@@ -206,7 +235,7 @@ export default function DuplicatePage() {
                           drag.setDragOverSlot(null);
                         }}
                         {...(hasCopies ? drag.getTouchHandlers(slot) : {})}
-                        className={`shrink-0 p-2 flex flex-col items-center gap-1.5 select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 cursor-pointer ${
+                        className={`shrink-0 p-2 flex flex-col items-center gap-1.5 select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                           hasCopies ? "active:cursor-grabbing" : "hover:scale-105"
                         } ${isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"}`}
                       >
@@ -276,12 +305,16 @@ export default function DuplicatePage() {
                   }}
                 />
 
-                {hasCopies && (
-                  <p className="text-xs text-primary-600 dark:text-primary-400 font-medium">
-                    {items.filter((it) => it.type === "copy").length} copy(ies) added — click below
-                    to apply
-                  </p>
-                )}
+                {hasCopies &&
+                  (() => {
+                    const copyCount = items.filter((it) => it.type === "copy").length;
+                    return (
+                      <p className="text-xs text-primary-600 dark:text-primary-400 font-medium">
+                        <span className="tabular-nums">{copyCount}</span>{" "}
+                        {copyCount === 1 ? "copy" : "copies"} added — click below to apply
+                      </p>
+                    );
+                  })()}
               </div>
 
               {hasCopies && (

@@ -46,12 +46,14 @@ export function PageThumbnail({
         <img
           src={src}
           alt={`Page ${pageNumber}`}
+          loading="lazy"
+          decoding="async"
           className="max-w-full max-h-full object-contain transition-transform"
           style={{ transform: `rotate(${rotation}deg)` }}
         />
       </div>
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent px-2 py-1.5">
-        <span className="text-xs text-white font-medium">Page {pageNumber}</span>
+        <span className="text-xs text-white font-medium tabular-nums">Page {pageNumber}</span>
       </div>
       {overlay && (
         <div className="absolute inset-0 flex items-center justify-center">{overlay}</div>

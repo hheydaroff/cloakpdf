@@ -20,7 +20,7 @@ import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { downloadBlob, downloadPdf, pdfFilename } from "../utils/file-helpers.ts";
-import { extractPages } from "../utils/pdf-operations.ts";
+import { splitPdfIntoParts } from "../utils/pdf-operations.ts";
 import { renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 
 export default function SplitPdf() {
@@ -99,18 +99,18 @@ export default function SplitPdf() {
     if (!pdf.file || parts.length === 0) return;
     const file = pdf.file;
     await task.run(async () => {
-      if (parts.length === 1) {
-        const result = await extractPages(file, parts[0]);
-        downloadPdf(result, pdfFilename(file, "_split"));
+      // Parse the source once, then carve every part from the single load.
+      const results = await splitPdfIntoParts(file, parts);
+      if (results.length === 1) {
+        downloadPdf(results[0], pdfFilename(file, "_split"));
       } else {
         const JSZip = (await import("jszip")).default;
         const zip = new JSZip();
-        const padLen = String(parts.length).length;
+        const padLen = String(results.length).length;
         const baseName = file.name.replace(/\.pdf$/i, "");
-        for (let i = 0; i < parts.length; i++) {
-          const result = await extractPages(file, parts[i]);
+        for (let i = 0; i < results.length; i++) {
           const padded = String(i + 1).padStart(padLen, "0");
-          zip.file(`${baseName}_part${padded}.pdf`, result);
+          zip.file(`${baseName}_part${padded}.pdf`, results[i]);
         }
         const zipBlob = await zip.generateAsync({ type: "blob" });
         downloadBlob(zipBlob, `${baseName}_split.zip`);
@@ -155,7 +155,7 @@ export default function SplitPdf() {
               <button
                 type="button"
                 onClick={splitEveryPage}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <Scissors className="w-3.5 h-3.5" />
                 Every page
@@ -174,7 +174,7 @@ export default function SplitPdf() {
                 <button
                   type="button"
                   onClick={() => splitEveryNPages(everyN)}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-sm border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 >
                   pages
                 </button>
@@ -183,7 +183,7 @@ export default function SplitPdf() {
                 <button
                   type="button"
                   onClick={clearSplits}
-                  className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors ml-auto"
+                  className="inline-flex items-center gap-1.5 rounded-lg text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors ml-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 >
                   <X className="w-4 h-4" />
                   Clear splits
@@ -196,7 +196,7 @@ export default function SplitPdf() {
             <LoadingSpinner />
           ) : (
             <>
-              <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+              <p className="text-xs text-slate-500 dark:text-dark-text-muted">
                 Click between pages to add or remove split points
               </p>
               <div className="flex flex-wrap gap-x-1 gap-y-3 items-start">
@@ -209,7 +209,7 @@ export default function SplitPdf() {
                       <button
                         type="button"
                         onClick={() => toggleSplit(i)}
-                        className={`flex flex-col items-center justify-center self-stretch mx-0.5 w-6 rounded-lg transition-colors group ${
+                        className={`flex flex-col items-center justify-center self-stretch mx-0.5 w-6 rounded-lg transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                           splitPoints.has(i)
                             ? "bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 border-dashed"
                             : "hover:bg-slate-100 dark:hover:bg-dark-surface-alt border border-transparent"

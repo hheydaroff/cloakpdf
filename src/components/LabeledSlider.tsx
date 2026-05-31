@@ -40,6 +40,7 @@ export function LabeledSlider({
         max={max}
         step={step}
         value={value}
+        aria-valuetext={displayValue}
         onChange={(e) => onChange(Number(e.target.value))}
         className={`w-full ${accent} cursor-pointer`}
       />
