@@ -600,7 +600,14 @@ export default function AddSignature() {
               ) : thumbnails[selectedPage] ? (
                 <div
                   ref={previewRef}
-                  className="relative aspect-3/4 bg-white dark:bg-dark-surface rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden"
+                  className="relative bg-white dark:bg-dark-surface rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden"
+                  style={
+                    pageDims[selectedPage]
+                      ? {
+                          aspectRatio: `${pageDims[selectedPage].width} / ${pageDims[selectedPage].height}`,
+                        }
+                      : { aspectRatio: "3 / 4" }
+                  }
                 >
                   <img
                     src={thumbnails[selectedPage]}

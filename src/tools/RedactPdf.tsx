@@ -584,14 +584,24 @@ export default function RedactPdf() {
                 <canvas
                   ref={canvasRef}
                   role="application"
-                  aria-label={`Redaction drawing surface for page ${selectedPage + 1} — drag with a pointer to cover sensitive content`}
+                  tabIndex={0}
+                  aria-label={`Redaction drawing surface for page ${selectedPage + 1} — drag with a pointer to cover sensitive content, or press Delete to clear this page's boxes`}
                   aria-describedby="redact-canvas-hint"
-                  className="absolute inset-0 w-full h-full touch-none"
+                  className="absolute inset-0 w-full h-full touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-inset"
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
                   onPointerCancel={cancelDrag}
                   onPointerLeave={cancelDrag}
+                  onKeyDown={(e) => {
+                    // Keyboard users can't draw boxes (pointer-only), but they can
+                    // remove them: Delete/Backspace clears the focused page's boxes,
+                    // matching the "Clear page" button.
+                    if ((e.key === "Delete" || e.key === "Backspace") && pageRects.length > 0) {
+                      e.preventDefault();
+                      clearPageRects();
+                    }
+                  }}
                 />
               </div>
               <p
@@ -599,7 +609,8 @@ export default function RedactPdf() {
                 className="text-xs text-slate-500 dark:text-dark-text-muted text-center"
               >
                 Drag on the page to draw a redaction box. Manual drawing requires a pointer; use
-                Auto-detect to add boxes for sensitive data with the keyboard.
+                Auto-detect to add boxes for sensitive data with the keyboard, and press Delete
+                while the page is focused to clear its boxes.
               </p>
             </div>
           </div>

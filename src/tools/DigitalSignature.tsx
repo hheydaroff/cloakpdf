@@ -45,7 +45,7 @@ import {
   type CertificateInfo,
   type ExistingSignature,
   detectSignatures,
-  generateSelfSignedCert,
+  generateSelfSignedCertAsync,
   parsePkcs12,
   signPdf,
 } from "../utils/pdf-signer.ts";
@@ -234,7 +234,7 @@ export default function DigitalSignature() {
     }
   }, [certFile, certPassword]);
 
-  const handleGenerateCert = useCallback(() => {
+  const handleGenerateCert = useCallback(async () => {
     if (!commonName.trim()) {
       setCertError("Please enter your name for the certificate.");
       return;
@@ -243,20 +243,19 @@ export default function DigitalSignature() {
     setCertError(null);
     setCertInfo(null);
 
-    // Use setTimeout to avoid blocking the UI during key generation
-    setTimeout(() => {
-      try {
-        const result = generateSelfSignedCert(commonName.trim());
-        setPrivateKey(result.key);
-        setCertificate(result.cert);
-        setCertChain([]);
-        setCertInfo(result.info);
-      } catch (err) {
-        setCertError(err instanceof Error ? err.message : "Failed to generate certificate.");
-      } finally {
-        setCertLoading(false);
-      }
-    }, 50);
+    // Key generation runs in a Web Worker (generateSelfSignedCertAsync) so the
+    // multi-second 2048-bit RSA keygen no longer freezes the UI.
+    try {
+      const result = await generateSelfSignedCertAsync(commonName.trim());
+      setPrivateKey(result.key);
+      setCertificate(result.cert);
+      setCertChain([]);
+      setCertInfo(result.info);
+    } catch (err) {
+      setCertError(err instanceof Error ? err.message : "Failed to generate certificate.");
+    } finally {
+      setCertLoading(false);
+    }
   }, [commonName]);
 
   const handleSign = useCallback(async () => {
@@ -667,8 +666,8 @@ export default function DigitalSignature() {
                         aria-live="polite"
                         className="mt-2 text-xs text-slate-500 dark:text-dark-text-muted"
                       >
-                        Generating a 2048-bit RSA key — this can take a few seconds and may briefly
-                        freeze the page.
+                        Generating a 2048-bit RSA key in the background — this can take a few
+                        seconds. The page stays responsive.
                       </p>
                     )}
                   </>

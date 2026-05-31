@@ -156,6 +156,11 @@ export default function DuplicatePage() {
                           key={item.id}
                           aria-roledescription="draggable copy"
                           {...drag.getItemProps(slot)}
+                          {...drag.getKeyboardProps(
+                            slot,
+                            items.length,
+                            `Copy of page ${item.sourceIndex + 1}`,
+                          )}
                           className={`shrink-0 p-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
                             isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"
                           }`}
@@ -208,12 +213,21 @@ export default function DuplicatePage() {
 
                     // Original page card — conditionally draggable (only after copies exist).
                     // Uses getTouchHandlers directly instead of getItemProps for selective control.
+                    // Once copies exist the card is part of the reorderable list, so it also
+                    // gets arrow-key reordering (merged below) while keeping Enter/Space to add a copy.
+                    const reorderKeys = hasCopies
+                      ? drag.getKeyboardProps(slot, items.length, `Page ${item.index + 1}`)
+                      : null;
                     return (
                       <div
                         key={`page-${item.index}`}
                         role="button"
                         tabIndex={0}
-                        aria-label={`Duplicate page ${item.index + 1}`}
+                        aria-label={
+                          hasCopies
+                            ? `Page ${item.index + 1}. Press Enter to duplicate. Position ${slot + 1} of ${items.length}, arrow keys to move.`
+                            : `Duplicate page ${item.index + 1}`
+                        }
                         aria-roledescription={hasCopies ? "draggable page" : undefined}
                         draggable={hasCopies}
                         onClick={() => {
@@ -223,7 +237,10 @@ export default function DuplicatePage() {
                           if ((e.key === "Enter" || e.key === " ") && !isDragging) {
                             e.preventDefault();
                             handleDuplicatePage(item.index, slot);
+                            return;
                           }
+                          // Arrow/Home/End reorder when the card is part of the list.
+                          reorderKeys?.onKeyDown(e);
                         }}
                         onDragStart={(e) => {
                           if (!hasCopies) return;
@@ -304,6 +321,10 @@ export default function DuplicatePage() {
                     );
                   }}
                 />
+
+                <div aria-live="polite" className="sr-only">
+                  {drag.liveMessage}
+                </div>
 
                 {hasCopies &&
                   (() => {

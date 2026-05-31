@@ -20,6 +20,7 @@ import {
   PDFNumber,
 } from "@pdfme/pdf-lib";
 import forge from "node-forge";
+import { SELF_SIGNED_ORG, buildSelfSignedCert } from "./self-signed-cert.ts";
 
 /** Options passed to the signing function. */
 export interface SigningOptions {
@@ -330,50 +331,105 @@ export function parsePkcs12(
 }
 
 /**
- * Generate a self-signed certificate for personal/testing use.
+ * Generate a self-signed certificate for personal/testing use (synchronous).
+ *
+ * The 2048-bit RSA key generation blocks the main thread for a few seconds.
+ * Prefer {@link generateSelfSignedCertAsync} in UI contexts — this synchronous
+ * form remains as the worker-unavailable fallback and for non-UI callers.
  */
 export function generateSelfSignedCert(commonName: string): {
   key: forge.pki.PrivateKey;
   cert: forge.pki.Certificate;
   info: CertificateInfo;
 } {
-  const keys = forge.pki.rsa.generateKeyPair(2048);
-  const cert = forge.pki.createCertificate();
-
-  cert.publicKey = keys.publicKey;
-  cert.serialNumber = "01" + forge.util.bytesToHex(forge.random.getBytesSync(8));
-  cert.validity.notBefore = new Date();
-  cert.validity.notAfter = new Date();
-  cert.validity.notAfter.setFullYear(cert.validity.notAfter.getFullYear() + 1);
-
-  const attrs: forge.pki.CertificateField[] = [
-    { name: "commonName", value: commonName },
-    { name: "organizationName", value: "Self-Signed (CloakPDF)" },
-  ];
-
-  cert.setSubject(attrs);
-  cert.setIssuer(attrs);
-
-  cert.setExtensions([
-    { name: "basicConstraints", cA: false },
-    {
-      name: "keyUsage",
-      digitalSignature: true,
-      nonRepudiation: true,
-    },
-  ]);
-
-  cert.sign(keys.privateKey, forge.md.sha256.create());
-
+  const { key, cert } = buildSelfSignedCert(commonName);
   return {
-    key: keys.privateKey,
+    key,
     cert,
     info: {
       commonName,
-      organisation: "Self-Signed (CloakPDF)",
+      organisation: SELF_SIGNED_ORG,
       validFrom: cert.validity.notBefore,
       validTo: cert.validity.notAfter,
       issuer: commonName,
+    },
+  };
+}
+
+/**
+ * Run the crypto worker to generate a key pair + certificate off the main
+ * thread, returning the result as PEM strings. Rejects (so the caller can fall
+ * back) if the worker can't be created or errors out.
+ */
+function runCryptoWorker(commonName: string): Promise<{ keyPem: string; certPem: string }> {
+  return new Promise((resolve, reject) => {
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL("../workers/crypto.worker.ts", import.meta.url), {
+        type: "module",
+      });
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("Worker unavailable."));
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      reject(new Error("Certificate generation timed out."));
+    }, 30000);
+
+    worker.onmessage = (e: MessageEvent) => {
+      clearTimeout(timeout);
+      worker.terminate();
+      const data = e.data;
+      if (data?.type === "cert") resolve({ keyPem: data.keyPem, certPem: data.certPem });
+      else reject(new Error(data?.message ?? "Certificate generation failed."));
+    };
+    worker.onerror = (err: ErrorEvent) => {
+      clearTimeout(timeout);
+      worker.terminate();
+      reject(new Error(err.message || "Worker error during certificate generation."));
+    };
+
+    worker.postMessage({ type: "generateCert", commonName });
+  });
+}
+
+/**
+ * Generate a self-signed certificate off the main thread.
+ *
+ * Offloads the multi-second 2048-bit RSA key generation to a Web Worker, then
+ * losslessly reconstructs the forge key + certificate from the returned PEM
+ * strings — the reconstructed objects sign PKCS#7 identically to freshly
+ * generated ones (pinned by tests/unit/self-signed-cert.test.ts). If the worker
+ * can't run (e.g. blocked by CSP), it transparently falls back to the
+ * synchronous {@link generateSelfSignedCert} so cert generation still works —
+ * it just briefly freezes the UI in that rare case.
+ */
+export async function generateSelfSignedCertAsync(commonName: string): Promise<{
+  key: forge.pki.PrivateKey;
+  cert: forge.pki.Certificate;
+  info: CertificateInfo;
+}> {
+  let keyPem: string;
+  let certPem: string;
+  try {
+    ({ keyPem, certPem } = await runCryptoWorker(commonName));
+  } catch {
+    return generateSelfSignedCert(commonName);
+  }
+
+  const key = forge.pki.privateKeyFromPem(keyPem);
+  const cert = forge.pki.certificateFromPem(certPem);
+  return {
+    key,
+    cert,
+    info: {
+      commonName: cert.subject.getField("CN")?.value ?? commonName,
+      organisation: cert.subject.getField("O")?.value ?? SELF_SIGNED_ORG,
+      validFrom: cert.validity.notBefore,
+      validTo: cert.validity.notAfter,
+      issuer: cert.issuer.getField("CN")?.value ?? commonName,
     },
   };
 }
