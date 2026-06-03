@@ -170,7 +170,7 @@ export default function RemoveBlankPages() {
                     onClick={() => togglePage(i)}
                     overlay={
                       selectedPages.has(i) ? (
-                        <div className="bg-primary-600/70 inset-0 absolute flex items-center justify-center">
+                        <div className="bg-red-500/70 inset-0 absolute flex items-center justify-center">
                           <Trash2 className="w-8 h-8 text-white" />
                         </div>
                       ) : null
@@ -191,11 +191,12 @@ export default function RemoveBlankPages() {
                   processing={task.processing}
                   label={`Remove ${selectedPages.size} Page${selectedPages.size !== 1 ? "s" : ""} & ${output.deliveryWord}`}
                   processingLabel="Removing…"
+                  color="bg-red-600 hover:bg-red-700"
                 />
               )}
 
               {selectedPages.size >= pageCount && pageCount > 0 && (
-                <p className="text-center text-sm text-red-500">
+                <p className="text-center text-sm text-red-500 dark:text-red-400">
                   Cannot remove all pages. Deselect at least one page.
                 </p>
               )}

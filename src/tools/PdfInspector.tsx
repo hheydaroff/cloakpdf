@@ -110,11 +110,11 @@ export default function PdfInspector() {
               label="Encrypted"
               value={
                 info.isEncrypted ? (
-                  <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                  <span className="inline-flex items-center gap-1 text-slate-800 dark:text-dark-text font-medium">
                     Yes
                   </span>
                 ) : (
-                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">No</span>
+                  <span className="text-slate-800 dark:text-dark-text font-medium">No</span>
                 )
               }
             />

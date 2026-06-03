@@ -16,6 +16,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
+import { ResetButton } from "../components/ResetButton.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
@@ -180,14 +181,12 @@ export default function SplitPdf() {
                 </button>
               </div>
               {splitPoints.size > 0 && (
-                <button
-                  type="button"
+                <ResetButton
                   onClick={clearSplits}
-                  className="inline-flex items-center gap-1.5 rounded-lg text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors ml-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                >
-                  <X className="w-4 h-4" />
-                  Clear splits
-                </button>
+                  icon={X}
+                  label="Clear splits"
+                  className="ml-auto"
+                />
               )}
             </div>
           )}
@@ -211,7 +210,7 @@ export default function SplitPdf() {
                         onClick={() => toggleSplit(i)}
                         className={`flex flex-col items-center justify-center self-stretch mx-0.5 w-6 rounded-lg transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                           splitPoints.has(i)
-                            ? "bg-red-50 dark:bg-red-900/30 border border-red-300 dark:border-red-700 border-dashed"
+                            ? "bg-primary-50 dark:bg-primary-900/30 border border-primary-300 dark:border-primary-700 border-dashed"
                             : "hover:bg-slate-100 dark:hover:bg-dark-surface-alt border border-transparent"
                         }`}
                         aria-label={
@@ -221,7 +220,7 @@ export default function SplitPdf() {
                         }
                       >
                         {splitPoints.has(i) ? (
-                          <Scissors className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />
+                          <Scissors className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
                         ) : (
                           <Minus className="w-3.5 h-3.5 text-slate-300 dark:text-dark-border group-hover:text-slate-500 dark:group-hover:text-dark-text-muted transition-colors" />
                         )}

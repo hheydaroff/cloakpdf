@@ -422,7 +422,7 @@ export default function StampPdf() {
                           type="button"
                           onClick={() => setSelectedStamp(stamp)}
                           aria-pressed={selectedStamp.id === stamp.id}
-                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 transition-[transform,opacity,color,background-color,border-color,box-shadow] hover:border-slate-300 dark:hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border bg-slate-100 dark:bg-dark-surface-alt text-slate-700 dark:text-dark-text transition-[transform,opacity,color,background-color,border-color,box-shadow] hover:border-slate-300 dark:hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                             selectedStamp.id === stamp.id
                               ? "border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800"
                               : "border-slate-200 dark:border-dark-border"

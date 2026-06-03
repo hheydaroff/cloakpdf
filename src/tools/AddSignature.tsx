@@ -14,6 +14,7 @@ import { Check, CheckSquare, Maximize2, Move, PenLine, Upload, X } from "lucide-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
+import { CheckboxField } from "../components/CheckboxField.tsx";
 import { ColorPicker, hexToRgb } from "../components/ColorPicker.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
@@ -451,17 +452,11 @@ export default function AddSignature() {
                   )}
 
                   {uploadedImageUrl && (
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={tintEnabled}
-                        onChange={(e) => setTintEnabled(e.target.checked)}
-                        className="accent-primary-600 w-4 h-4 rounded"
-                      />
-                      <span className="text-sm text-slate-700 dark:text-dark-text">
-                        Tint with selected colour
-                      </span>
-                    </label>
+                    <CheckboxField
+                      label="Tint with selected colour"
+                      checked={tintEnabled}
+                      onChange={setTintEnabled}
+                    />
                   )}
                 </div>
               )}
@@ -511,20 +506,14 @@ export default function AddSignature() {
 
               {thumbnails.length > 1 && (
                 <div className="space-y-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={applyToAllPages}
-                      onChange={(e) => {
-                        setApplyToAllPages(e.target.checked);
-                        if (e.target.checked) setSelectedPages(new Set());
-                      }}
-                      className="accent-primary-600 w-4 h-4 rounded"
-                    />
-                    <span className="text-sm font-medium text-slate-700 dark:text-dark-text">
-                      Apply to all pages at same position
-                    </span>
-                  </label>
+                  <CheckboxField
+                    label="Apply to all pages at same position"
+                    checked={applyToAllPages}
+                    onChange={(v) => {
+                      setApplyToAllPages(v);
+                      if (v) setSelectedPages(new Set());
+                    }}
+                  />
 
                   {!applyToAllPages && (
                     <div className="space-y-2">

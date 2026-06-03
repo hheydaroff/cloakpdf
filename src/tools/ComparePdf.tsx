@@ -14,6 +14,7 @@ import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { canvas as canvasColors, categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -411,20 +412,11 @@ export default function ComparePdf() {
             />
 
             {loading && progress && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted">
-                  <span>Comparing pages…</span>
-                  <span>
-                    {progress.done} / {progress.total}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200 dark:bg-dark-border rounded-full h-2">
-                  <div
-                    className="bg-primary-600 h-2 rounded-full transition-[width]"
-                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
-                  />
-                </div>
-              </div>
+              <ProgressBar
+                current={progress.done}
+                total={progress.total}
+                label="Comparing pages…"
+              />
             )}
           </>
         )}

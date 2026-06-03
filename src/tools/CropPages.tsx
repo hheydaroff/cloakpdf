@@ -482,7 +482,7 @@ export default function CropPages() {
                         margins.right > 0 ||
                         margins.bottom > 0 ||
                         margins.left > 0) && (
-                        <p className="text-sm text-red-500">
+                        <p className="text-sm text-red-500 dark:text-red-400">
                           Margins exceed page dimensions — reduce them.
                         </p>
                       )}
@@ -550,7 +550,9 @@ export default function CropPages() {
                         ))}
                       </div>
                       {selectedPages.size === 0 && (
-                        <p className="text-xs text-red-500">Select at least one page.</p>
+                        <p className="text-xs text-red-500 dark:text-red-400">
+                          Select at least one page.
+                        </p>
                       )}
                       {selectedPages.size > 0 && (
                         <p className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums">
@@ -573,7 +575,7 @@ export default function CropPages() {
                       type="button"
                       onClick={handleUncrop}
                       disabled={processing || (!applyToAll && selectedPages.size === 0)}
-                      className="w-full bg-slate-100 dark:bg-dark-surface text-slate-700 dark:text-dark-text py-3 px-6 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-dark-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-slate-200 dark:border-dark-border"
+                      className="w-full bg-slate-100 dark:bg-dark-surface text-slate-700 dark:text-dark-text py-3 px-6 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-dark-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-slate-200 dark:border-dark-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     >
                       {processing ? "Processing…" : `Remove Crop & ${output.deliveryWord}`}
                     </button>

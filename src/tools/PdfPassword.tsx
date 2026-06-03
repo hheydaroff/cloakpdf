@@ -376,7 +376,7 @@ export default function PdfPassword() {
             <div id="perm-panel" className="space-y-6">
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
                 <div className="px-4 py-2.5 bg-slate-50 dark:bg-dark-surface-alt rounded-t-xl">
-                  <p className="text-xs font-semibold text-slate-500 dark:text-dark-text-muted uppercase tracking-wide">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-dark-text-muted uppercase tracking-widest">
                     Allowed Operations
                   </p>
                 </div>
@@ -402,7 +402,7 @@ export default function PdfPassword() {
                       type="checkbox"
                       checked={permissions[key]}
                       onChange={() => togglePermission(key)}
-                      className="accent-primary-500 w-4 h-4 rounded shrink-0"
+                      className="accent-primary-600 w-4 h-4 rounded shrink-0"
                     />
                   </label>
                 ))}

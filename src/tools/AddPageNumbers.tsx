@@ -213,7 +213,7 @@ export default function AddPageNumbers() {
                       title={title}
                       aria-label={title}
                       aria-pressed={options.position === value}
-                      className={`h-10 rounded-lg text-base font-semibold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                      className={`h-10 rounded-lg text-base font-semibold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                         options.position === value
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300"
                           : "border-slate-200 dark:border-dark-border text-slate-400 dark:text-dark-text-muted hover:border-slate-300 dark:hover:border-slate-500 bg-white dark:bg-dark-surface"
@@ -239,7 +239,7 @@ export default function AddPageNumbers() {
                         key={f}
                         type="button"
                         onClick={() => setOpt("format", f)}
-                        className={`py-2 px-3 rounded-xl text-sm text-center border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                        className={`py-2 px-3 rounded-xl text-sm text-center border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                           options.format === f
                             ? "font-semibold border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 ring-1 ring-primary-300 dark:ring-primary-700"
                             : "font-medium border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-600 dark:text-dark-text-muted hover:border-slate-300 dark:hover:border-slate-500"

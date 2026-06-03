@@ -22,6 +22,7 @@ import { InfoCallout } from "../components/InfoCallout.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
+import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
@@ -382,7 +383,7 @@ export default function OcrPdf() {
                     aria-checked={language === lang.code}
                     onClick={() => setLanguage(lang.code)}
                     disabled={processing}
-                    className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-[transform,opacity,color,background-color,border-color,box-shadow] ${
+                    className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-[transform,opacity,color,background-color,border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                       language === lang.code
                         ? "bg-primary-600 text-white shadow-sm"
                         : "bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted border border-slate-200 dark:border-dark-border hover:bg-slate-200 dark:hover:bg-dark-border"
@@ -453,32 +454,16 @@ export default function OcrPdf() {
           {/* Controls: layout/plain toggle + page navigation */}
           <div className="flex items-center justify-between gap-3">
             {hasLayout ? (
-              <div
-                role="group"
-                aria-label="Text view"
-                className="inline-flex rounded-lg border border-slate-200 dark:border-dark-border p-0.5 bg-slate-50 dark:bg-dark-bg"
-              >
-                {(
-                  [
-                    ["layout", "Layout"],
-                    ["text", "Plain text"],
-                  ] as const
-                ).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setViewMode(mode)}
-                    aria-pressed={viewMode === mode}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      viewMode === mode
-                        ? "bg-white dark:bg-dark-surface text-primary-700 dark:text-primary-300 shadow-sm"
-                        : "text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl
+                size="sm"
+                ariaLabel="Text view"
+                value={viewMode}
+                onChange={setViewMode}
+                options={[
+                  { value: "layout", label: "Layout" },
+                  { value: "text", label: "Plain text" },
+                ]}
+              />
             ) : (
               <span />
             )}
@@ -502,7 +487,7 @@ export default function OcrPdf() {
                 <button
                   type="button"
                   onClick={handleCopyPage}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-slate-100 dark:bg-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-primary-100 hover:text-primary-700 dark:hover:bg-primary-900/40 dark:hover:text-primary-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full bg-slate-100 dark:bg-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-primary-100 hover:text-primary-700 dark:hover:bg-primary-900/40 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 >
                   {copiedPage ? (
                     <>
@@ -555,7 +540,7 @@ export default function OcrPdf() {
           <div className="grid grid-cols-2 gap-3">
             <button
               onClick={handleCopyAll}
-              className="inline-flex items-center justify-center gap-2 bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border text-slate-700 dark:text-dark-text py-2.5 px-4 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-dark-border transition-colors text-sm"
+              className="inline-flex items-center justify-center gap-2 bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border text-slate-700 dark:text-dark-text py-2.5 px-4 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-dark-border transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               {copiedAll ? (
                 <>
@@ -571,7 +556,7 @@ export default function OcrPdf() {
             </button>
             <button
               onClick={handleDownload}
-              className="inline-flex items-center justify-center gap-2 bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border text-slate-700 dark:text-dark-text py-2.5 px-4 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-dark-border transition-colors text-sm"
+              className="inline-flex items-center justify-center gap-2 bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border text-slate-700 dark:text-dark-text py-2.5 px-4 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-dark-border transition-colors text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               <Download className="w-4 h-4" />
               Download .txt

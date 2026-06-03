@@ -15,11 +15,12 @@
  * preview side-by-side on desktop, stacked on mobile.
  */
 
-import { ScanSearch, Trash2, Undo2 } from "lucide-react";
+import { Loader2, ScanSearch, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
+import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
@@ -373,25 +374,18 @@ export default function RedactPdf() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <p className="text-sm text-slate-600 dark:text-dark-text-muted wrap-anywhere min-w-0 flex-1">
-          <span className="font-medium">{pdf.file.name}</span> — {pageCount} page
-          {pageCount === 1 ? "" : "s"}
-          {totalRedactions > 0 && (
+      <FileInfoBar
+        fileName={pdf.file.name}
+        details={`${pageCount} page${pageCount === 1 ? "" : "s"}`}
+        onChangeFile={pdf.reset}
+        extra={
+          totalRedactions > 0 ? (
             <span className="text-red-600 dark:text-red-400 ml-2">
               ({totalRedactions} redaction{totalRedactions > 1 ? "s" : ""})
             </span>
-          )}
-        </p>
-        <button
-          type="button"
-          onClick={pdf.reset}
-          className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 shrink-0 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
-        >
-          Change file
-        </button>
-      </div>
+          ) : undefined
+        }
+      />
 
       {pdf.loading ? (
         thumbProgress && thumbProgress.total > 0 ? (
@@ -453,7 +447,7 @@ export default function RedactPdf() {
                 >
                   {detecting ? (
                     <>
-                      <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                       Scanning…
                     </>
                   ) : (

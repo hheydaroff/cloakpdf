@@ -260,7 +260,7 @@ export default function BatesNumbering() {
                       title={title}
                       aria-label={title}
                       aria-pressed={options.position === value}
-                      className={`h-10 rounded-lg text-base font-bold border transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                      className={`h-10 rounded-lg text-base font-bold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                         options.position === value
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300"
                           : "border-slate-200 dark:border-dark-border text-slate-400 dark:text-dark-text-muted hover:border-slate-300 dark:hover:border-slate-500 bg-white dark:bg-dark-surface"

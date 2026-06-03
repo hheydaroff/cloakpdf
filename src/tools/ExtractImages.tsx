@@ -6,13 +6,15 @@
  * images or a ZIP of all selected images.
  */
 
-import { CheckSquare, ImageDown, Loader2, X } from "lucide-react";
+import { CheckSquare, ImageDown, X } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useMemo, useState } from "react";
+import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
@@ -338,14 +340,13 @@ export default function ExtractImages() {
           />
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <LoadingSpinner className="" />
-              {progress && (
-                <p className="text-sm text-slate-500 dark:text-dark-text-muted">
-                  Scanning page {progress.done} of {progress.total}…
-                </p>
-              )}
-            </div>
+            progress ? (
+              <ProgressBar current={progress.done} total={progress.total} label="Scanning pages…" />
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <LoadingSpinner className="" />
+              </div>
+            )
           ) : (
             <>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -424,22 +425,15 @@ export default function ExtractImages() {
                 </div>
               )}
 
-              <button
+              <ActionButton
                 onClick={handleDownload}
+                processing={downloading}
                 disabled={downloading || selected.size === 0}
-                className="w-full bg-primary-600 text-white py-3 px-6 rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {downloading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Preparing download…
-                  </>
-                ) : selected.size === 1 ? (
-                  "Download Image"
-                ) : (
-                  `Download ${selected.size} Images as ZIP`
-                )}
-              </button>
+                label={
+                  selected.size === 1 ? "Download Image" : `Download ${selected.size} Images as ZIP`
+                }
+                processingLabel="Preparing download…"
+              />
             </>
           )}
         </>

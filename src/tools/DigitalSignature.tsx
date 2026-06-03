@@ -37,6 +37,7 @@ import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
+import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { downloadPdf, formatFileSize, pdfFilename } from "../utils/file-helpers.ts";
@@ -299,14 +300,14 @@ export default function DigitalSignature() {
           {/* Existing signatures */}
           {detectingSignatures && (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-dark-text-muted py-2">
-              <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 dark:border-dark-border dark:border-t-dark-text-muted rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
               Checking for existing signatures...
             </div>
           )}
 
           {!detectingSignatures && existingSignatures.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-dark-text flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted flex items-center gap-2">
                 <BadgeCheck className="w-4 h-4 text-primary-500" />
                 Existing Signatures ({existingSignatures.length})
               </h3>
@@ -487,65 +488,33 @@ export default function DigitalSignature() {
 
           {/* Step 2: Certificate source */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-dark-text flex items-center gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted flex items-center gap-2">
               <FileKey2 className="w-4 h-4 text-primary-500" />
               Certificate
             </h3>
 
-            {/* Tabs */}
-            <div
-              role="group"
-              aria-label="Certificate source"
-              className="flex rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden"
-            >
-              <button
-                type="button"
-                aria-pressed={certSource === "upload"}
-                onClick={() => {
-                  setCertSource("upload");
-                  setCertFile(null);
-                  setCertPassword("");
-                  setShowPassword(false);
-                  setCertInfo(null);
-                  setCertError(null);
-                  setPrivateKey(null);
-                  setCertificate(null);
-                  setCertChain([]);
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                  certSource === "upload"
-                    ? "bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300"
-                    : "bg-white dark:bg-dark-surface text-slate-500 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
-                }`}
-              >
-                <Upload className="w-4 h-4" />
-                Upload Certificate
-              </button>
-              <button
-                type="button"
-                aria-pressed={certSource === "generate"}
-                onClick={() => {
-                  setCertSource("generate");
-                  setCertFile(null);
-                  setCertPassword("");
-                  setShowPassword(false);
-                  setCommonName("");
-                  setCertInfo(null);
-                  setCertError(null);
-                  setPrivateKey(null);
-                  setCertificate(null);
-                  setCertChain([]);
-                }}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-l border-slate-200 dark:border-dark-border ${
-                  certSource === "generate"
-                    ? "bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300"
-                    : "bg-white dark:bg-dark-surface text-slate-500 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
-                }`}
-              >
-                <KeyRound className="w-4 h-4" />
-                Self-Signed
-              </button>
-            </div>
+            {/* Certificate source */}
+            <SegmentedControl
+              fullWidth
+              ariaLabel="Certificate source"
+              value={certSource}
+              onChange={(v) => {
+                setCertSource(v);
+                setCertFile(null);
+                setCertPassword("");
+                setShowPassword(false);
+                setCommonName("");
+                setCertInfo(null);
+                setCertError(null);
+                setPrivateKey(null);
+                setCertificate(null);
+                setCertChain([]);
+              }}
+              options={[
+                { value: "upload", label: "Upload Certificate", icon: Upload },
+                { value: "generate", label: "Self-Signed", icon: KeyRound },
+              ]}
+            />
 
             {/* Upload form */}
             {certSource === "upload" && (
@@ -580,7 +549,7 @@ export default function DigitalSignature() {
                       value={certPassword}
                       onChange={(e) => setCertPassword(e.target.value)}
                       placeholder="Enter certificate password…"
-                      className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
+                      className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
                     />
                     <button
                       type="button"
@@ -598,7 +567,7 @@ export default function DigitalSignature() {
                     type="button"
                     onClick={handleLoadCert}
                     disabled={certLoading || !certPassword}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50"
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
                     {certLoading ? (
                       <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -640,7 +609,7 @@ export default function DigitalSignature() {
                       value={commonName}
                       onChange={(e) => setCommonName(e.target.value)}
                       placeholder="e.g. Jane Doe"
-                      className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
+                      className="w-full pl-10 pr-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
                     />
                   </div>
                 </div>
@@ -651,7 +620,7 @@ export default function DigitalSignature() {
                       type="button"
                       onClick={handleGenerateCert}
                       disabled={certLoading || !commonName.trim()}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50"
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     >
                       {certLoading ? (
                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -679,10 +648,10 @@ export default function DigitalSignature() {
 
             {/* Certificate info display */}
             {certInfo && (
-              <div className="bg-emerald-50/60 dark:bg-emerald-900/10 rounded-xl border border-emerald-200 dark:border-emerald-700/40 p-4">
+              <div className="bg-primary-50/60 dark:bg-primary-900/10 rounded-xl border border-primary-200 dark:border-primary-700/40 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Award className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                  <Award className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                  <span className="text-sm font-semibold text-primary-700 dark:text-primary-300">
                     Certificate Loaded
                   </span>
                 </div>
@@ -720,7 +689,7 @@ export default function DigitalSignature() {
           {/* Step 3: Signature details (optional) */}
           {certInfo && (
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-dark-text flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted flex items-center gap-2">
                 <MessageSquareText className="w-4 h-4 text-primary-500" />
                 Signature Details
                 <span className="text-xs font-normal text-slate-400 dark:text-dark-text-muted">
@@ -743,7 +712,7 @@ export default function DigitalSignature() {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     placeholder="e.g. I approve this document"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
                   />
                 </div>
                 <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-2">
@@ -760,7 +729,7 @@ export default function DigitalSignature() {
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
                     placeholder="e.g. New York, NY"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
                   />
                 </div>
                 <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-2">
@@ -781,7 +750,7 @@ export default function DigitalSignature() {
                     value={contactInfo}
                     onChange={(e) => setContactInfo(e.target.value)}
                     placeholder="e.g. jane@example.com"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
                   />
                 </div>
               </div>

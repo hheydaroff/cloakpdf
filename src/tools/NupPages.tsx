@@ -109,7 +109,7 @@ export default function NupPages() {
                       aria-checked={layout === l.value}
                       aria-label={l.label}
                       onClick={() => setLayout(l.value)}
-                      className={`border-2 rounded-xl p-3 text-center transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                      className={`border-2 rounded-xl p-3 text-center transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                         layout === l.value
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-300 dark:ring-primary-700"
                           : "border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-dark-surface-alt"

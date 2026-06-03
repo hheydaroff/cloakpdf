@@ -7,13 +7,15 @@
  * written to a new PDF and downloaded.
  */
 
-import { Check, CheckSquare, X } from "lucide-react";
+import { Check, CheckSquare } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
+import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
+import { ResetButton } from "../components/ResetButton.tsx";
 import { ThumbnailGrid } from "../components/ThumbnailGrid.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -116,43 +118,18 @@ export default function ExtractPages() {
         />
       ) : (
         <>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <p className="text-sm text-slate-600 dark:text-dark-text-muted wrap-anywhere min-w-0 flex-1">
-              <span className="font-medium">{pdf.file.name}</span> — {thumbnails.length} pages
-              {selectedPages.size > 0 && !rangeInput.trim() && (
+          <FileInfoBar
+            fileName={pdf.file.name}
+            details={`${thumbnails.length} pages`}
+            onChangeFile={pdf.reset}
+            extra={
+              selectedPages.size > 0 && !rangeInput.trim() ? (
                 <span className="text-primary-600 dark:text-primary-400 ml-2">
                   ({selectedPages.size} selected)
                 </span>
-              )}
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={selectAll}
-                className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-              >
-                <CheckSquare className="w-4 h-4" />
-                Select all
-              </button>
-              <button
-                type="button"
-                onClick={clearAll}
-                className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-              >
-                <X className="w-4 h-4" />
-                Clear
-              </button>
-              {!output.inWorkflow && (
-                <button
-                  type="button"
-                  onClick={pdf.reset}
-                  className="px-2 py-1.5 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                >
-                  Change file
-                </button>
-              )}
-            </div>
-          </div>
+              ) : undefined
+            }
+          />
 
           <div>
             <label
@@ -177,6 +154,20 @@ export default function ExtractPages() {
               Or click pages below to select them
             </p>
           </div>
+
+          {!pdf.loading && (
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={selectAll}
+                className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              >
+                <CheckSquare className="w-4 h-4" />
+                Select all
+              </button>
+              <ResetButton onClick={clearAll} label="Clear" />
+            </div>
+          )}
 
           {pdf.loading ? (
             <LoadingSpinner />

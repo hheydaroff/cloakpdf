@@ -137,7 +137,7 @@ export default function PdfToImage() {
                 </p>
                 <button
                   onClick={toggleAll}
-                  className="text-sm text-primary-600 hover:text-primary-700"
+                  className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
                 >
                   {selectedPages.size === thumbnails.length ? "Deselect all" : "Select all"}
                 </button>

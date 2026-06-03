@@ -132,7 +132,7 @@ export default function MergePdf() {
                     onClick={() => moveFile(index, -1)}
                     disabled={isSortActive || index === 0}
                     title={isSortActive ? "Clear sort to reorder manually" : "Move up"}
-                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     aria-label="Move up"
                   >
                     <ChevronUp className="w-4 h-4 text-slate-500 dark:text-dark-text-muted" />
@@ -141,14 +141,14 @@ export default function MergePdf() {
                     onClick={() => moveFile(index, 1)}
                     disabled={isSortActive || index === displayedFiles.length - 1}
                     title={isSortActive ? "Clear sort to reorder manually" : "Move down"}
-                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:hover:bg-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     aria-label="Move down"
                   >
                     <ChevronDown className="w-4 h-4 text-slate-500 dark:text-dark-text-muted" />
                   </button>
                   <button
                     onClick={() => removeFile(item.id)}
-                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    className="min-w-11 min-h-11 flex items-center justify-center rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     aria-label={`Remove ${item.file.name}`}
                   >
                     <X className="w-4 h-4 text-slate-400 dark:text-dark-text-muted hover:text-red-500" />
