@@ -12,6 +12,7 @@ import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
+import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -60,45 +61,11 @@ export default function RepairPdf() {
 
       {pdf.file && (
         <>
-          <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
-            <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-sm font-medium text-slate-600 dark:text-dark-text-muted">
-                File
-              </span>
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-800 dark:text-dark-text truncate max-w-48">
-                  {pdf.file.name}
-                </span>
-                {!output.inWorkflow && (
-                  <button
-                    type="button"
-                    onClick={pdf.reset}
-                    className="text-xs text-primary-600 hover:text-primary-700 shrink-0"
-                  >
-                    Change
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-between px-4 py-3">
-              <span className="text-sm font-medium text-slate-600 dark:text-dark-text-muted">
-                Original size
-              </span>
-              <span className="text-sm text-slate-800 dark:text-dark-text">
-                {formatFileSize(pdf.file.size)}
-              </span>
-            </div>
-            {sizeAfter > 0 && (
-              <div className="flex items-center justify-between px-4 py-3">
-                <span className="text-sm font-medium text-slate-600 dark:text-dark-text-muted">
-                  Repaired size
-                </span>
-                <span className="text-sm text-slate-800 dark:text-dark-text">
-                  {formatFileSize(sizeAfter)}
-                </span>
-              </div>
-            )}
-          </div>
+          <FileInfoBar
+            fileName={pdf.file.name}
+            details={formatFileSize(pdf.file.size)}
+            onChangeFile={pdf.reset}
+          />
 
           <ActionButton
             onClick={handleRepair}
@@ -107,9 +74,22 @@ export default function RepairPdf() {
             processingLabel="Repairing…"
           />
 
+          {task.processing && (
+            <p
+              role="status"
+              aria-live="polite"
+              className="text-center text-xs text-slate-500 dark:text-dark-text-muted"
+            >
+              Rebuilding the document — this can take a few seconds on large or damaged files, and
+              the page may briefly freeze.
+            </p>
+          )}
+
           {done && (
             <InfoCallout icon={CheckCircle2} accent="transform">
-              PDF repaired successfully. The file has been downloaded.
+              {output.inWorkflow && !output.isLastStep
+                ? `PDF repaired successfully${sizeAfter > 0 ? ` — ${formatFileSize(sizeAfter)}` : ""}. Passed to the next step.`
+                : `PDF repaired successfully${sizeAfter > 0 ? ` — ${formatFileSize(sizeAfter)}` : ""}. The file has been downloaded.`}
             </InfoCallout>
           )}
         </>

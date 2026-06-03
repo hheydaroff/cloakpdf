@@ -96,13 +96,20 @@ export default function NupPages() {
                   <LayoutGrid className="w-3.5 h-3.5" />
                   Layout
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div
+                  className="grid grid-cols-2 sm:grid-cols-4 gap-3"
+                  role="radiogroup"
+                  aria-label="Layout"
+                >
                   {LAYOUTS.map((l) => (
                     <button
                       key={l.value}
                       type="button"
+                      role="radio"
+                      aria-checked={layout === l.value}
+                      aria-label={l.label}
                       onClick={() => setLayout(l.value)}
-                      className={`border-2 rounded-xl p-3 text-center transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                      className={`border-2 rounded-xl p-3 text-center transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                         layout === l.value
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-300 dark:ring-primary-700"
                           : "border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
@@ -126,7 +133,7 @@ export default function NupPages() {
                       >
                         {l.label}
                       </p>
-                      <p className="text-xs text-slate-400 dark:text-dark-text-muted leading-snug">
+                      <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-snug">
                         {l.desc}
                       </p>
                     </button>
@@ -151,7 +158,9 @@ export default function NupPages() {
 
               {done && (
                 <InfoCallout icon={CheckCircle2} accent="transform">
-                  N-up PDF created and downloaded successfully.
+                  {output.inWorkflow && !output.isLastStep
+                    ? "N-up PDF created. Sent to the next step."
+                    : "N-up PDF created and downloaded successfully."}
                 </InfoCallout>
               )}
             </>

@@ -25,7 +25,7 @@ import {
   Workflow as WorkflowIcon,
   X,
 } from "lucide-react";
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Layout } from "./components/Layout.tsx";
 import { useRevealOnScroll } from "./hooks/useRevealOnScroll.ts";
 import { useSpotlightGlow } from "./hooks/useSpotlightGlow.ts";
@@ -37,9 +37,19 @@ import { categories, findTool, findToolComponent, tools } from "./config/tool-re
 import type { Tool, ToolId } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
 import { NAVIGATE_TOOL_EVENT } from "./utils/nav.ts";
-import { WorkflowBuilder } from "./workflow/WorkflowBuilder.tsx";
-import { WorkflowRunner } from "./workflow/WorkflowRunner.tsx";
-import { WorkflowsHome } from "./workflow/WorkflowsHome.tsx";
+// Workflow views are lazy-loaded: WorkflowRunner is the only static App.tsx
+// import that reaches pdf-lib (through step execution), so code-splitting the
+// three workflow views keeps the ~233 kB-gzip pdf-lib/pako graph off the
+// home-screen critical path. They render under a Suspense boundary below.
+const WorkflowBuilder = lazy(() =>
+  import("./workflow/WorkflowBuilder.tsx").then((m) => ({ default: m.WorkflowBuilder })),
+);
+const WorkflowRunner = lazy(() =>
+  import("./workflow/WorkflowRunner.tsx").then((m) => ({ default: m.WorkflowRunner })),
+);
+const WorkflowsHome = lazy(() =>
+  import("./workflow/WorkflowsHome.tsx").then((m) => ({ default: m.WorkflowsHome })),
+);
 
 // ── Platform detection (module-level, computed once) ──────────────
 
@@ -636,22 +646,30 @@ function ViewContent({
       return <PrivacyPolicy />;
     case "workflows-home":
       return (
-        <WorkflowsHome
-          onCreate={() => onOpenWorkflowBuilder(null)}
-          onEdit={(id) => onOpenWorkflowBuilder(id)}
-          onRun={(id) => onOpenWorkflowRunner(id)}
-        />
+        <Suspense fallback={<LoadingSpinner />}>
+          <WorkflowsHome
+            onCreate={() => onOpenWorkflowBuilder(null)}
+            onEdit={(id) => onOpenWorkflowBuilder(id)}
+            onRun={(id) => onOpenWorkflowRunner(id)}
+          />
+        </Suspense>
       );
     case "workflow-builder":
       return (
-        <WorkflowBuilder
-          workflowId={view.workflowId}
-          onCancel={onOpenWorkflowsHome}
-          onSaved={onOpenWorkflowsHome}
-        />
+        <Suspense fallback={<LoadingSpinner />}>
+          <WorkflowBuilder
+            workflowId={view.workflowId}
+            onCancel={onOpenWorkflowsHome}
+            onSaved={onOpenWorkflowsHome}
+          />
+        </Suspense>
       );
     case "workflow-runner":
-      return <WorkflowRunner workflowId={view.workflowId} onExit={onOpenWorkflowsHome} />;
+      return (
+        <Suspense fallback={<LoadingSpinner />}>
+          <WorkflowRunner workflowId={view.workflowId} onExit={onOpenWorkflowsHome} />
+        </Suspense>
+      );
     default: {
       // Exhaustiveness check — TypeScript will flag missing cases.
       const _exhaustive: never = view;

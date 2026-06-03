@@ -7,17 +7,20 @@
  * Extra pages (when page counts differ) are shown with a notice.
  */
 
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Eye, EyeOff, Layers } from "lucide-react";
+import { ArrowLeftRight, Eye, EyeOff, Layers } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useMemo, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { canvas as canvasColors, categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
 import { pdfjsLib } from "../utils/pdf-renderer.ts";
+import { PDFJS_WASM_URL } from "../utils/pdfjs-config.ts";
 import { isPdfEncrypted } from "../utils/pdf-security.ts";
 
 /**
@@ -68,9 +71,10 @@ async function renderPageToCanvas(
 }
 
 /**
- * Compare two canvases pixel-by-pixel. Returns a diff canvas (changed
- * pixels drawn in red over a dimmed composite) and the percentage of
- * pixels that differ beyond the colour threshold.
+ * Compare two canvases pixel-by-pixel. Returns a transparent diff canvas
+ * (changed pixels painted in the diffHighlight red, unchanged pixels left
+ * fully transparent so it can be layered over a page image) and the
+ * percentage of pixels that differ beyond the colour threshold.
  */
 function diffCanvases(
   canvasA: HTMLCanvasElement,
@@ -275,17 +279,16 @@ export default function ComparePdf() {
 
     const ok = await task.run(async () => {
       const [bufA, bufB] = await Promise.all([fileA.arrayBuffer(), fileB.arrayBuffer()]);
-      const [pdfA, pdfB] = await Promise.all([
-        pdfjsLib.getDocument({ data: bufA }).promise,
-        pdfjsLib.getDocument({ data: bufB }).promise,
-      ]);
+      const taskA = pdfjsLib.getDocument({ data: bufA, wasmUrl: PDFJS_WASM_URL });
+      const taskB = pdfjsLib.getDocument({ data: bufB, wasmUrl: PDFJS_WASM_URL });
+      const [pdfA, pdfB] = await Promise.all([taskA.promise, taskB.promise]);
 
       const results = await comparePdfs(pdfA, pdfB, 1.5, (done, total) =>
         setProgress({ done, total }),
       );
 
-      void pdfA.destroy();
-      void pdfB.destroy();
+      void taskA.destroy();
+      void taskB.destroy();
 
       setComparisons(results);
     }, "Failed to compare PDFs. One of the files may be corrupted or password-protected.");
@@ -409,20 +412,11 @@ export default function ComparePdf() {
             />
 
             {loading && progress && (
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted">
-                  <span>Comparing pages…</span>
-                  <span>
-                    {progress.done} / {progress.total}
-                  </span>
-                </div>
-                <div className="w-full bg-slate-200 dark:bg-dark-border rounded-full h-2">
-                  <div
-                    className="bg-primary-600 h-2 rounded-full transition-[width]"
-                    style={{ width: `${(progress.done / progress.total) * 100}%` }}
-                  />
-                </div>
-              </div>
+              <ProgressBar
+                current={progress.done}
+                total={progress.total}
+                label="Comparing pages…"
+              />
             )}
           </>
         )}
@@ -441,17 +435,17 @@ export default function ComparePdf() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-4 flex-wrap">
               <div className="text-sm text-slate-600 dark:text-dark-text-muted">
-                <span className="font-semibold text-slate-800 dark:text-dark-text">
+                <span className="font-semibold text-slate-800 dark:text-dark-text tabular-nums">
                   {summary.total}
                 </span>{" "}
                 page{summary.total !== 1 && "s"} compared
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                   {summary.identical} identical
                 </span>
                 {summary.changed > 0 && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                     {summary.changed} changed
                   </span>
                 )}
@@ -480,30 +474,13 @@ export default function ComparePdf() {
           ]}
         />
 
-        {/* Page navigation */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-            disabled={currentPage === 0}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-dark-border hover:bg-slate-50 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="w-4 h-4 text-slate-600 dark:text-dark-text-muted" />
-          </button>
-          <span className="text-sm font-medium text-slate-700 dark:text-dark-text tabular-nums min-w-20 text-center">
-            Page {currentPage + 1} of {comparisons.length}
-          </span>
-          <button
-            type="button"
-            onClick={() => setCurrentPage((p) => Math.min(comparisons.length - 1, p + 1))}
-            disabled={currentPage === comparisons.length - 1}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-dark-border hover:bg-slate-50 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            aria-label="Next page"
-          >
-            <ChevronRight className="w-4 h-4 text-slate-600 dark:text-dark-text-muted" />
-          </button>
-        </div>
+        {/* Page navigation — shared stepper, prominent bordered pager */}
+        <PagePreviewNav
+          page={currentPage}
+          total={comparisons.length}
+          onChange={setCurrentPage}
+          variant="bordered"
+        />
       </div>
 
       {/* Current page comparison */}
@@ -512,19 +489,19 @@ export default function ComparePdf() {
           {/* Diff badge */}
           <div className="flex items-center gap-2">
             <span
-              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${diffBadgeClass(current.diffPercent)}`}
+              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold tabular-nums ${diffBadgeClass(current.diffPercent)}`}
             >
               {current.diffPercent === 0
                 ? "Identical"
                 : `${current.diffPercent.toFixed(1)}% changed`}
             </span>
             {!current.thumbA && (
-              <span className="text-xs text-slate-400 dark:text-dark-text-muted">
+              <span className="text-xs text-slate-500 dark:text-dark-text-muted">
                 Page only in modified PDF
               </span>
             )}
             {!current.thumbB && (
-              <span className="text-xs text-slate-400 dark:text-dark-text-muted">
+              <span className="text-xs text-slate-500 dark:text-dark-text-muted">
                 Page only in original PDF
               </span>
             )}
@@ -548,7 +525,7 @@ export default function ComparePdf() {
                       className="w-full h-auto"
                     />
                   ) : (
-                    <div className="aspect-3/4 flex items-center justify-center text-slate-400 dark:text-dark-text-muted text-sm">
+                    <div className="aspect-3/4 flex items-center justify-center text-slate-500 dark:text-dark-text-muted text-sm">
                       No page
                     </div>
                   )}
@@ -571,7 +548,7 @@ export default function ComparePdf() {
                       className="w-full h-auto"
                     />
                   ) : (
-                    <div className="aspect-3/4 flex items-center justify-center text-slate-400 dark:text-dark-text-muted text-sm">
+                    <div className="aspect-3/4 flex items-center justify-center text-slate-500 dark:text-dark-text-muted text-sm">
                       No page
                     </div>
                   )}
@@ -624,10 +601,10 @@ export default function ComparePdf() {
 
       {/* Page strip — mini thumbnails for quick navigation */}
       <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+        <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
           All Pages
         </p>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto thin-scrollbar pb-1">
           {comparisons.map((comp) => (
             <button
               type="button"
@@ -645,13 +622,13 @@ export default function ComparePdf() {
                   <img
                     src={comp.thumbA}
                     alt={`Page ${comp.page}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : comp.thumbB ? (
                   <img
                     src={comp.thumbB}
                     alt={`Page ${comp.page}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain"
                   />
                 ) : null}
               </div>

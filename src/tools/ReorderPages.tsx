@@ -119,7 +119,8 @@ export default function ReorderPages() {
                       <div
                         key={`page-${originalIndex}`}
                         {...drag.getItemProps(slot)}
-                        className={`shrink-0 pt-2 pr-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
+                        {...drag.getKeyboardProps(slot, order.length, `Page ${originalIndex + 1}`)}
+                        className={`shrink-0 pt-2 pr-2 flex flex-col items-center gap-1.5 cursor-grab active:cursor-grabbing select-none rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 ${
                           isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"
                         }`}
                       >
@@ -139,7 +140,7 @@ export default function ReorderPages() {
                             />
                           </div>
                           <div
-                            className={`absolute -top-1.5 -right-1.5 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md z-10 transition-opacity duration-200 ${
+                            className={`absolute -top-1.5 -right-1.5 text-white text-xs font-bold tabular-nums w-6 h-6 rounded-full flex items-center justify-center shadow-md z-10 transition-opacity duration-200 ${
                               isSource
                                 ? "bg-slate-400 dark:bg-slate-600 opacity-50"
                                 : "bg-primary-600"
@@ -148,7 +149,7 @@ export default function ReorderPages() {
                             {originalIndex + 1}
                           </div>
                         </div>
-                        <span className="text-xs font-medium text-slate-500 dark:text-dark-text-muted">
+                        <span className="text-xs font-medium tabular-nums text-slate-500 dark:text-dark-text-muted">
                           Page {originalIndex + 1}
                         </span>
                       </div>
@@ -164,12 +165,16 @@ export default function ReorderPages() {
                           draggable={false}
                         />
                       </div>
-                      <div className="absolute top-0 right-0 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-md bg-primary-600">
+                      <div className="absolute top-0 right-0 text-white text-xs font-bold tabular-nums w-6 h-6 rounded-full flex items-center justify-center shadow-md bg-primary-600">
                         {order[idx] + 1}
                       </div>
                     </div>
                   )}
                 />
+
+                <div aria-live="polite" className="sr-only">
+                  {drag.liveMessage}
+                </div>
 
                 {isReordered && (
                   <p className="text-xs text-primary-600 dark:text-primary-400 font-medium">

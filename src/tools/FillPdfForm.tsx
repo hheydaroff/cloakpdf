@@ -20,6 +20,7 @@ import { ChevronDown, FileX } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
+import { CheckboxField } from "../components/CheckboxField.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
@@ -214,8 +215,8 @@ export default function FillPdfForm() {
 
                 {totalFields === 0 ? (
                   <InfoCallout icon={FileX} title="No fillable fields" accent="annotate">
-                    This PDF does not contain interactive form fields. Use the Add Watermark or Add
-                    Signature tools to annotate it instead.
+                    This PDF does not contain interactive form fields. Use the Stamp & Watermark or
+                    Add Signature tools to annotate it instead.
                   </InfoCallout>
                 ) : (
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
@@ -227,7 +228,9 @@ export default function FillPdfForm() {
                           key={thumbnailIds[i] ?? i}
                           type="button"
                           onClick={() => setSelectedPage(i)}
-                          className={`flex flex-col items-center gap-1 p-1 rounded-lg border-2 transition-colors ${
+                          aria-pressed={isSelected}
+                          aria-label={`Page ${i + 1}, ${count} field${count !== 1 ? "s" : ""}`}
+                          className={`flex flex-col items-center gap-1 p-1 rounded-lg border-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                             isSelected
                               ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
                               : "border-transparent hover:border-slate-200 dark:hover:border-dark-border"
@@ -240,12 +243,12 @@ export default function FillPdfForm() {
                               alt={`Page ${i + 1}`}
                             />
                             {count > 0 && (
-                              <span className="absolute top-0.5 right-0.5 bg-primary-600 text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                              <span className="absolute top-0.5 right-0.5 bg-primary-600 text-white text-xxs font-bold tabular-nums rounded-full w-4 h-4 flex items-center justify-center leading-none">
                                 {count}
                               </span>
                             )}
                           </div>
-                          <span className="text-tag text-slate-400 dark:text-dark-text-muted">
+                          <span className="text-tag tabular-nums text-slate-500 dark:text-dark-text-muted">
                             {i + 1}
                           </span>
                         </button>
@@ -319,7 +322,7 @@ export default function FillPdfForm() {
                                     [field.name]: e.target.checked,
                                   }))
                                 }
-                                className="w-4 h-4 text-primary-600 rounded"
+                                className="w-4 h-4 accent-primary-600 rounded"
                               />
                               <span className="text-sm text-slate-600 dark:text-dark-text-muted">
                                 Checked
@@ -364,7 +367,7 @@ export default function FillPdfForm() {
                                     onChange={() =>
                                       setFieldValues((prev) => ({ ...prev, [field.name]: opt }))
                                     }
-                                    className="w-4 h-4 text-primary-600"
+                                    className="w-4 h-4 accent-primary-600"
                                   />
                                   <span className="text-sm text-slate-600 dark:text-dark-text-muted">
                                     {opt}
@@ -384,22 +387,12 @@ export default function FillPdfForm() {
               {totalFields > 0 && (
                 <div className="space-y-3">
                   <div className="bg-slate-50 dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4">
-                    <label className="flex items-center gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={flatten}
-                        onChange={(e) => setFlatten(e.target.checked)}
-                        className="w-4 h-4 text-primary-600 rounded"
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
-                          Flatten after filling
-                        </p>
-                        <p className="text-xs text-slate-400 dark:text-dark-text-muted">
-                          Converts form fields to static text — the PDF will no longer be editable
-                        </p>
-                      </div>
-                    </label>
+                    <CheckboxField
+                      label="Flatten after filling"
+                      description="Converts form fields to static text — the PDF will no longer be editable"
+                      checked={flatten}
+                      onChange={setFlatten}
+                    />
                   </div>
                   <ActionButton
                     onClick={handleFill}

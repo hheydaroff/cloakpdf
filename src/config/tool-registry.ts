@@ -275,7 +275,8 @@ export const tools: Tool[] = [
   {
     id: "stamp-pdf",
     title: "Stamp & Watermark",
-    description: "Apply pre-built stamps or custom text watermarks with configurable style",
+    description:
+      "Apply pre-built stamps or custom text watermarks — set colour, opacity, angle, and position",
     icon: Stamp,
     category: "annotate",
   },
@@ -312,7 +313,8 @@ export const tools: Tool[] = [
   {
     id: "redact-pdf",
     title: "Redact PDF",
-    description: "Permanently black out sensitive text and images",
+    description:
+      "Auto-detect emails, links, phones & IDs — or box regions — and permanently remove them",
     icon: EyeOff,
     category: "security",
   },

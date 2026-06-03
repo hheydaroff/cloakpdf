@@ -58,6 +58,9 @@ export default function FileAttachment() {
   // Tracked by ref so re-renders don't re-trigger; only a fresh injection
   // (new step) replaces the file.
   const lastInjectedRef = useRef<File | null>(null);
+  // Drives the visually-hidden file input from a real <button>, so the
+  // "Add files" affordance is reachable and operable from the keyboard.
+  const addInputRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
     const injected = slot?.injectedFile ?? null;
     if (!injected || lastInjectedRef.current === injected) return;
@@ -203,17 +206,25 @@ export default function FileAttachment() {
                     ? "No attachments found"
                     : `${attachments.length} attachment${attachments.length > 1 ? "s" : ""}`}
                 </p>
-                <label className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 cursor-pointer transition-colors">
+                <button
+                  type="button"
+                  onClick={() => addInputRef.current?.click()}
+                  disabled={processing}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 -mx-2 -my-1 text-sm font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg disabled:opacity-50"
+                >
                   <Plus className="w-4 h-4" />
                   Add files
-                  <input
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={handleAddFiles}
-                    disabled={processing}
-                  />
-                </label>
+                </button>
+                <input
+                  ref={addInputRef}
+                  type="file"
+                  multiple
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden="true"
+                  onChange={handleAddFiles}
+                  disabled={processing}
+                />
               </div>
 
               {/* Attachment list */}
@@ -228,7 +239,7 @@ export default function FileAttachment() {
                         <p className="text-sm font-medium text-slate-700 dark:text-dark-text truncate">
                           {att.name}
                         </p>
-                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                        <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
                           {formatFileSize(att.size)}
                         </p>
                       </div>
@@ -236,7 +247,8 @@ export default function FileAttachment() {
                         type="button"
                         onClick={() => handleExtract(att)}
                         title="Download attachment"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:text-emerald-400 dark:hover:bg-emerald-900/20 transition-colors"
+                        aria-label={`Download ${att.name}`}
+                        className="min-w-11 min-h-11 flex items-center justify-center rounded-lg text-slate-500 hover:text-primary-600 hover:bg-primary-50 dark:text-slate-400 dark:hover:text-primary-400 dark:hover:bg-primary-900/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                       >
                         <Download className="w-4 h-4" />
                       </button>
@@ -245,7 +257,8 @@ export default function FileAttachment() {
                         onClick={() => handleRemove(att.name)}
                         disabled={processing}
                         title="Remove attachment"
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                        aria-label={`Remove ${att.name}`}
+                        className="min-w-11 min-h-11 flex items-center justify-center rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 dark:text-slate-400 dark:hover:text-red-400 dark:hover:bg-red-900/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg disabled:opacity-50"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

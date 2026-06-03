@@ -27,6 +27,7 @@
  * model, no graph state — they unit-test cleanly in isolation.
  */
 import type { Document } from "@langchain/core/documents";
+import { EMAIL_RE, PHONE_RE } from "../utils/pii.ts";
 import type { ChunkMetadata } from "./chunking.ts";
 
 export interface FastPathHit {
@@ -37,21 +38,11 @@ export interface FastPathHit {
 }
 
 // ── Verbatim contact-info extraction (phone / email) ─────────────────
-
-/**
- * Phone-number regex: matches an international `+CC-NNNN…NNN` form,
- * an `(NNN) NNN-NNNN` form, or any plain run of 7+ digits (which
- * covers local-format phone numbers without separators). Tight enough
- * that it doesn't fire on years ("1988") or 4-digit IDs but loose
- * enough to catch the variety of formats résumés / contact blocks use.
- */
-const PHONE_RE =
-  /\+\d{1,3}[\s\-.]?\d[\d\s\-.()]{5,}\d|\(?\d{3}\)?[\s\-.]?\d{3,4}[\s\-.]?\d{4}|\b\d{7,}\b/;
-
-/**
- * Email regex. Standard local-part / domain shape.
- */
-const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+//
+// PHONE_RE / EMAIL_RE now live in `../utils/pii.ts` (the shared PII source
+// of truth) and are imported above. They are used here exactly as before —
+// non-globally, first-match `.match()` / stateless `.test()`. The redaction
+// page-sweep uses pii.ts's own broader patterns, so it can't add noise here.
 
 /**
  * Deterministic fast-path for verbatim contact-info extraction.

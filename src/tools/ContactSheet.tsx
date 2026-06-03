@@ -20,6 +20,7 @@ import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { downloadBlob, formatFileSize } from "../utils/file-helpers.ts";
 import { pdfjsLib, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
+import { PDFJS_WASM_URL } from "../utils/pdfjs-config.ts";
 
 type GridLayout = "2x2" | "3x3" | "4x4" | "5x5";
 type OutputFormat = "png" | "pdf";
@@ -91,7 +92,8 @@ export default function ContactSheet() {
 
       // Use the shared PDF.js instance (worker already configured)
       const arrayBuffer = await file.arrayBuffer();
-      const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+      const pdfDoc = await loadingTask.promise;
 
       // Decide thumbnail render scale based on grid density
       const thumbScale = cols <= 2 ? 1.5 : cols <= 3 ? 1.0 : cols <= 4 ? 0.8 : 0.6;
@@ -100,9 +102,13 @@ export default function ContactSheet() {
       const sheetW = 2480;
       const sheetH = 3508;
       const pad = 40;
-      const genLabelH = showLabels ? 28 : 0;
       const genCellW = Math.floor((sheetW - pad * (cols + 1)) / cols);
       const genCellH = Math.floor((sheetH - pad * (cols + 1)) / cols);
+      // Derive label size from cell width (mirrors the preview's labelFontSize =
+      // cellSize * 0.09) so labels stay proportional across 2×2…5×5 instead of a
+      // fixed 20px font + 28px band. The preview's sizing model is the source of truth.
+      const genLabelFont = Math.max(20, Math.round(genCellW * 0.09));
+      const genLabelH = showLabels ? genLabelFont + 12 : 0;
 
       const sheets: Blob[] = [];
 
@@ -162,7 +168,7 @@ export default function ContactSheet() {
           // Page label
           if (showLabels) {
             ctx.fillStyle = canvasColors.label;
-            ctx.font = "bold 20px sans-serif";
+            ctx.font = `bold ${genLabelFont}px sans-serif`;
             ctx.textAlign = "center";
             ctx.fillText(`Page ${pageIdx + 1}`, cellX + genCellW / 2, cellY + genCellH - 6);
           }
@@ -187,7 +193,7 @@ export default function ContactSheet() {
         canvas.height = 0;
       }
 
-      void pdfDoc.destroy();
+      void loadingTask.destroy();
 
       const baseName = file.name.replace(/\.pdf$/i, "");
 
@@ -271,7 +277,7 @@ export default function ContactSheet() {
                   options={GRID_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
                 />
                 {pageCount > 0 && (
-                  <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1.5">
+                  <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1.5 tabular-nums">
                     {perSheet} pages per sheet · {sheetsNeeded}{" "}
                     {sheetsNeeded === 1 ? "sheet" : "sheets"} total
                   </p>
@@ -391,7 +397,7 @@ export default function ContactSheet() {
                 </div>
               )}
               {sheetsNeeded > 1 && !loading && (
-                <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-2 text-center">
+                <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-2 text-center tabular-nums">
                   {pageCount - perSheet} more {pageCount - perSheet === 1 ? "page" : "pages"} on{" "}
                   {sheetsNeeded - 1} additional {sheetsNeeded - 1 === 1 ? "sheet" : "sheets"}
                 </p>
@@ -411,7 +417,7 @@ export default function ContactSheet() {
             onClick={handleGenerate}
             processing={processing}
             disabled={processing || loading || pageCount === 0}
-            label={`Generate Contact Sheet${sheetsNeeded > 1 ? "s" : ""}`}
+            label={`Generate Contact Sheet${output === "png" && sheetsNeeded > 1 ? "s" : ""}`}
             processingLabel="Generating…"
           />
         </>

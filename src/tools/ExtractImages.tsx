@@ -6,18 +6,21 @@
  * images or a ZIP of all selected images.
  */
 
-import { CheckSquare, ImageDown, Loader2, X } from "lucide-react";
+import { CheckSquare, ImageDown, X } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useMemo, useState } from "react";
+import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { downloadBlob, formatFileSize } from "../utils/file-helpers.ts";
 import { pdfjsLib } from "../utils/pdf-renderer.ts";
+import { PDFJS_WASM_URL } from "../utils/pdfjs-config.ts";
 
 /** Metadata for a single extracted image. */
 interface ExtractedImage {
@@ -209,6 +212,10 @@ async function extractImagesFromPdf(
 
     page.cleanup();
     onProgress?.(p, pdf.numPages);
+    // Yield so the progress counter repaints between pages instead of the
+    // whole extraction pinning the main thread (matches the compress/grayscale
+    // per-page-yield pattern in pdf-operations.ts).
+    await new Promise((r) => setTimeout(r, 0));
   }
 
   // Release canvas memory
@@ -228,7 +235,8 @@ export default function ExtractImages() {
     load: async (file) => {
       setProgress(null);
       const arrayBuffer = await file.arrayBuffer();
-      const doc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+      const doc = await loadingTask.promise;
       try {
         const extracted = await extractImagesFromPdf(doc, (done, total) =>
           setProgress({ done, total }),
@@ -240,7 +248,7 @@ export default function ExtractImages() {
         }
         return extracted;
       } finally {
-        void doc.destroy();
+        void loadingTask.destroy();
         setProgress(null);
       }
     },
@@ -332,14 +340,13 @@ export default function ExtractImages() {
           />
 
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <LoadingSpinner className="" />
-              {progress && (
-                <p className="text-sm text-slate-500 dark:text-dark-text-muted">
-                  Scanning page {progress.done} of {progress.total}…
-                </p>
-              )}
-            </div>
+            progress ? (
+              <ProgressBar current={progress.done} total={progress.total} label="Scanning pages…" />
+            ) : (
+              <div className="flex items-center justify-center py-12">
+                <LoadingSpinner className="" />
+              </div>
+            )
           ) : (
             <>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -389,8 +396,8 @@ export default function ExtractImages() {
                     </div>
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5">
                       <span className="text-xs text-white font-medium block">Page {img.page}</span>
-                      <span className="text-xs text-white/70">
-                        {img.width} x {img.height}
+                      <span className="text-xs text-white/70 tabular-nums">
+                        {img.width} × {img.height}
                       </span>
                     </div>
                   </button>
@@ -398,9 +405,9 @@ export default function ExtractImages() {
               </div>
 
               {selected.size > 0 && (
-                <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4">
+                <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4">
                   <div className="flex items-center justify-between">
-                    <div className="text-sm text-slate-600 dark:text-dark-text-muted">
+                    <div className="text-sm text-slate-600 dark:text-dark-text-muted tabular-nums">
                       <span className="font-medium text-slate-800 dark:text-dark-text">
                         {selected.size}
                       </span>{" "}
@@ -418,22 +425,15 @@ export default function ExtractImages() {
                 </div>
               )}
 
-              <button
+              <ActionButton
                 onClick={handleDownload}
+                processing={downloading}
                 disabled={downloading || selected.size === 0}
-                className="w-full bg-primary-600 text-white py-3 px-6 rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                {downloading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Preparing download…
-                  </>
-                ) : selected.size === 1 ? (
-                  "Download Image"
-                ) : (
-                  `Download ${selected.size} Images as ZIP`
-                )}
-              </button>
+                label={
+                  selected.size === 1 ? "Download Image" : `Download ${selected.size} Images as ZIP`
+                }
+                processingLabel="Preparing download…"
+              />
             </>
           )}
         </>

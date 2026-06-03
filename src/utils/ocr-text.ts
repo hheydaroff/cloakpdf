@@ -15,6 +15,7 @@
  * can show one bar that smoothly tracks the whole extraction.
  */
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 
 let _pdfjsLib: typeof import("pdfjs-dist") | null = null;
 async function getPdfJs(): Promise<typeof import("pdfjs-dist")> {
@@ -68,7 +69,8 @@ export async function extractPdfText(
 
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const pdf: PDFDocumentProxy = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf: PDFDocumentProxy = await loadingTask.promise;
   const totalPages = pdf.numPages;
 
   const results: ExtractedPage[] = [];
@@ -146,7 +148,7 @@ export async function extractPdfText(
       }
     }
   } finally {
-    void pdf.destroy();
+    void loadingTask.destroy();
   }
 
   return results;

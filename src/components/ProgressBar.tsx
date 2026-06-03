@@ -31,7 +31,15 @@ export function ProgressBar({
 }: ProgressBarProps) {
   const percent = total > 0 ? Math.min(100, Math.max(0, (current / total) * 100)) : 0;
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={total > 0 ? total : undefined}
+      aria-valuenow={total > 0 ? current : undefined}
+      aria-valuetext={total > 0 ? `${current} of ${total}` : undefined}
+    >
       <div className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted">
         <span>{label}</span>
         <span className="tabular-nums">

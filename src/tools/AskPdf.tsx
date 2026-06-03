@@ -100,7 +100,12 @@ export default function AskPdf() {
   const scrollTrigger = turns.length * 1_000_000 + (turns.at(-1)?.content.length ?? 0);
   useEffect(() => {
     if (scrollTrigger === 0) return;
-    scrollAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    // Honour prefers-reduced-motion: smooth token-by-token scrolling
+    // is a near-continuous animation, exactly what the media query
+    // asks us to suppress. Fall back to an instant jump for users who
+    // opt out.
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scrollAnchorRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "end" });
   }, [scrollTrigger]);
 
   const dialogOpen =
@@ -642,8 +647,20 @@ function ChatPanel({
       {/* `thin-scrollbar` matches the scrollbar idiom used in modals
           (AiConsentModal, AiModelDetailsModal, ToolPickerModal) so
           the chat panel doesn't read as a different surface from the
-          rest of the app's overflow containers. */}
-      <div className="flex-1 overflow-y-auto thin-scrollbar px-4 py-4">
+          rest of the app's overflow containers.
+
+          `role="log"` + `aria-live="polite"` turn the transcript into
+          an announced region: the "Thinking…" placeholder and each
+          streamed assistant token are read out as they append.
+          `aria-atomic="false"` keeps the reader from re-announcing the
+          whole conversation on every token — only the newly appended
+          text is voiced. */}
+      <div
+        className="flex-1 overflow-y-auto thin-scrollbar px-4 py-4"
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
+      >
         {turns.length === 0 ? (
           <EmptyChatHint />
         ) : (
@@ -730,7 +747,7 @@ function AssistantMarkdown({ content }: { content: string }) {
             </code>
           ),
           pre: ({ children }) => (
-            <pre className="my-2 p-3 rounded-lg bg-slate-100 dark:bg-dark-bg text-xs font-mono overflow-x-auto">
+            <pre className="my-2 p-3 rounded-lg bg-slate-100 dark:bg-dark-bg text-xs font-mono overflow-x-auto thin-scrollbar">
               {children}
             </pre>
           ),
@@ -751,7 +768,7 @@ function AssistantMarkdown({ content }: { content: string }) {
           ),
           hr: () => <hr className="my-3 border-slate-200 dark:border-dark-border" />,
           table: ({ children }) => (
-            <div className="my-2 overflow-x-auto">
+            <div className="my-2 overflow-x-auto thin-scrollbar">
               <table className="text-xs border-collapse">{children}</table>
             </div>
           ),
@@ -867,19 +884,26 @@ function Composer({
   // of those. We keep just the padding so the textarea has room to
   // breathe.
   return (
-    <div className="p-3">
+    // The textarea drops its own outline (so a long pasted question
+    // scrolls cleanly without a clipped ring); the visible focus
+    // indicator moves to this wrapper via `focus-within` so keyboard
+    // users still get the one-accent ring around the whole composer.
+    <div className="p-3 rounded-lg focus-within:ring-2 focus-within:ring-primary-600 focus-within:ring-offset-1 dark:focus-within:ring-offset-dark-surface">
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
         disabled={disabled}
+        aria-label="Ask a question about this PDF"
         placeholder={placeholder ?? "Ask something about this PDF…"}
         rows={2}
         maxLength={MAX_QUESTION_CHARS}
         // `thin-scrollbar` matches the styled scrollbar used elsewhere
         // (modals, chat panel) so a long pasted question scrolls
         // inside the textarea consistently with the rest of the app.
-        className="thin-scrollbar w-full resize-none bg-transparent text-sm text-slate-800 dark:text-dark-text placeholder-slate-400 dark:placeholder-dark-text-muted focus-visible:outline-none disabled:opacity-50"
+        // Placeholder is slate-500 (not slate-400) so the only label
+        // these users see before typing clears WCAG 1.4.3 AA.
+        className="thin-scrollbar w-full resize-none bg-transparent text-sm text-slate-800 dark:text-dark-text placeholder-slate-500 dark:placeholder-dark-text-muted focus-visible:outline-none disabled:opacity-50"
       />
       <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-100 dark:border-dark-border/60">
         <p className="text-xs text-slate-400 dark:text-dark-text-muted hidden sm:block">
@@ -897,10 +921,18 @@ function Composer({
             limit so it doesn't clutter the composer during normal use.
             Switches to amber once `COUNTER_WARN_AT` is reached so the
             constraint feels advisory rather than punitive. Tabular
-            numerals keep the count from jiggling as digits change. */}
+            numerals keep the count from jiggling as digits change.
+
+            The visual counter is *not* an aria-live region: voicing
+            the running "401/500 … 402/500 …" tally on every keystroke
+            is noise, not help. Instead the screen-reader announcement
+            lives in the dedicated polite region below, whose content
+            only changes at the two thresholds — so it fires once when
+            the user is approaching the limit and once when they hit
+            it, and stays silent in between. */}
         {value.length >= COUNTER_WARN_AT && (
           <span
-            aria-live="polite"
+            aria-hidden="true"
             className={`text-xs tabular-nums ${
               value.length >= MAX_QUESTION_CHARS
                 ? "text-amber-600 dark:text-amber-400 font-medium"
@@ -910,11 +942,18 @@ function Composer({
             {value.length}/{MAX_QUESTION_CHARS}
           </span>
         )}
+        <span role="status" aria-live="polite" className="sr-only">
+          {value.length >= MAX_QUESTION_CHARS
+            ? `Question length limit of ${MAX_QUESTION_CHARS} characters reached.`
+            : value.length >= COUNTER_WARN_AT
+              ? `Approaching the ${MAX_QUESTION_CHARS} character question limit.`
+              : ""}
+        </span>
         <button
           type="button"
           onClick={onSubmit}
           disabled={disabled || !value.trim()}
-          className="inline-flex items-center gap-1.5 ml-auto px-4 py-2 rounded-lg text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-1.5 ml-auto px-4 py-2 rounded-lg text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-surface"
         >
           {disabled ? (
             <>

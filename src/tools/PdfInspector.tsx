@@ -90,19 +90,31 @@ export default function PdfInspector() {
               </p>
             </div>
             <InfoRow icon={FileText} label="File name" value={fileName} />
-            <InfoRow icon={HardDrive} label="File size" value={formatFileSize(info.fileSize)} />
-            <InfoRow icon={FileCode2} label="PDF version" value={info.version} />
-            <InfoRow icon={BookOpen} label="Page count" value={info.pageCount} />
+            <InfoRow
+              icon={HardDrive}
+              label="File size"
+              value={<span className="tabular-nums">{formatFileSize(info.fileSize)}</span>}
+            />
+            <InfoRow
+              icon={FileCode2}
+              label="PDF version"
+              value={<span className="tabular-nums">{info.version}</span>}
+            />
+            <InfoRow
+              icon={BookOpen}
+              label="Page count"
+              value={<span className="tabular-nums">{info.pageCount}</span>}
+            />
             <InfoRow
               icon={info.isEncrypted ? Lock : LockOpen}
               label="Encrypted"
               value={
                 info.isEncrypted ? (
-                  <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+                  <span className="inline-flex items-center gap-1 text-slate-800 dark:text-dark-text font-medium">
                     Yes
                   </span>
                 ) : (
-                  <span className="text-emerald-600 dark:text-emerald-400 font-medium">No</span>
+                  <span className="text-slate-800 dark:text-dark-text font-medium">No</span>
                 )
               }
             />
@@ -134,16 +146,16 @@ export default function PdfInspector() {
                   Page Dimensions
                 </p>
               </div>
-              <div className="max-h-64 overflow-y-auto divide-y divide-slate-100 dark:divide-dark-border">
+              <div className="max-h-64 overflow-y-auto thin-scrollbar divide-y divide-slate-100 dark:divide-dark-border">
                 {info.pages.map((dim, i) => (
                   <div key={i} className="flex items-center justify-between px-4 py-2.5">
                     <span className="text-sm text-slate-500 dark:text-dark-text-muted flex items-center gap-1.5">
                       <FileText className="w-3.5 h-3.5 text-primary-500 dark:text-primary-400 shrink-0" />
                       Page {i + 1}
                     </span>
-                    <span className="text-sm text-slate-800 dark:text-dark-text font-mono">
+                    <span className="text-sm text-slate-800 dark:text-dark-text tabular-nums">
                       {dim.width.toFixed(0)} × {dim.height.toFixed(0)} pt
-                      <span className="text-slate-400 dark:text-dark-text-muted ml-2 text-xs">
+                      <span className="text-slate-500 dark:text-dark-text-muted ml-2 text-xs">
                         ({(dim.width * PT_TO_MM).toFixed(1)} × {(dim.height * PT_TO_MM).toFixed(1)}{" "}
                         mm)
                       </span>

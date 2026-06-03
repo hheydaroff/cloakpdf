@@ -6,7 +6,7 @@
  * is downloaded immediately after processing.
  */
 
-import { ChevronLeft, ChevronRight, Hash, Move } from "lucide-react";
+import { Hash, Move } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -15,6 +15,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LabeledSlider } from "../components/LabeledSlider.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ResetButton } from "../components/ResetButton.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -199,14 +200,20 @@ export default function AddPageNumbers() {
                   <Move className="w-3.5 h-3.5" />
                   Position
                 </p>
-                <div className="grid grid-cols-3 gap-2 max-w-45">
+                <div
+                  className="grid grid-cols-3 gap-2 max-w-45"
+                  role="group"
+                  aria-label="Page number position"
+                >
                   {POSITIONS.map(({ value, label, title }) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setOpt("position", value)}
                       title={title}
-                      className={`h-10 rounded-lg text-base font-bold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                      aria-label={title}
+                      aria-pressed={options.position === value}
+                      className={`h-10 rounded-lg text-base font-semibold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                         options.position === value
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-600 dark:text-primary-300"
                           : "border-slate-200 dark:border-dark-border text-slate-400 dark:text-dark-text-muted hover:border-slate-300 dark:hover:border-slate-500 bg-white dark:bg-dark-surface"
@@ -232,7 +239,7 @@ export default function AddPageNumbers() {
                         key={f}
                         type="button"
                         onClick={() => setOpt("format", f)}
-                        className={`py-2 px-3 rounded-xl text-sm text-center border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                        className={`py-2 px-3 rounded-xl text-sm text-center border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                           options.format === f
                             ? "font-semibold border-primary-500 bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 ring-1 ring-primary-300 dark:ring-primary-700"
                             : "font-medium border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface text-slate-600 dark:text-dark-text-muted hover:border-slate-300 dark:hover:border-slate-500"
@@ -338,29 +345,7 @@ export default function AddPageNumbers() {
                     ? `Preview — Page ${selectedPage + 1}`
                     : `Preview — Page ${selectedPage + 1} (no number)`}
                 </p>
-                {pageCount > 1 && (
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      disabled={selectedPage === 0}
-                      onClick={() => setSelectedPage((p) => p - 1)}
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1">
-                      {selectedPage + 1} / {pageCount}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={selectedPage === pageCount - 1}
-                      onClick={() => setSelectedPage((p) => p + 1)}
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+                <PagePreviewNav page={selectedPage} total={pageCount} onChange={setSelectedPage} />
               </div>
 
               {pdf.loading ? (

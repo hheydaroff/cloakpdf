@@ -13,6 +13,7 @@
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import * as pdfjsLib from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?worker&url";
+import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 
 // PDF.js requires a Web Worker for parsing. The `?worker&url` Vite suffix
 // ensures the worker file is emitted as a standalone asset with the correct
@@ -98,9 +99,10 @@ async function renderPage(
  */
 export async function getPageCount(file: File): Promise<number> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const count = pdf.numPages;
-  void pdf.destroy();
+  void loadingTask.destroy();
   return count;
 }
 
@@ -117,12 +119,13 @@ export async function renderPageThumbnail(
   pageNum: number,
   scale = 0.5,
 ): Promise<string> {
-  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const { canvas } = await renderPage(pdf, pageNum, scale);
   const url = await canvasToBlobUrl(canvas);
   canvas.width = 0;
   canvas.height = 0;
-  void pdf.destroy();
+  void loadingTask.destroy();
   return url;
 }
 
@@ -143,7 +146,8 @@ export async function renderSpecificThumbnails(
   scale = 0.4,
 ): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const results: string[] = [];
 
   for (const pageNum of pageNums) {
@@ -153,7 +157,7 @@ export async function renderSpecificThumbnails(
     canvas.height = 0;
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return results;
 }
 
@@ -181,7 +185,8 @@ export async function renderPagesToBlobs(
 ): Promise<{ pageIndex: number; blob: Blob }[]> {
   const arrayBuffer = await file.arrayBuffer();
   const scale = dpi / 72;
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const results: { pageIndex: number; blob: Blob }[] = [];
 
   for (let i = 0; i < pageIndices.length; i++) {
@@ -206,7 +211,7 @@ export async function renderPagesToBlobs(
     onProgress?.(i + 1, pageIndices.length);
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return results;
 }
 
@@ -218,22 +223,100 @@ export async function renderPagesToBlobs(
  *
  * @param file - The PDF file whose pages should be rendered.
  * @param scale - Render scale factor (default 0.4 for lighter thumbnails).
+ * @param onProgress - Optional callback invoked after each page: (rendered, total).
+ *   Lets tools show a determinate progress bar while a large PDF renders.
  * @returns An ordered array of `blob:…` URLs, one per page. Caller must revoke when done.
  */
-export async function renderAllThumbnails(file: File, scale = 0.4): Promise<string[]> {
+export async function renderAllThumbnails(
+  file: File,
+  scale = 0.4,
+  onProgress?: (rendered: number, total: number) => void,
+): Promise<string[]> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const thumbnails: string[] = [];
+  const total = pdf.numPages;
 
-  for (let i = 1; i <= pdf.numPages; i++) {
+  for (let i = 1; i <= total; i++) {
     const { canvas } = await renderPage(pdf, i, scale);
     thumbnails.push(await canvasToBlobUrl(canvas));
     canvas.width = 0;
     canvas.height = 0;
+    onProgress?.(i, total);
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return thumbnails;
+}
+
+/** Result of {@link renderThumbnailsAndScan}: previews + digital/scanned split. */
+export interface ThumbnailsScanResult {
+  thumbnails: string[];
+  /** Total page count. */
+  total: number;
+  /** 1-based page numbers with no usable text layer (need Tesseract OCR). */
+  scannedPages: number[];
+}
+
+/**
+ * Render thumbnails AND classify each page (digital vs scanned) in a single
+ * pass over one decoded document.
+ *
+ * Used by the OCR tool so it can be upfront about what was uploaded and hide
+ * the Tesseract engine/language download UI for fully-digital PDFs — without
+ * paying a second `getDocument()` decode (the previous "render, then classify
+ * separately" path opened the file twice). Per-page work is wrapped so a single
+ * page that fails to render or whose text layer can't be read degrades that one
+ * page (blank thumbnail / treated as scanned) instead of failing the whole
+ * load. A document that won't open at all still rejects — it can't be OCR'd
+ * either way.
+ */
+export async function renderThumbnailsAndScan(
+  file: File,
+  scale = 0.4,
+  minTextChars = 16,
+  onProgress?: (rendered: number, total: number) => void,
+): Promise<ThumbnailsScanResult> {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
+  const total = pdf.numPages;
+  const thumbnails: string[] = [];
+  const scannedPages: number[] = [];
+  try {
+    for (let i = 1; i <= total; i++) {
+      try {
+        const { canvas } = await renderPage(pdf, i, scale);
+        thumbnails.push(await canvasToBlobUrl(canvas));
+        canvas.width = 0;
+        canvas.height = 0;
+      } catch {
+        // One unrenderable page shouldn't blank the whole preview strip.
+        thumbnails.push("");
+      }
+      try {
+        // pdf.js caches getPage, so this re-uses the page renderPage just fetched.
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        let chars = 0;
+        for (const raw of content.items as Array<{ str?: string }>) {
+          chars += (raw.str ?? "").replace(/\s+/g, "").length;
+          if (chars >= minTextChars) break;
+        }
+        if (chars < minTextChars) scannedPages.push(i);
+        page.cleanup();
+      } catch {
+        // Unreadable text layer → treat the page as scanned (conservative: the
+        // user gets the OCR controls rather than a wrong "digital" banner).
+        scannedPages.push(i);
+      }
+      onProgress?.(i, total);
+    }
+  } finally {
+    void loadingTask.destroy();
+  }
+  return { thumbnails, total, scannedPages };
 }
 
 /**
@@ -252,7 +335,8 @@ export async function renderThumbnailsAndScores(
   scale = 0.3,
 ): Promise<{ thumbnails: string[]; scores: number[] }> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
   const thumbnails: string[] = [];
   const scores: number[] = [];
 
@@ -282,6 +366,6 @@ export async function renderThumbnailsAndScores(
     canvas.height = 0;
   }
 
-  void pdf.destroy();
+  void loadingTask.destroy();
   return { thumbnails, scores };
 }

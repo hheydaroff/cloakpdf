@@ -14,12 +14,15 @@ import { Check, CheckSquare, Maximize2, Move, PenLine, Upload, X } from "lucide-
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
+import { CheckboxField } from "../components/CheckboxField.tsx";
 import { ColorPicker, hexToRgb } from "../components/ColorPicker.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LabeledSlider } from "../components/LabeledSlider.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
+import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { SignaturePad } from "../components/SignaturePad.tsx";
 import { categoryAccent, categoryGlow, colorPresets } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -132,6 +135,13 @@ export default function AddSignature() {
   const error = pdf.loadError ?? task.error;
   const [isDragging, setIsDragging] = useState(false);
   const [applyToAllPages, setApplyToAllPages] = useState(false);
+
+  // A single-page PDF hides the page-selection UI (it only renders for
+  // multi-page docs), so seed page 0 as selected. Without this, the per-page
+  // apply path iterates zero pages and silently delivers an UNSIGNED file.
+  useEffect(() => {
+    if (thumbnails.length === 1) setSelectedPages(new Set([0]));
+  }, [thumbnails.length]);
 
   // Centralised colour (drives both SignaturePad ink & image tint)
   const [color, setColor] = useState<string>(colorPresets[0].hex);
@@ -273,6 +283,11 @@ export default function AddSignature() {
         ? Array.from({ length: pdfDoc.getPageCount() }, (_, i) => i)
         : [...selectedPages].sort((a, b) => a - b);
 
+      // Defence-in-depth: never deliver an unchanged file as "signed".
+      if (pageIndices.length === 0) {
+        throw new Error("Select at least one page to place the signature on.");
+      }
+
       if (applyToAllPages) {
         // Single shared position
         const page = pdfDoc.getPage(0);
@@ -357,36 +372,19 @@ export default function AddSignature() {
                 custom image (PNG/JPEG).
               </p>
               {/* ---- Mode toggle ---- */}
-              <div className="inline-flex rounded-lg border border-slate-200 dark:border-dark-border p-0.5 bg-slate-100 dark:bg-dark-surface-alt">
-                <button
-                  onClick={() => {
-                    setMode("draw");
-                    setSignatureDataUrl("");
-                  }}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    mode === "draw"
-                      ? "bg-white dark:bg-dark-surface text-slate-900 dark:text-dark-text shadow-sm"
-                      : "text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text"
-                  }`}
-                >
-                  <PenLine className="w-3.5 h-3.5" />
-                  Draw
-                </button>
-                <button
-                  onClick={() => {
-                    setMode("upload");
-                    setSignatureDataUrl(uploadedImageUrl);
-                  }}
-                  className={`flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    mode === "upload"
-                      ? "bg-white dark:bg-dark-surface text-slate-900 dark:text-dark-text shadow-sm"
-                      : "text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text"
-                  }`}
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  Upload
-                </button>
-              </div>
+              <SegmentedControl
+                ariaLabel="Signature mode"
+                value={mode}
+                onChange={(next) => {
+                  setMode(next);
+                  // Draw mode starts blank; Upload restores the last uploaded image.
+                  setSignatureDataUrl(next === "draw" ? "" : uploadedImageUrl);
+                }}
+                options={[
+                  { value: "draw", label: "Draw", icon: PenLine },
+                  { value: "upload", label: "Upload", icon: Upload },
+                ]}
+              />
 
               {/* ---- Draw mode ---- */}
               {mode === "draw" && (
@@ -421,7 +419,7 @@ export default function AddSignature() {
                     >
                       <Upload className="w-8 h-8" strokeWidth={1.5} />
                       <span className="text-sm font-medium">Click to upload PNG or JPEG</span>
-                      <span className="text-xs text-slate-400 dark:text-dark-text-muted">
+                      <span className="text-xs text-slate-500 dark:text-dark-text-muted">
                         Max 5 MB — transparent PNG recommended
                       </span>
                     </button>
@@ -440,13 +438,13 @@ export default function AddSignature() {
                           setSignatureDataUrl("");
                           if (uploadInputRef.current) uploadInputRef.current.value = "";
                         }}
-                        className="text-xs text-slate-500 hover:text-red-500 transition-colors"
+                        className="rounded px-2 py-1.5 text-xs text-slate-500 hover:text-red-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                       >
                         Remove
                       </button>
                       <button
                         onClick={() => uploadInputRef.current?.click()}
-                        className="text-xs text-primary-600 hover:text-primary-700 transition-colors"
+                        className="rounded px-2 py-1.5 text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                       >
                         Change
                       </button>
@@ -454,17 +452,11 @@ export default function AddSignature() {
                   )}
 
                   {uploadedImageUrl && (
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={tintEnabled}
-                        onChange={(e) => setTintEnabled(e.target.checked)}
-                        className="accent-primary-600 w-4 h-4 rounded"
-                      />
-                      <span className="text-sm text-slate-700 dark:text-dark-text">
-                        Tint with selected colour
-                      </span>
-                    </label>
+                    <CheckboxField
+                      label="Tint with selected colour"
+                      checked={tintEnabled}
+                      onChange={setTintEnabled}
+                    />
                   )}
                 </div>
               )}
@@ -514,20 +506,14 @@ export default function AddSignature() {
 
               {thumbnails.length > 1 && (
                 <div className="space-y-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={applyToAllPages}
-                      onChange={(e) => {
-                        setApplyToAllPages(e.target.checked);
-                        if (e.target.checked) setSelectedPages(new Set());
-                      }}
-                      className="accent-primary-600 w-4 h-4 rounded"
-                    />
-                    <span className="text-sm font-medium text-slate-700 dark:text-dark-text">
-                      Apply to all pages at same position
-                    </span>
-                  </label>
+                  <CheckboxField
+                    label="Apply to all pages at same position"
+                    checked={applyToAllPages}
+                    onChange={(v) => {
+                      setApplyToAllPages(v);
+                      if (v) setSelectedPages(new Set());
+                    }}
+                  />
 
                   {!applyToAllPages && (
                     <div className="space-y-2">
@@ -596,15 +582,29 @@ export default function AddSignature() {
             </div>
 
             <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-dark-text mb-1.5">
-                Preview — {applyToAllPages ? "All Pages" : `Page ${selectedPage + 1}`}
-              </p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+                  Preview — {applyToAllPages ? "All Pages" : `Page ${selectedPage + 1}`}
+                </p>
+                <PagePreviewNav
+                  page={selectedPage}
+                  total={thumbnails.length}
+                  onChange={setSelectedPage}
+                />
+              </div>
               {loading ? (
                 <LoadingSpinner className="aspect-3/4 bg-slate-100 dark:bg-dark-surface-alt rounded-lg flex items-center justify-center" />
               ) : thumbnails[selectedPage] ? (
                 <div
                   ref={previewRef}
-                  className="relative aspect-3/4 bg-white dark:bg-dark-surface rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden"
+                  className="relative bg-white dark:bg-dark-surface rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden"
+                  style={
+                    pageDims[selectedPage]
+                      ? {
+                          aspectRatio: `${pageDims[selectedPage].width} / ${pageDims[selectedPage].height}`,
+                        }
+                      : { aspectRatio: "3 / 4" }
+                  }
                 >
                   <img
                     src={thumbnails[selectedPage]}

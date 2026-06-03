@@ -26,7 +26,7 @@ export function CheckboxField({
           {label}
         </p>
         {description && (
-          <p className="text-xs text-slate-400 dark:text-dark-text-muted leading-snug">
+          <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-snug">
             {description}
           </p>
         )}

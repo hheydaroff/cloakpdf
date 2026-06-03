@@ -17,6 +17,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LabeledSlider } from "../components/LabeledSlider.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
 import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
@@ -50,8 +51,8 @@ type StampStyle = "text" | "seal" | "rectangle" | "watermark";
 interface StampPreset {
   id: string;
   label: string;
+  /** Ink colour, used for the preview, output, and the picker's colour dot. */
   color: { r: number; g: number; b: number };
-  bg: string;
 }
 
 const STAMPS: StampPreset[] = [
@@ -59,49 +60,41 @@ const STAMPS: StampPreset[] = [
     id: "draft",
     label: "DRAFT",
     color: { r: 100, g: 100, b: 100 },
-    bg: "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200",
   },
   {
     id: "approved",
     label: "APPROVED",
     color: { r: 22, g: 163, b: 74 },
-    bg: "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300",
   },
   {
     id: "confidential",
     label: "CONFIDENTIAL",
     color: { r: 220, g: 38, b: 38 },
-    bg: "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300",
   },
   {
     id: "rejected",
     label: "REJECTED",
     color: { r: 185, g: 28, b: 28 },
-    bg: "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300",
   },
   {
     id: "copy",
     label: "COPY",
     color: { r: 37, g: 99, b: 235 },
-    bg: "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300",
   },
   {
     id: "void",
     label: "VOID",
     color: { r: 234, g: 88, b: 12 },
-    bg: "bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300",
   },
   {
     id: "for-review",
     label: "FOR REVIEW",
     color: { r: 161, g: 98, b: 7 },
-    bg: "bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-300",
   },
   {
     id: "top-secret",
     label: "TOP SECRET",
     color: { r: 127, g: 29, b: 29 },
-    bg: "bg-red-100 dark:bg-red-900/40 text-red-900 dark:text-red-200",
   },
 ];
 
@@ -344,7 +337,7 @@ export default function StampPdf() {
             <div className="space-y-5">
               {/* Stamp style toggle */}
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                   Mode
                 </p>
                 <SegmentedControl
@@ -428,12 +421,19 @@ export default function StampPdf() {
                           key={stamp.id}
                           type="button"
                           onClick={() => setSelectedStamp(stamp)}
-                          className={`px-3 py-2 rounded-lg text-xs font-bold border-2 transition-[transform,opacity,color,background-color,border-color,box-shadow] ${stamp.bg} ${
+                          aria-pressed={selectedStamp.id === stamp.id}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border bg-slate-100 dark:bg-dark-surface-alt text-slate-700 dark:text-dark-text transition-[transform,opacity,color,background-color,border-color,box-shadow] hover:border-slate-300 dark:hover:border-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                             selectedStamp.id === stamp.id
                               ? "border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800"
-                              : "border-transparent"
+                              : "border-slate-200 dark:border-dark-border"
                           }`}
                         >
+                          {/* Non-interactive ink-colour dot — keeps brand colour out of the picker chrome */}
+                          <span
+                            aria-hidden="true"
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: rgbaColor(stamp.color, 1) }}
+                          />
                           {stamp.label}
                         </button>
                       ))}
@@ -492,14 +492,14 @@ export default function StampPdf() {
                               setSelectedPages(new Set(thumbnails.map((_, i) => i)));
                               setSelectedPage(0);
                             }}
-                            className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                            className="px-2 py-1 rounded text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                           >
                             All
                           </button>
                           <button
                             type="button"
                             onClick={() => setSelectedPages(new Set())}
-                            className="text-xs text-slate-500 hover:text-slate-700 dark:text-dark-text-muted"
+                            className="px-2 py-1 rounded text-xs text-slate-500 hover:text-slate-700 dark:text-dark-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                           >
                             Clear
                           </button>
@@ -542,9 +542,16 @@ export default function StampPdf() {
 
             {/* Right column: preview */}
             <div className="sticky top-4">
-              <p className="text-sm font-medium text-slate-700 dark:text-dark-text mb-1.5">
-                Preview — Page {selectedPage + 1}
-              </p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+                  Preview — Page {selectedPage + 1}
+                </p>
+                <PagePreviewNav
+                  page={selectedPage}
+                  total={thumbnails.length}
+                  onChange={setSelectedPage}
+                />
+              </div>
               {loading ? (
                 <div className="aspect-3/4 bg-slate-100 dark:bg-dark-surface-alt rounded-lg flex items-center justify-center">
                   <LoadingSpinner />
@@ -582,6 +589,7 @@ export default function StampPdf() {
                           color: rgbaColor(customColor, opacity),
                           fontWeight: "bold",
                           whiteSpace: "nowrap",
+                          fontFamily: "Helvetica, Arial, sans-serif",
                         }}
                       >
                         {customText}
@@ -595,6 +603,7 @@ export default function StampPdf() {
                           fontWeight: "bold",
                           whiteSpace: "nowrap",
                           letterSpacing: "0.05em",
+                          fontFamily: "Helvetica, Arial, sans-serif",
                         }}
                       >
                         {selectedStamp.label}
@@ -616,6 +625,7 @@ export default function StampPdf() {
                             fontWeight: "bold",
                             whiteSpace: "nowrap",
                             letterSpacing: "0.05em",
+                            fontFamily: "Helvetica, Arial, sans-serif",
                           }}
                         >
                           {selectedStamp.label}

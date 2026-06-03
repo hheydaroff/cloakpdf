@@ -37,22 +37,45 @@ export function ConfirmModal({
   onCancel,
 }: ConfirmModalProps) {
   const confirmRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    // Restore focus to whatever was focused before the dialog opened.
+    const prevFocused = document.activeElement as HTMLElement | null;
     confirmRef.current?.focus();
+    // Escape cancels; Tab is trapped inside the dialog. Enter is left to
+    // native button behaviour — whichever button has focus activates — so
+    // a stray Enter can't fire a destructive confirm from elsewhere.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
-      if (e.key === "Enter") onConfirm();
+      if (e.key === "Escape") {
+        onCancel();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusables = dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusables || focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
       window.removeEventListener("keydown", onKey);
+      prevFocused?.focus?.();
     };
-  }, [open, onCancel, onConfirm]);
+  }, [open, onCancel]);
 
   if (!open) return null;
 
@@ -68,6 +91,7 @@ export function ConfirmModal({
 
   return createPortal(
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-200 flex items-center justify-center p-4 animate-fade-in overscroll-contain"
       role="dialog"
       aria-modal="true"

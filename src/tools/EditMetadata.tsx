@@ -58,7 +58,7 @@ const METADATA_FIELDS: {
     key: "keywords",
     label: "Keywords",
     type: "text",
-    placeholder: "Comma-separated keywords",
+    placeholder: "Keywords",
     icon: Tag,
   },
   {
@@ -195,7 +195,7 @@ export default function EditMetadata() {
                   <button
                     type="button"
                     onClick={handleRedact}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-red-200 dark:border-red-700/60 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted bg-white dark:bg-dark-surface hover:border-slate-300 dark:hover:border-slate-500 hover:text-slate-700 dark:hover:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
                   >
                     <ShieldOff className="w-3.5 h-3.5" />
                     Redact All
@@ -238,7 +238,7 @@ export default function EditMetadata() {
                           value={metadata[field.key]}
                           placeholder={field.placeholder}
                           onChange={(e) => handleFieldChange(field.key, e.target.value)}
-                          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
+                          className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-500 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
                         />
                       )}
                     </div>
@@ -256,7 +256,9 @@ export default function EditMetadata() {
 
               {saved && (
                 <InfoCallout icon={CheckCircle2} accent="security">
-                  Metadata updated and PDF downloaded successfully.
+                  {output.inWorkflow && !output.isLastStep
+                    ? "Metadata updated and PDF passed to the next step."
+                    : "Metadata updated and PDF downloaded successfully."}
                 </InfoCallout>
               )}
             </div>

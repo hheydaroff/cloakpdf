@@ -8,22 +8,27 @@
  * rendered or printed.
  */
 
-import { Check, Scissors } from "lucide-react";
+import { Check, Scissors, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
+import { CheckboxField } from "../components/CheckboxField.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { ResetButton } from "../components/ResetButton.tsx";
+import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useToolOutput } from "../hooks/useToolOutput.ts";
 import type { CropMargins } from "../types.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
-import { cropPages, uncropPages } from "../utils/pdf-operations.ts";
+import { extractTextGeometry } from "../utils/layout-extract.ts";
+import { cropPages, cropPagesIndividual, uncropPages } from "../utils/pdf-operations.ts";
 import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 
 const MM_TO_PT = 2.83465;
@@ -57,6 +62,12 @@ export default function CropPages() {
   const [margins, setMargins] = useState<CropMargins>({ top: 0, right: 0, bottom: 0, left: 0 });
   const [applyToAll, setApplyToAll] = useState(true);
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
+  // Preview-only cursor: which page the right-hand preview shows. Kept
+  // strictly separate from `selectedPages` (what actually gets cropped)
+  // so paging the preview never changes the output.
+  const [selectedPage, setSelectedPage] = useState(0);
+  // Determinate progress for the auto-crop geometry pass on large documents.
+  const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
   const pdf = usePdfFile<LoadedPdf>({
@@ -67,6 +78,8 @@ export default function CropPages() {
       setAllSides(0);
       setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
       setSelectedPages(new Set());
+      setAutoProgress(null);
+      setSelectedPage(0);
     },
   });
   const task = useAsyncProcess();
@@ -84,6 +97,7 @@ export default function CropPages() {
     setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
     setApplyToAll(true);
     setSelectedPages(new Set());
+    setSelectedPage(0);
   }, []);
 
   const isDirty =
@@ -160,6 +174,70 @@ export default function CropPages() {
     }, "Failed to crop pages. Please try again.");
   }, [pdf.file, marginsInPt, applyToAll, selectedPages, isValid, task, output]);
 
+  /**
+   * Auto-crop: trim each page to its own content bounding box. We pull the
+   * text-layer geometry (no OCR — crop is a visual trim, not a re-read), union
+   * each page's item boxes into a content rect, and convert the surrounding
+   * whitespace to per-page margins. Pages with no detectable text (e.g. pure
+   * scans) are left untouched.
+   */
+  const AUTO_PAD_PT = 6; // a little breathing room so glyphs aren't clipped
+  const handleAutoCrop = useCallback(async () => {
+    if (!pdf.file) return;
+    const file = pdf.file;
+    setAutoProgress(null);
+    await task.run(async () => {
+      const layoutPages = await extractTextGeometry(file, {
+        ocr: false,
+        onProgress: (done, total) => setAutoProgress({ current: done, total }),
+      });
+      let anyText = false;
+      const marginsByIndex = new Map<number, CropMargins>();
+      layoutPages.forEach((p, i) => {
+        const items = p.items.filter((it) => it.text.trim());
+        if (items.length === 0 || !p.width || !p.height) return;
+        anyText = true;
+        let xMin = Infinity;
+        let yMin = Infinity;
+        let xMax = 0;
+        let yMax = 0;
+        for (const it of items) {
+          if (it.x < xMin) xMin = it.x;
+          if (it.y < yMin) yMin = it.y;
+          if (it.x + it.width > xMax) xMax = it.x + it.width;
+          if (it.y + it.height > yMax) yMax = it.y + it.height;
+        }
+        const m: CropMargins = {
+          top: Math.max(0, yMin - AUTO_PAD_PT),
+          bottom: Math.max(0, p.height - yMax - AUTO_PAD_PT),
+          left: Math.max(0, xMin - AUTO_PAD_PT),
+          right: Math.max(0, p.width - xMax - AUTO_PAD_PT),
+        };
+        if (m.top + m.bottom + m.left + m.right > 2) marginsByIndex.set(i, m);
+      });
+      if (marginsByIndex.size === 0) {
+        // Be precise about why nothing happened — a scanned PDF (no text layer)
+        // is a different story from one whose pages already fill the sheet.
+        throw new Error(
+          anyText
+            ? "Pages already fit their content — nothing to trim."
+            : "No text layer found to auto-crop (this PDF looks scanned) — use the manual margins below instead.",
+        );
+      }
+      const { bytes, croppedCount } = await cropPagesIndividual(file, marginsByIndex);
+      if (croppedCount === 0) {
+        // The only candidate pages were rotated, which cropPagesIndividual skips
+        // (its margins live in a different coordinate frame). Don't hand back an
+        // unchanged file pretending it was cropped.
+        throw new Error(
+          "These pages are rotated — auto-crop can't trim them safely. Use the manual margins below instead.",
+        );
+      }
+      output.deliver(bytes, "_cropped", file);
+    }, "Failed to auto-crop. Please try again.");
+    setAutoProgress(null);
+  }, [pdf.file, task, output]);
+
   const handleUncrop = useCallback(async () => {
     if (!pdf.file) return;
     const file = pdf.file;
@@ -176,7 +254,7 @@ export default function CropPages() {
   // Suppress unused ref warning — it's used for layout
   useEffect(() => void previewRef.current, []);
 
-  const firstThumb = allThumbs[0] ?? null;
+  const previewThumb = allThumbs[selectedPage] ?? null;
 
   return (
     <div className="space-y-6">
@@ -212,32 +290,64 @@ export default function CropPages() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Left: controls */}
                 <div className="space-y-4">
-                  <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted">
+                  {/* Auto-crop — one click trims every page to its own content
+                      box (text-layer geometry via pdf.js / liteparse). */}
+                  <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4 space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 w-9 h-9 rounded-lg bg-primary-50 dark:bg-primary-900/30 flex items-center justify-center">
+                        <Sparkles className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 dark:text-dark-text">
+                          Auto-crop to content
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
+                          Trims the whitespace around the text on every page, fitting each one to
+                          its own content.
+                        </p>
+                      </div>
+                    </div>
+                    {processing && autoProgress && autoProgress.total > 0 && (
+                      <ProgressBar
+                        current={autoProgress.current}
+                        total={autoProgress.total}
+                        label={`Reading page ${autoProgress.current} of ${autoProgress.total}…`}
+                      />
+                    )}
+                    <ActionButton
+                      onClick={handleAutoCrop}
+                      processing={processing}
+                      disabled={processing}
+                      label={`Auto-crop & ${output.deliveryWord}`}
+                      processingLabel="Analyzing pages…"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-slate-200 dark:bg-dark-border" />
+                    <span className="text-xs text-slate-400 dark:text-dark-text-muted">
+                      or set margins manually
+                    </span>
+                    <div className="h-px flex-1 bg-slate-200 dark:bg-dark-border" />
+                  </div>
+
+                  <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted">
                         <Scissors className="w-3.5 h-3.5" />
                         Margins to hide (mm)
                       </p>
                       {/* Mode toggle */}
-                      <div className="inline-flex rounded-lg border border-slate-200 dark:border-dark-border p-0.5 bg-slate-100 dark:bg-dark-surface-alt">
-                        <button
-                          type="button"
-                          onClick={() => {
+                      <SegmentedControl
+                        size="sm"
+                        ariaLabel="Margin mode"
+                        value={marginMode}
+                        onChange={(mode) => {
+                          if (mode === "uniform") {
                             setMarginMode("uniform");
                             setAllSides(0);
                             setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
-                          }}
-                          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                            marginMode === "uniform"
-                              ? "bg-white dark:bg-dark-surface text-slate-900 dark:text-dark-text shadow-sm"
-                              : "text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text"
-                          }`}
-                        >
-                          All Sides
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
+                          } else {
                             setMarginMode("custom");
                             setMargins({
                               top: allSides,
@@ -245,16 +355,13 @@ export default function CropPages() {
                               bottom: allSides,
                               left: allSides,
                             });
-                          }}
-                          className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                            marginMode === "custom"
-                              ? "bg-white dark:bg-dark-surface text-slate-900 dark:text-dark-text shadow-sm"
-                              : "text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text"
-                          }`}
-                        >
-                          Custom
-                        </button>
-                      </div>
+                          }
+                        }}
+                        options={[
+                          { value: "uniform", label: "All Sides" },
+                          { value: "custom", label: "Custom" },
+                        ]}
+                      />
                     </div>
 
                     {/* Uniform input */}
@@ -265,7 +372,7 @@ export default function CropPages() {
                           className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted mb-1"
                         >
                           <span>All sides</span>
-                          <span>{allSides} mm</span>
+                          <span className="tabular-nums">{allSides} mm</span>
                         </label>
                         <input
                           id="crop-all"
@@ -290,7 +397,7 @@ export default function CropPages() {
                             className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted mb-1"
                           >
                             <span>Top</span>
-                            <span>{margins.top} mm</span>
+                            <span className="tabular-nums">{margins.top} mm</span>
                           </label>
                           <input
                             id="crop-top"
@@ -312,7 +419,7 @@ export default function CropPages() {
                               className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted mb-1"
                             >
                               <span>Left</span>
-                              <span>{margins.left} mm</span>
+                              <span className="tabular-nums">{margins.left} mm</span>
                             </label>
                             <input
                               id="crop-left"
@@ -332,7 +439,7 @@ export default function CropPages() {
                               className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted mb-1"
                             >
                               <span>Right</span>
-                              <span>{margins.right} mm</span>
+                              <span className="tabular-nums">{margins.right} mm</span>
                             </label>
                             <input
                               id="crop-right"
@@ -354,7 +461,7 @@ export default function CropPages() {
                             className="flex justify-between text-sm text-slate-600 dark:text-dark-text-muted mb-1"
                           >
                             <span>Bottom</span>
-                            <span>{margins.bottom} mm</span>
+                            <span className="tabular-nums">{margins.bottom} mm</span>
                           </label>
                           <input
                             id="crop-bottom"
@@ -375,13 +482,13 @@ export default function CropPages() {
                         margins.right > 0 ||
                         margins.bottom > 0 ||
                         margins.left > 0) && (
-                        <p className="text-sm text-red-500">
+                        <p className="text-sm text-red-500 dark:text-red-400">
                           Margins exceed page dimensions — reduce them.
                         </p>
                       )}
                   </div>
 
-                  <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-3 space-y-1">
+                  <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-3 space-y-1">
                     <p className="text-xs text-slate-500 dark:text-dark-text-muted">
                       <strong>Crop</strong> sets a crop box that hides margins from view without
                       permanently removing them — the hidden content stays in the file.
@@ -392,17 +499,11 @@ export default function CropPages() {
                     </p>
                   </div>
 
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={applyToAll}
-                      onChange={(e) => handleApplyToAllChange(e.target.checked)}
-                      className="w-4 h-4 text-primary-600 rounded"
-                    />
-                    <span className="text-sm text-slate-700 dark:text-dark-text">
-                      Apply to all pages
-                    </span>
-                  </label>
+                  <CheckboxField
+                    label="Apply to all pages"
+                    checked={applyToAll}
+                    onChange={handleApplyToAllChange}
+                  />
 
                   {/* Per-page selector */}
                   {!applyToAll && allThumbs.length > 0 && (
@@ -428,7 +529,7 @@ export default function CropPages() {
                           </button>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto rounded-xl border border-slate-200 dark:border-dark-border p-2">
+                      <div className="grid grid-cols-3 gap-2 max-h-64 overflow-y-auto thin-scrollbar rounded-xl border border-slate-200 dark:border-dark-border p-2">
                         {allThumbs.map((thumb, i) => (
                           <PageThumbnail
                             key={thumb}
@@ -449,10 +550,12 @@ export default function CropPages() {
                         ))}
                       </div>
                       {selectedPages.size === 0 && (
-                        <p className="text-xs text-red-500">Select at least one page.</p>
+                        <p className="text-xs text-red-500 dark:text-red-400">
+                          Select at least one page.
+                        </p>
                       )}
                       {selectedPages.size > 0 && (
-                        <p className="text-xs text-slate-500 dark:text-dark-text-muted">
+                        <p className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums">
                           {selectedPages.size} of {allThumbs.length} page
                           {allThumbs.length !== 1 ? "s" : ""} selected
                         </p>
@@ -472,7 +575,7 @@ export default function CropPages() {
                       type="button"
                       onClick={handleUncrop}
                       disabled={processing || (!applyToAll && selectedPages.size === 0)}
-                      className="w-full bg-slate-100 dark:bg-dark-surface text-slate-700 dark:text-dark-text py-3 px-6 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-dark-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-slate-200 dark:border-dark-border"
+                      className="w-full bg-slate-100 dark:bg-dark-surface text-slate-700 dark:text-dark-text py-3 px-6 rounded-xl font-medium hover:bg-slate-200 dark:hover:bg-dark-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-slate-200 dark:border-dark-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     >
                       {processing ? "Processing…" : `Remove Crop & ${output.deliveryWord}`}
                     </button>
@@ -481,17 +584,28 @@ export default function CropPages() {
 
                 {/* Right: preview */}
                 <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-dark-text mb-2">
-                    Preview (first page)
-                  </p>
-                  {firstThumb && (
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+                      Preview — Page {selectedPage + 1}
+                    </p>
+                    <PagePreviewNav
+                      page={selectedPage}
+                      total={allThumbs.length}
+                      onChange={setSelectedPage}
+                    />
+                  </div>
+                  {/* The crop overlay below is derived from page 0's
+                      dimensions, so on mixed-size documents the mask edges
+                      are approximate when previewing other pages. The
+                      cropped output bytes are unaffected. */}
+                  {previewThumb && (
                     <div
                       ref={previewRef}
                       className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-dark-border"
                     >
                       <img
-                        src={firstThumb}
-                        alt="Page preview"
+                        src={previewThumb}
+                        alt={`Page ${selectedPage + 1}`}
                         width="800"
                         height="1131"
                         decoding="async"

@@ -41,6 +41,7 @@ export interface PdfInfo {
   pages: Array<{ width: number; height: number }>;
 }
 import type { PDFDocumentProxy } from "pdfjs-dist";
+import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 
 /**
  * Lazily load PDF.js and configure its Web Worker exactly once.
@@ -68,6 +69,7 @@ import type {
   CropMargins,
   BatesNumberOptions,
 } from "../types.ts";
+import type { LayoutPage } from "./layout-extract.ts";
 /**
  * Merge multiple PDF files into a single document.
  *
@@ -160,7 +162,8 @@ export async function compressPdf(
 
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const sourcePdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const sourcePdf = await loadingTask.promise;
   const newPdf = await PDFDocument.create();
 
   for (let i = 1; i <= sourcePdf.numPages; i++) {
@@ -207,7 +210,7 @@ export async function compressPdf(
     await new Promise((r) => setTimeout(r, 0));
   }
 
-  void sourcePdf.destroy();
+  void loadingTask.destroy();
 
   return newPdf.save({
     useObjectStreams: true,
@@ -233,7 +236,8 @@ export async function grayscalePdf(
 
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const sourcePdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const sourcePdf = await loadingTask.promise;
   const newPdf = await PDFDocument.create();
 
   for (let i = 1; i <= sourcePdf.numPages; i++) {
@@ -284,7 +288,7 @@ export async function grayscalePdf(
     await new Promise((r) => setTimeout(r, 0));
   }
 
-  void sourcePdf.destroy();
+  void loadingTask.destroy();
 
   return newPdf.save({ useObjectStreams: true });
 }
@@ -366,20 +370,52 @@ export async function reorderPages(file: File, newOrder: number[]): Promise<Uint
 }
 
 /**
- * Convert one or more image files (PNG / JPEG) into a single PDF document.
+ * Decode an image the browser can render but pdf-lib can't embed natively
+ * (e.g. WebP) into PNG bytes via an off-screen canvas, so it can be passed to
+ * `embedPng`. Prefers `OffscreenCanvas`; falls back to a DOM canvas.
+ */
+async function decodeImageToPngBytes(file: File): Promise<Uint8Array> {
+  const bitmap = await createImageBitmap(file);
+  try {
+    if (typeof OffscreenCanvas !== "undefined") {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error(`Could not decode image "${file.name}".`);
+      ctx.drawImage(bitmap, 0, 0);
+      const blob = await canvas.convertToBlob({ type: "image/png" });
+      return new Uint8Array(await blob.arrayBuffer());
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error(`Could not decode image "${file.name}".`);
+    ctx.drawImage(bitmap, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!blob) throw new Error(`Could not encode image "${file.name}" as PNG.`);
+    return new Uint8Array(await blob.arrayBuffer());
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * Convert one or more image files (PNG / JPEG / WebP) into a single PDF.
  *
  * Each image is placed on its own page. When `pageSize` is "a4" or "letter",
  * the image is scaled to fit within the standard page dimensions while
  * preserving its aspect ratio and centred on the page. When "fit" is
  * selected, the page dimensions match the image exactly.
  *
- * @param images - Array of image File objects (PNG or JPEG).
+ * @param images - Array of image File objects (PNG, JPEG, or WebP).
  * @param pageSize - Target page size: "a4" (595×842pt), "letter" (612×792pt), or "fit".
+ * @param onProgress - Optional callback invoked with (completed, total) after each image.
  * @returns PDF bytes containing all images, one per page.
  */
 export async function imagesToPdf(
   images: File[],
   pageSize: "a4" | "letter" | "fit" = "a4",
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
 
@@ -388,17 +424,22 @@ export async function imagesToPdf(
     letter: [612, 792],
   };
 
-  for (const imageFile of images) {
-    const imageBytes = await imageFile.arrayBuffer();
-    const uint8 = new Uint8Array(imageBytes);
+  for (let i = 0; i < images.length; i++) {
+    const imageFile = images[i];
+    const uint8 = new Uint8Array(await imageFile.arrayBuffer());
 
-    if (!["image/png", "image/jpeg", "image/jpg"].includes(imageFile.type)) {
-      throw new Error(
-        `Unsupported image type "${imageFile.type}" (${imageFile.name}). Only PNG and JPEG images are supported.`,
-      );
+    // pdf-lib embeds PNG and JPEG directly. WebP (and any other format the
+    // dropzone accepts) isn't natively embeddable, so decode it to PNG via a
+    // canvas first — the tool advertises WebP, so honour it instead of
+    // throwing at Create-PDF time.
+    let image: Awaited<ReturnType<typeof pdf.embedPng>>;
+    if (imageFile.type === "image/png") {
+      image = await pdf.embedPng(uint8);
+    } else if (imageFile.type === "image/jpeg" || imageFile.type === "image/jpg") {
+      image = await pdf.embedJpg(uint8);
+    } else {
+      image = await pdf.embedPng(await decodeImageToPngBytes(imageFile));
     }
-    const image =
-      imageFile.type === "image/png" ? await pdf.embedPng(uint8) : await pdf.embedJpg(uint8);
 
     let pageWidth: number;
     let pageHeight: number;
@@ -423,6 +464,10 @@ export async function imagesToPdf(
       width: scaledWidth,
       height: scaledHeight,
     });
+
+    onProgress?.(i + 1, images.length);
+    // Yield so the main thread can paint progress between (often multi-MB) images.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   return pdf.save();
@@ -867,7 +912,8 @@ export async function extractTextOcr(
   const { createWorker, PSM } = await import("tesseract.js");
   const pdfjsLib = await getPdfJs();
   const arrayBuffer = await file.arrayBuffer();
-  const pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdfDoc = await loadingTask.promise;
   const totalPages = pdfDoc.numPages;
   const OCR_SCALE = 3; // 3× ≈ 216 DPI for typical 72-DPI PDFs
 
@@ -893,49 +939,55 @@ export async function extractTextOcr(
     }
   }
 
-  // Create Tesseract worker once, reuse across all pages
-  const worker = await createWorker(resolvedLang);
-  await worker.setParameters({
-    tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
-    preserve_interword_spaces: "1",
-  });
-
   const pageTexts: string[] = [];
 
+  // `worker` is created inside the try so that a createWorker / setParameters
+  // rejection still runs the finally that destroys the PDF.js document; the
+  // finally only terminates a worker that was actually created.
+  let worker: Awaited<ReturnType<typeof createWorker>> | undefined;
   try {
+    // Create Tesseract worker once, reuse across all pages
+    worker = await createWorker(resolvedLang);
+    await worker.setParameters({
+      tessedit_pageseg_mode: PSM.SINGLE_BLOCK,
+      preserve_interword_spaces: "1",
+    });
+
     for (let i = 1; i <= totalPages; i++) {
       onProgress?.(i, totalPages, `Extracting page ${i} of ${totalPages}…`);
 
       const canvas = await renderPageToCanvas(pdfDoc, i, OCR_SCALE);
-      const { data } = await worker.recognize(canvas);
+      try {
+        const { data } = await worker.recognize(canvas);
 
-      // Build spatially-aware text from the block hierarchy
-      let pageText = "";
-      if (data.blocks && data.blocks.length > 0) {
-        for (const block of data.blocks) {
-          for (const paragraph of block.paragraphs) {
-            for (const line of paragraph.lines) {
-              pageText += `${line.text}\n`;
+        // Build spatially-aware text from the block hierarchy
+        let pageText = "";
+        if (data.blocks && data.blocks.length > 0) {
+          for (const block of data.blocks) {
+            for (const paragraph of block.paragraphs) {
+              for (const line of paragraph.lines) {
+                pageText += `${line.text}\n`;
+              }
+              pageText += "\n"; // paragraph break
             }
-            pageText += "\n"; // paragraph break
           }
+        } else {
+          // Fallback to raw text if blocks aren't available
+          pageText = data.text;
         }
-      } else {
-        // Fallback to raw text if blocks aren't available
-        pageText = data.text;
+
+        pageTexts.push(pageText.trim());
+      } finally {
+        // Release canvas memory even if recognition throws.
+        canvas.width = 0;
+        canvas.height = 0;
       }
-
-      pageTexts.push(pageText.trim());
-
-      // Release canvas memory
-      canvas.width = 0;
-      canvas.height = 0;
 
       onProgress?.(i, totalPages);
     }
   } finally {
-    await worker.terminate();
-    void pdfDoc.destroy();
+    await worker?.terminate();
+    void loadingTask.destroy();
   }
 
   return pageTexts;
@@ -952,7 +1004,11 @@ export async function extractTextOcr(
  * @param pageTexts - Array of per-page OCR text strings.
  * @returns Uint8Array of the new searchable PDF.
  */
-export async function createSearchablePdf(file: File, pageTexts: string[]): Promise<Uint8Array> {
+export async function createSearchablePdf(
+  file: File,
+  pageTexts: string[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
   const pdfDoc = await PDFDocument.load(arrayBuffer);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -960,7 +1016,10 @@ export async function createSearchablePdf(file: File, pageTexts: string[]): Prom
 
   for (let i = 0; i < pageCount && i < pageTexts.length; i++) {
     const text = pageTexts[i];
-    if (!text) continue;
+    if (!text) {
+      onProgress?.(i + 1, pageCount);
+      continue;
+    }
 
     const page = pdfDoc.getPage(i);
     const { height } = page.getSize();
@@ -993,6 +1052,76 @@ export async function createSearchablePdf(file: File, pageTexts: string[]): Prom
 
       y -= lineHeight;
     }
+    onProgress?.(i + 1, pageCount);
+    if (i % 16 === 15) await new Promise<void>((r) => setTimeout(r, 0));
+  }
+
+  return pdfDoc.save();
+}
+
+/**
+ * Create a searchable PDF whose invisible text layer is positioned at each
+ * text item's true bounding box.
+ *
+ * This is the layout-aware successor to {@link createSearchablePdf}: instead
+ * of stacking lines at a synthetic line height from the top of the page (which
+ * never aligned with the underlying image), every run from
+ * {@link extractLayout} is drawn at its own x/y so selecting text in a viewer
+ * highlights the right place — the prerequisite for word-accurate select and
+ * copy on scanned PDFs.
+ *
+ * liteparse reports item positions in PDF points with a top-left origin; we
+ * convert to pdf-lib's bottom-left space. Each `drawText` is wrapped because
+ * the standard Helvetica font can only encode WinAnsi — items with characters
+ * it can't represent (e.g. CJK OCR output) are skipped rather than failing the
+ * whole document; the original page image keeps them visible regardless.
+ *
+ * @param file  - The original PDF file.
+ * @param pages - Per-page layout from {@link extractLayout}.
+ * @returns Uint8Array of the new searchable PDF.
+ */
+export async function createSearchablePdfFromLayout(
+  file: File,
+  pages: LayoutPage[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfDoc = await PDFDocument.load(arrayBuffer);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const pageCount = pdfDoc.getPageCount();
+
+  const byNumber = new Map(pages.map((p) => [p.pageNumber, p]));
+
+  for (let i = 0; i < pageCount; i++) {
+    const layout = byNumber.get(i + 1);
+    if (!layout) {
+      onProgress?.(i + 1, pageCount);
+      continue;
+    }
+
+    const page = pdfDoc.getPage(i);
+    const { width: pdfW, height: pdfH } = page.getSize();
+    // liteparse coordinates are in the source page's point space; scale to the
+    // pdf-lib page in case the two differ (defensive — usually identical).
+    const sx = layout.width ? pdfW / layout.width : 1;
+    const sy = layout.height ? pdfH / layout.height : 1;
+
+    for (const item of layout.items) {
+      const text = item.text.trim();
+      if (!text) continue;
+      const size = Math.max(1, (item.fontSize || item.height) * sy);
+      // Baseline sits at the bottom of the item box; convert top-left → bottom-left.
+      const x = item.x * sx;
+      const y = pdfH - (item.y + item.height) * sy;
+      try {
+        page.drawText(text, { x, y, size, font, color: rgb(0, 0, 0), opacity: 0 });
+      } catch {
+        // Unencodable glyphs for Helvetica — skip this run, keep the rest.
+      }
+    }
+    onProgress?.(i + 1, pageCount);
+    // Yield every 16 pages so React can repaint the progress bar on big docs.
+    if (i % 16 === 15) await new Promise<void>((r) => setTimeout(r, 0));
   }
 
   return pdfDoc.save();
@@ -1375,14 +1504,36 @@ export async function addHeaderFooter(
 }
 
 /**
+ * Remap edge margins expressed against the *displayed* (rotated) page into the
+ * page's unrotated user space, so a crop box set with `setCropBox` trims the
+ * edge the user actually sees in the preview. `angle` is the page's `/Rotate`
+ * (clockwise degrees). Without this, cropping a 90/270 page trims the wrong
+ * side because the preview applies `/Rotate` but the crop box does not.
+ */
+function rotateCropMargins(m: CropMargins, angle: number): CropMargins {
+  switch (((angle % 360) + 360) % 360) {
+    case 90:
+      return { left: m.top, right: m.bottom, top: m.right, bottom: m.left };
+    case 180:
+      return { left: m.right, right: m.left, top: m.bottom, bottom: m.top };
+    case 270:
+      return { left: m.bottom, right: m.top, top: m.left, bottom: m.right };
+    default:
+      return m;
+  }
+}
+
+/**
  * Crop pages by setting a crop box that hides the specified margins.
  *
  * The crop box is a non-destructive trim — the hidden content remains in the
  * file but won't be rendered or printed. At least one target page must have
- * positive remaining dimensions for the operation to succeed.
+ * positive remaining dimensions for the operation to succeed. Margins are
+ * interpreted against the displayed (rotated) page and remapped per page so
+ * rotated pages crop the edge the user selected, not a transposed one.
  *
  * @param file - The source PDF file.
- * @param margins - Margin values in PDF points to hide on each edge.
+ * @param margins - Margin values in PDF points to hide on each displayed edge.
  * @param pageIndices - Optional 0-based indices to crop; defaults to all pages.
  * @returns New PDF bytes with crop boxes applied.
  */
@@ -1398,16 +1549,56 @@ export async function cropPages(
 
   for (const page of targets) {
     const { width, height } = page.getSize();
-    const x = margins.left;
-    const y = margins.bottom;
-    const w = width - margins.left - margins.right;
-    const h = height - margins.top - margins.bottom;
+    const m = rotateCropMargins(margins, page.getRotation().angle);
+    const x = m.left;
+    const y = m.bottom;
+    const w = width - m.left - m.right;
+    const h = height - m.top - m.bottom;
     if (w > 0 && h > 0) {
       page.setCropBox(x, y, w, h);
     }
   }
 
   return pdf.save();
+}
+
+/**
+ * Crop each page to its own crop box — the per-page counterpart of
+ * {@link cropPages}, used by auto-crop where every page is trimmed to fit its
+ * own content. `marginsByIndex` maps a 0-based page index to the margins (in
+ * PDF points) to hide on that page; pages absent from the map are left as-is.
+ *
+ * Rotated pages (/Rotate 90/180/270) are skipped: the caller computes margins
+ * in the rendered (rotated) frame while the crop box lives in unrotated user
+ * space, so applying them there would mis-place the box. Leaving rotated pages
+ * untouched is the safe choice (the manual margin tool still handles them).
+ *
+ * Returns the new bytes plus `croppedCount` — how many pages actually got a
+ * crop box — so the caller can tell the user when nothing was trimmable (e.g.
+ * every candidate page was rotated) instead of silently handing back an
+ * unchanged file.
+ */
+export async function cropPagesIndividual(
+  file: File,
+  marginsByIndex: Map<number, CropMargins>,
+): Promise<{ bytes: Uint8Array; croppedCount: number }> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await PDFDocument.load(arrayBuffer);
+  const pages = pdf.getPages();
+  let croppedCount = 0;
+  for (const [index, m] of marginsByIndex) {
+    const page = pages[index];
+    if (!page) continue;
+    if (page.getRotation().angle % 360 !== 0) continue;
+    const { width, height } = page.getSize();
+    const w = width - m.left - m.right;
+    const h = height - m.top - m.bottom;
+    if (w > 0 && h > 0) {
+      page.setCropBox(m.left, m.bottom, w, h);
+      croppedCount++;
+    }
+  }
+  return { bytes: await pdf.save(), croppedCount };
 }
 
 /**
@@ -1534,6 +1725,13 @@ export async function flattenPdf(file: File): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await PDFDocument.load(arrayBuffer);
   pdf.getForm().flatten();
+  // flatten() bakes form-field widgets into page content and drops them from
+  // each page's /Annots. Remove any remaining annotations — sticky-note
+  // comments, highlights, text markup, links — so the output truly carries no
+  // annotation layer, which is what "removes annotations" promises.
+  for (const page of pdf.getPages()) {
+    page.node.delete(PDFName.of("Annots"));
+  }
   return pdf.save();
 }
 
@@ -1578,45 +1776,161 @@ export async function extractPages(file: File, pageIndices: number[]): Promise<U
 }
 
 /**
- * Permanently redact regions of a PDF by drawing filled black rectangles.
+ * Split a PDF into multiple parts in a single pass.
  *
- * Coordinates are expressed as fractions (0-1) of the page's width and height
- * measured from the top-left corner. They are converted to PDF user-space points
- * (origin at bottom-left) before drawing.
+ * Parses the source document exactly once, then copies the page ranges for
+ * each part — equivalent to calling {@link extractPages} per part but without
+ * re-reading and re-parsing the whole source for every output (an N-part
+ * split previously parsed the source N times).
+ *
+ * @param file - The source PDF.
+ * @param parts - One array of 0-based page indices per output part, in order.
+ * @returns One PDF (as bytes) per part, in the same order as `parts`.
+ */
+export async function splitPdfIntoParts(file: File, parts: number[][]): Promise<Uint8Array[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const source = await PDFDocument.load(arrayBuffer);
+  const pageCount = source.getPageCount();
+  const out: Uint8Array[] = [];
+  for (const indices of parts) {
+    const valid = indices.filter((i) => i >= 0 && i < pageCount);
+    if (valid.length === 0) throw new Error("No valid pages selected.");
+    const result = await PDFDocument.create();
+    const copied = await result.copyPages(source, valid);
+    for (const page of copied) result.addPage(page);
+    out.push(await result.save());
+  }
+  return out;
+}
+
+/** Encode a canvas to image bytes via `toBlob` (async, memory-friendly). */
+function canvasToImageBytes(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number,
+): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Failed to encode redacted page image"));
+          return;
+        }
+        blob
+          .arrayBuffer()
+          .then((buf) => resolve(new Uint8Array(buf)))
+          .catch(reject);
+      },
+      type,
+      quality,
+    );
+  });
+}
+
+/**
+ * Permanently redact regions of a PDF — destructively.
+ *
+ * A black rectangle drawn on top of a page is NOT a redaction: the text and
+ * images underneath survive in the byte stream and are trivially recovered by
+ * copy/paste or text extraction. So instead, any page that carries a redaction
+ * is **rasterised, has the black boxes burned into the pixels, and is rebuilt
+ * as an image-only page** — the original text/vectors under (and around) the
+ * boxes no longer exist in the output. Pages without redactions are copied
+ * through untouched, so they keep their crisp vector text and small size.
+ *
+ * Trade-off (surfaced in the UI): redacted pages become flattened images —
+ * their remaining text is no longer selectable and the file grows. That is the
+ * standard, defensible cost of true redaction.
+ *
+ * Coordinates are fractions (0-1) of page width/height from the top-left.
  *
  * @param file - The source PDF file.
  * @param redactions - Array of redaction regions per page.
- * @returns A new PDF with the redacted areas permanently blacked out.
+ * @returns A new PDF with the redacted areas permanently destroyed.
  */
 export async function redactPdf(
   file: File,
   redactions: Array<{ pageIndex: number; xPct: number; yPct: number; wPct: number; hPct: number }>,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
-  const pdf = await PDFDocument.load(arrayBuffer);
+  const src = await PDFDocument.load(arrayBuffer);
+  const pageCount = src.getPageCount();
 
+  // Group redaction rects by page.
+  const byPage = new Map<number, typeof redactions>();
   for (const r of redactions) {
-    if (r.pageIndex < 0 || r.pageIndex >= pdf.getPageCount()) continue;
-    const page = pdf.getPage(r.pageIndex);
-    const { width, height } = page.getSize();
-
-    // Convert from top-left fraction coords to PDF bottom-left points
-    const pdfX = r.xPct * width;
-    const pdfH = r.hPct * height;
-    const pdfY = height - r.yPct * height - pdfH;
-    const pdfW = r.wPct * width;
-
-    page.drawRectangle({
-      x: pdfX,
-      y: pdfY,
-      width: pdfW,
-      height: pdfH,
-      color: rgb(0, 0, 0),
-      opacity: 1,
-    });
+    if (r.pageIndex < 0 || r.pageIndex >= pageCount) continue;
+    const list = byPage.get(r.pageIndex) ?? [];
+    list.push(r);
+    byPage.set(r.pageIndex, list);
   }
+  if (byPage.size === 0) return src.save();
 
-  return pdf.save();
+  const pdfjsLib = await getPdfJs();
+  // PDF.js may detach the backing buffer — hand it its own copy so `src`
+  // (used for copying untouched pages) stays valid.
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0), wasmUrl: PDFJS_WASM_URL });
+  const pdfjsDoc = await loadingTask.promise;
+  const REDACT_DPI = 150;
+  const scale = REDACT_DPI / 72;
+
+  // Only the box-carrying pages do real (slow) rasterisation work — report
+  // progress over those, since the copy-through pages are near-instant.
+  const total = byPage.size;
+  let done = 0;
+
+  const out = await PDFDocument.create();
+  try {
+    for (let i = 0; i < pageCount; i++) {
+      const rects = byPage.get(i);
+      if (!rects) {
+        const [copied] = await out.copyPages(src, [i]);
+        out.addPage(copied);
+        continue;
+      }
+
+      const page = await pdfjsDoc.getPage(i + 1);
+      try {
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement("canvas");
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Failed to acquire 2D canvas context");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+
+        // Burn the redaction boxes into the pixels.
+        ctx.fillStyle = "#000000";
+        for (const r of rects) {
+          ctx.fillRect(
+            r.xPct * canvas.width,
+            r.yPct * canvas.height,
+            r.wPct * canvas.width,
+            r.hPct * canvas.height,
+          );
+        }
+
+        const jpeg = await canvasToImageBytes(canvas, "image/jpeg", 0.92);
+        const img = await out.embedJpg(jpeg);
+        const ptW = viewport.width / scale;
+        const ptH = viewport.height / scale;
+        const outPage = out.addPage([ptW, ptH]);
+        outPage.drawImage(img, { x: 0, y: 0, width: ptW, height: ptH });
+
+        canvas.width = 0;
+        canvas.height = 0;
+      } finally {
+        page.cleanup();
+      }
+      onProgress?.(++done, total);
+    }
+    return out.save();
+  } finally {
+    void loadingTask.destroy();
+  }
 }
 
 /**

@@ -6,12 +6,13 @@
  * and the percentage saved. The compressed file can then be downloaded.
  */
 
-import { Gauge } from "lucide-react";
+import { Gauge, Info } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
+import { InfoCallout } from "../components/InfoCallout.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -78,7 +79,7 @@ export default function CompressPdf() {
           encryptedFile={pdf.encryptedFile}
           onClearEncrypted={pdf.reset}
           label="Drop a PDF file here"
-          hint="We'll optimize the file structure to reduce size"
+          hint="Re-renders each page as a compressed JPEG image to shrink the file"
         />
       ) : (
         <>
@@ -91,71 +92,50 @@ export default function CompressPdf() {
           {!result ? (
             <div className="space-y-4">
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                <p
+                  id="compress-level-label"
+                  className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2"
+                >
                   <Gauge className="w-3.5 h-3.5" />
                   Compression Level
                 </p>
-                <div className="grid grid-cols-3 gap-3">
+                <div
+                  role="radiogroup"
+                  aria-labelledby="compress-level-label"
+                  className="grid grid-cols-3 gap-3"
+                >
                   {[
                     {
                       value: "low" as const,
                       label: "Light",
-                      desc: "Best quality, less compression",
-                      blur: "blur(0px)",
+                      desc: "Sharpest pages, modest size drop",
+                      detail: "Renders pages at 1×, JPEG quality 85%",
                     },
                     {
                       value: "medium" as const,
                       label: "Balanced",
                       desc: "Good balance of size & quality",
-                      blur: "blur(0.4px)",
+                      detail: "Renders pages at 1.5×, JPEG quality 70%",
                     },
                     {
                       value: "high" as const,
                       label: "Maximum",
-                      desc: "Smallest file, lower quality",
-                      blur: "blur(0.9px)",
+                      desc: "Highest detail; may not shrink text PDFs",
+                      detail: "Renders pages at 2×, JPEG quality 50%",
                     },
                   ].map((opt) => (
                     <button
                       key={opt.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={quality === opt.value}
                       onClick={() => setQuality(opt.value)}
-                      className={`p-3 rounded-xl border-2 text-left transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+                      className={`p-3 rounded-xl border text-left transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
                         quality === opt.value
                           ? "border-primary-500 bg-primary-50 dark:bg-primary-900/30 ring-1 ring-primary-300 dark:ring-primary-700"
                           : "border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface hover:border-slate-300 dark:hover:border-slate-500 hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
                       }`}
                     >
-                      {/* Mini document preview showing sharpness */}
-                      <div className="mb-2.5 rounded-md overflow-hidden border border-primary-100 dark:border-primary-900/50 bg-primary-50/40 dark:bg-primary-900/20 w-full aspect-video flex flex-col p-1.5 gap-1">
-                        <div
-                          className="w-full h-1.5 rounded-full bg-primary-700 dark:bg-primary-300"
-                          style={{ filter: opt.blur }}
-                        />
-                        <div
-                          className="w-4/5 h-1.5 rounded-full bg-primary-400 dark:bg-primary-500"
-                          style={{ filter: opt.blur }}
-                        />
-                        <div
-                          className="w-full h-1.5 rounded-full bg-primary-200 dark:bg-primary-700"
-                          style={{ filter: opt.blur }}
-                        />
-                        <div
-                          className="w-3/5 h-1.5 rounded-full bg-primary-200 dark:bg-primary-700"
-                          style={{ filter: opt.blur }}
-                        />
-                        <div
-                          className="mt-0.5 w-full h-5 rounded bg-primary-100 dark:bg-primary-900/50"
-                          style={{ filter: opt.blur }}
-                        />
-                        <div
-                          className="w-full h-1.5 rounded-full bg-primary-200 dark:bg-primary-700"
-                          style={{ filter: opt.blur }}
-                        />
-                        <div
-                          className="w-2/3 h-1.5 rounded-full bg-primary-200 dark:bg-primary-700"
-                          style={{ filter: opt.blur }}
-                        />
-                      </div>
                       <p
                         className={`text-sm font-semibold ${quality === opt.value ? "text-primary-700 dark:text-primary-300" : "text-slate-700 dark:text-dark-text"}`}
                       >
@@ -164,10 +144,18 @@ export default function CompressPdf() {
                       <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-0.5 leading-snug">
                         {opt.desc}
                       </p>
+                      <p className="text-xxs text-slate-500 dark:text-dark-text-muted mt-1.5 leading-snug tabular-nums">
+                        {opt.detail}
+                      </p>
                     </button>
                   ))}
                 </div>
               </div>
+
+              <InfoCallout icon={Info} accent="warning" title="Output is rasterized">
+                Each page is re-rendered as a JPEG image, so text in the result is no longer
+                selectable or searchable. Keep the original if you need the text layer.
+              </InfoCallout>
 
               {processing && progress && (
                 <ProgressBar
@@ -190,20 +178,20 @@ export default function CompressPdf() {
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
                     <p className="text-sm text-slate-500 dark:text-dark-text-muted">Original</p>
-                    <p className="text-xl font-bold text-slate-800 dark:text-dark-text">
+                    <p className="text-xl font-semibold tabular-nums text-slate-800 dark:text-dark-text">
                       {formatFileSize(result.original)}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-slate-500 dark:text-dark-text-muted">Compressed</p>
-                    <p className="text-xl font-bold text-emerald-600">
+                    <p className="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                       {formatFileSize(result.compressed)}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-slate-500 dark:text-dark-text-muted">Saved</p>
                     <p
-                      className={`text-xl font-bold ${savings > 0 ? "text-emerald-600" : "text-slate-500 dark:text-dark-text-muted"}`}
+                      className={`text-xl font-semibold tabular-nums ${savings > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-dark-text-muted"}`}
                     >
                       {savings}%
                     </p>

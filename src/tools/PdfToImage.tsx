@@ -137,7 +137,7 @@ export default function PdfToImage() {
                 </p>
                 <button
                   onClick={toggleAll}
-                  className="text-sm text-primary-600 hover:text-primary-700"
+                  className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
                 >
                   {selectedPages.size === thumbnails.length ? "Deselect all" : "Select all"}
                 </button>
@@ -159,7 +159,7 @@ export default function PdfToImage() {
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                       <Image className="w-3.5 h-3.5" />
                       Format
                     </p>
@@ -176,7 +176,7 @@ export default function PdfToImage() {
                   </div>
 
                   <div>
-                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                       <ScanLine className="w-3.5 h-3.5" />
                       Resolution
                     </p>
@@ -191,7 +191,7 @@ export default function PdfToImage() {
                         { value: 300, label: "300" },
                       ]}
                     />
-                    <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-1.5">DPI</p>
+                    <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1.5">DPI</p>
                   </div>
                 </div>
 
@@ -206,7 +206,7 @@ export default function PdfToImage() {
                       unit="%"
                       onChange={setQuality}
                     />
-                    <div className="flex justify-between text-xs text-slate-400 dark:text-dark-text-muted">
+                    <div className="flex justify-between text-xs text-slate-500 dark:text-dark-text-muted">
                       <span>Smaller</span>
                       <span>Higher quality</span>
                     </div>

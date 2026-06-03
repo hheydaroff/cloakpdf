@@ -136,7 +136,7 @@ function PasswordField({
         >
           {label}
         </label>
-        {hint && <p className="text-xs text-slate-400 dark:text-dark-text-muted mt-0.5">{hint}</p>}
+        {hint && <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-0.5">{hint}</p>}
       </div>
       <div className="relative">
         <input
@@ -151,7 +151,7 @@ function PasswordField({
         <button
           type="button"
           onClick={onToggleShow}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-dark-text transition-colors"
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 transition-colors"
           aria-label={show ? "Hide password" : "Show password"}
         >
           {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -296,7 +296,7 @@ export default function PdfPassword() {
               <span className="font-medium">{file.name}</span> — {formatFileSize(file.size)}
             </p>
             {pdfState === "detecting" && (
-              <span className="text-xs text-slate-400 dark:text-dark-text-muted animate-pulse">
+              <span className="text-xs text-slate-500 dark:text-dark-text-muted animate-pulse">
                 Detecting…
               </span>
             )}
@@ -309,7 +309,7 @@ export default function PdfPassword() {
           <button
             type="button"
             onClick={reset}
-            className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+            className="rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
           >
             Change file
           </button>
@@ -362,7 +362,9 @@ export default function PdfPassword() {
           <button
             type="button"
             onClick={() => setShowPerms((v) => !v)}
-            className="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-dark-text-muted hover:text-slate-800 dark:hover:text-dark-text transition-colors"
+            aria-expanded={showPerms}
+            aria-controls="perm-panel"
+            className="flex items-center gap-2 rounded text-sm font-medium text-slate-600 dark:text-dark-text-muted hover:text-slate-800 dark:hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg transition-colors"
           >
             <ChevronRight
               className={`w-4 h-4 transition-transform ${showPerms ? "rotate-90" : ""}`}
@@ -371,10 +373,10 @@ export default function PdfPassword() {
           </button>
 
           {showPerms && (
-            <>
+            <div id="perm-panel" className="space-y-6">
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
                 <div className="px-4 py-2.5 bg-slate-50 dark:bg-dark-surface-alt rounded-t-xl">
-                  <p className="text-xs font-semibold text-slate-500 dark:text-dark-text-muted uppercase tracking-wide">
+                  <p className="text-xs font-semibold text-slate-500 dark:text-dark-text-muted uppercase tracking-widest">
                     Allowed Operations
                   </p>
                 </div>
@@ -391,7 +393,7 @@ export default function PdfPassword() {
                         <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
                           {label}
                         </p>
-                        <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+                        <p className="text-xs text-slate-500 dark:text-dark-text-muted">
                           {description}
                         </p>
                       </div>
@@ -400,7 +402,7 @@ export default function PdfPassword() {
                       type="checkbox"
                       checked={permissions[key]}
                       onChange={() => togglePermission(key)}
-                      className="accent-primary-500 w-4 h-4 rounded shrink-0"
+                      className="accent-primary-600 w-4 h-4 rounded shrink-0"
                     />
                   </label>
                 ))}
@@ -410,7 +412,7 @@ export default function PdfPassword() {
                 Permission restrictions are enforced by Adobe Acrobat/Reader. Other viewers such as
                 macOS Preview and Chrome may ignore them and allow all operations regardless.
               </InfoCallout>
-            </>
+            </div>
           )}
         </>
       )}

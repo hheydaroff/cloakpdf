@@ -11,7 +11,7 @@
  * clicking a bookmark row jumps the preview to its target page.
  */
 
-import { CheckCircle2, ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
+import { CheckCircle2, Plus, Sparkles, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -19,11 +19,14 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
+import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useToolOutput } from "../hooks/useToolOutput.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
+import { detectHeadings, extractLayout } from "../utils/layout-extract.ts";
 import { addPdfBookmarks } from "../utils/pdf-operations.ts";
 import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 
@@ -49,6 +52,12 @@ export default function AddBookmarks() {
   const [bookmarks, setBookmarks] = useState<BookmarkEntry[]>(initialBookmarks);
   const [selectedPage, setSelectedPage] = useState(0);
   const [done, setDone] = useState(false);
+  const [detecting, setDetecting] = useState(false);
+  const [autoNote, setAutoNote] = useState<string | null>(null);
+  // Determinate OCR progress shown while auto-detecting headings on scanned PDFs.
+  const [detectProgress, setDetectProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
 
   const pdf = usePdfFile<LoadedPdf>({
     load: loadPdf,
@@ -57,6 +66,9 @@ export default function AddBookmarks() {
       setDone(false);
       setSelectedPage(0);
       setBookmarks(initialBookmarks());
+      setDetecting(false);
+      setAutoNote(null);
+      setDetectProgress(null);
     },
     loadErrorMessage: "Failed to load PDF.",
   });
@@ -95,6 +107,47 @@ export default function AddBookmarks() {
     },
     [pageCount],
   );
+
+  /**
+   * Auto-build the bookmark list from the document's visual structure
+   * (liteparse layout → heading detection). Replaces the current list with one
+   * row per detected heading; the user can still edit/remove before applying.
+   */
+  const handleAutoDetect = useCallback(async () => {
+    if (!pdf.file || detecting) return;
+    setDetecting(true);
+    setAutoNote(null);
+    setDetectProgress(null);
+    task.setError(null);
+    try {
+      const layoutPages = await extractLayout(pdf.file, {
+        ocr: true,
+        // Fires per scanned page that goes through OCR — on a scanned PDF this
+        // turns the indefinite "Detecting…" spinner into a real progress bar.
+        onOcrPage: (done, total) => setDetectProgress({ current: done, total }),
+      });
+      const headings = detectHeadings(layoutPages);
+      if (headings.length === 0) {
+        setAutoNote("No headings detected — add bookmarks manually using the preview.");
+        return;
+      }
+      setBookmarks(
+        headings.map((h) => ({
+          id: nextId++,
+          title: h.text,
+          pageNumber: String(h.pageNumber),
+        })),
+      );
+      setAutoNote(
+        `Detected ${headings.length} heading${headings.length !== 1 ? "s" : ""} — review and edit below, then add them.`,
+      );
+    } catch {
+      task.setError("Couldn't auto-detect headings. Add bookmarks manually instead.");
+    } finally {
+      setDetecting(false);
+      setDetectProgress(null);
+    }
+  }, [pdf.file, detecting, task]);
 
   const handleApply = useCallback(async () => {
     if (!pdf.file) return;
@@ -143,26 +196,59 @@ export default function AddBookmarks() {
             <LoadingSpinner />
           ) : (
             <>
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* ── Left column: bookmark list editor ── */}
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
                       Bookmarks
                       {validCount > 0 && (
-                        <span className="text-primary-600 dark:text-primary-400 ml-1.5">
+                        <span className="text-primary-600 dark:text-primary-400 ml-1.5 tabular-nums">
                           ({validCount})
                         </span>
                       )}
                     </p>
+                    <button
+                      type="button"
+                      onClick={handleAutoDetect}
+                      disabled={detecting || task.processing}
+                      title="First use downloads a ~4 MB layout engine, then works offline"
+                      className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border border-primary-200 dark:border-primary-800/60 hover:bg-primary-100 dark:hover:bg-primary-900/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {detecting ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+                          Detecting…
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                          Auto-detect headings
+                        </>
+                      )}
+                    </button>
                   </div>
+
+                  {detecting && detectProgress && detectProgress.total > 0 && (
+                    <ProgressBar
+                      current={detectProgress.current}
+                      total={detectProgress.total}
+                      label={`OCR'ing scanned page ${detectProgress.current} of ${detectProgress.total}…`}
+                    />
+                  )}
+
+                  {autoNote && (
+                    <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
+                      {autoNote}
+                    </p>
+                  )}
 
                   <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border overflow-hidden">
                     <div className="grid grid-cols-[1fr_auto_auto] px-3 py-2 bg-slate-50 dark:bg-dark-surface-alt border-b border-slate-100 dark:border-dark-border">
-                      <span className="text-xs font-medium text-slate-500 dark:text-dark-text-muted uppercase tracking-wide">
+                      <span className="text-xs font-semibold text-slate-400 dark:text-dark-text-muted uppercase tracking-widest">
                         Bookmark title
                       </span>
-                      <span className="text-xs font-medium text-slate-500 dark:text-dark-text-muted uppercase tracking-wide w-20 text-center">
+                      <span className="text-xs font-semibold text-slate-400 dark:text-dark-text-muted uppercase tracking-widest w-20 text-center">
                         Page
                       </span>
                       <span className="w-8" />
@@ -185,6 +271,7 @@ export default function AddBookmarks() {
                               placeholder={`Bookmark ${idx + 1}`}
                               onChange={(e) => updateRow(bm.id, "title", e.target.value)}
                               onFocus={() => jumpToBookmark(bm.pageNumber)}
+                              aria-label={`Title for bookmark ${idx + 1}`}
                               className="w-full px-3 py-1.5 border border-slate-200 dark:border-dark-border dark:bg-dark-bg dark:text-dark-text rounded-lg text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent"
                             />
                             <input
@@ -230,11 +317,15 @@ export default function AddBookmarks() {
                   </button>
 
                   <p className="text-xs text-slate-500 dark:text-dark-text-muted leading-relaxed">
-                    Use the preview on the right to find the page you want, then click{" "}
+                    Use the page preview to find the page you want, then click{" "}
                     <span className="font-medium text-slate-700 dark:text-dark-text">
                       Add bookmark
                     </span>{" "}
-                    and give it a title.
+                    and give it a title — or{" "}
+                    <span className="font-medium text-slate-700 dark:text-dark-text">
+                      Auto-detect headings
+                    </span>{" "}
+                    to build the list automatically.
                   </p>
                 </div>
 
@@ -244,31 +335,11 @@ export default function AddBookmarks() {
                     <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
                       Preview — Page {selectedPage + 1}
                     </p>
-                    {pageCount > 1 && (
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          disabled={selectedPage === 0}
-                          onClick={() => setSelectedPage((p) => Math.max(0, p - 1))}
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          aria-label="Previous page"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1">
-                          {selectedPage + 1} / {pageCount}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={selectedPage === pageCount - 1}
-                          onClick={() => setSelectedPage((p) => Math.min(pageCount - 1, p + 1))}
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          aria-label="Next page"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
+                    <PagePreviewNav
+                      page={selectedPage}
+                      total={pageCount}
+                      onChange={setSelectedPage}
+                    />
                   </div>
 
                   {thumbnails[selectedPage] ? (
@@ -295,7 +366,9 @@ export default function AddBookmarks() {
 
               {done && (
                 <InfoCallout icon={CheckCircle2} accent="organise">
-                  Bookmarks added successfully. The PDF has been downloaded.
+                  {output.inWorkflow && !output.isLastStep
+                    ? "Bookmarks added — passed to the next step."
+                    : "Bookmarks added successfully. The PDF has been downloaded."}
                 </InfoCallout>
               )}
             </>

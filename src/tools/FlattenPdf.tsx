@@ -1,9 +1,10 @@
 /**
  * Flatten PDF tool.
  *
- * Removes all interactive form fields and annotations from a PDF,
- * converting them to static content. Useful for locking down filled
- * forms before sharing.
+ * Flattens fillable form fields (text inputs, checkboxes, dropdowns, radios,
+ * buttons) into static content AND strips all remaining annotations
+ * (sticky-note comments, highlights, text markup, links). Useful for locking
+ * down filled forms and removing the annotation layer before sharing.
  */
 
 import { CheckCircle2 } from "lucide-react";
@@ -58,7 +59,7 @@ export default function FlattenPdf() {
           encryptedFile={pdf.encryptedFile}
           onClearEncrypted={pdf.reset}
           label="Drop a PDF file here"
-          hint="Form fields and annotations will be converted to static content"
+          hint="Fillable form fields will be converted to static content"
         />
       ) : (
         <>
@@ -70,8 +71,12 @@ export default function FlattenPdf() {
 
           {!result ? (
             <div className="space-y-4">
-              {/* Visual: before → after flattening */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Visual: before → after flattening (decorative; text equivalent below) */}
+              <p className="sr-only">
+                Before: a form with editable fields. After: the same form with fields converted to
+                flat, static text.
+              </p>
+              <div className="grid grid-cols-2 gap-3" aria-hidden="true">
                 {/* Before — interactive */}
                 <div className="rounded-xl border border-primary-100 dark:border-primary-900/50 bg-primary-50/40 dark:bg-primary-900/20 p-3 flex flex-col gap-2">
                   <p className="text-xxs font-semibold uppercase tracking-widest text-primary-400 dark:text-primary-500">
@@ -190,6 +195,7 @@ export default function FlattenPdf() {
                 <ul className="text-sm text-slate-500 dark:text-dark-text-muted space-y-1 list-disc list-inside">
                   <li>Converts fillable form fields to plain text</li>
                   <li>Removes interactive checkboxes, dropdowns, and buttons</li>
+                  <li>Strips comments, highlights, and other annotations</li>
                   <li>Makes the document non-editable</li>
                 </ul>
               </div>
@@ -204,7 +210,8 @@ export default function FlattenPdf() {
           ) : (
             <div className="space-y-4">
               <InfoCallout icon={CheckCircle2} accent="transform">
-                PDF flattened successfully. All form fields and annotations have been removed.
+                PDF flattened successfully. Form fields were converted to static text and any
+                comments, highlights, and other annotations were removed.
               </InfoCallout>
 
               <ActionButton

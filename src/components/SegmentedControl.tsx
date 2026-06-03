@@ -62,7 +62,7 @@ export function SegmentedControl<T extends string | number | boolean>({
       {options.map((opt) => {
         const active = opt.value === value;
         const Icon = opt.icon;
-        const buttonClasses = `inline-flex items-center justify-center gap-1.5 ${s.button} transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 ${
+        const buttonClasses = `inline-flex items-center justify-center gap-1.5 ${s.button} transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
           fullWidth ? "flex-1" : ""
         } ${
           active

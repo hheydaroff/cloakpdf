@@ -373,7 +373,7 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
           className={
             displayText
               ? "text-slate-800 dark:text-dark-text"
-              : "text-slate-400 dark:text-slate-500"
+              : "text-slate-500 dark:text-slate-400"
           }
         >
           {displayText || "Not set"}
@@ -488,7 +488,7 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
 
           {/* Year picker grid */}
           {showYearPicker ? (
-            <div className="animate-fade-in grid grid-cols-4 gap-1 max-h-44 overflow-y-auto py-0.5">
+            <div className="animate-fade-in grid grid-cols-4 gap-1 max-h-44 overflow-y-auto thin-scrollbar py-0.5">
               {yearList.map((year) => (
                 <button
                   key={year}

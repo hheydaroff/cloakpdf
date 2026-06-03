@@ -44,6 +44,17 @@ Tool metadata flags worth knowing:
 
 These never get conflated. Adding a "modify the bytes" tool → use pdf-lib. Adding a "show me the page" UI → use PDF.js.
 
+### Layout-aware extraction & smart redaction
+
+[src/utils/layout-extract.ts](src/utils/layout-extract.ts) turns a PDF into positioned text — per-page `items` with `{text, x, y, width, height}` in top-left point space — which powers two features. Two extraction entry points exist on purpose:
+
+- **`extractLayout`** (LlamaParse Lite / `@llamaindex/liteparse-wasm`) — used by the **OCR PDF** tool for layout-aware reading-order text and a correctly positioned searchable-PDF layer (`createSearchablePdfFromLayout` in pdf-operations). liteparse is a ~4 MB Rust→WASM module, loaded lazily via a Vite `?url` import; it needs **no COOP/COEP headers** (single-threaded, verified). **Caveat, do not relitigate:** liteparse's _in-browser OCR/rasterisation_ path traps (`RuntimeError: unreachable`) and hangs the parse on the published 2.0.4 wasm — so we always call it with `ocrEnabled:false` and OCR scanned pages ourselves with PDF.js + Tesseract (`ocrScannedPages`), guarded by a parse timeout.
+- **`extractTextGeometry`** (PDF.js `getTextContent`) — used by **smart redaction**. liteparse merges runs and occasionally reports a bogus item width (e.g. 29 pt for a 69-char line), which throws a sub-line redaction box to the wrong place; PDF.js gives trustworthy per-run widths, so redaction geometry comes from there.
+
+**PII detection** lives in [src/utils/pii.ts](src/utils/pii.ts) — the single source of truth for email/url/phone/SSN/card(Luhn)/IBAN/IP/date patterns. `EMAIL_RE`/`PHONE_RE` are imported by the RAG fast-paths (relocated, behaviour unchanged); `detectPii` is the broader page-sweep. `detectPiiRects` (layout-extract) maps each PII span to a fraction rect via `substringFractionRect`. **Names are not auto-detected** (would need an NER model → desktop-only); users box those by hand.
+
+**Redaction is destructive.** `redactPdf` rasterises every page that carries a box and burns the boxes into the pixels, rebuilding those pages as image-only — the underlying text is physically gone, not just covered (verified by OCR'ing the output). Untouched pages are copied through as vectors. The trade-off (redacted pages lose selectable text, file grows) is surfaced in the UI.
+
 ### Standalone vs. workflow execution (`useToolOutput`)
 
 Tools have two execution modes:
