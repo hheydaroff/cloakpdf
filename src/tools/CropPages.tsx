@@ -16,6 +16,7 @@ import { CheckboxField } from "../components/CheckboxField.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
 import { ResetButton } from "../components/ResetButton.tsx";
@@ -61,6 +62,10 @@ export default function CropPages() {
   const [margins, setMargins] = useState<CropMargins>({ top: 0, right: 0, bottom: 0, left: 0 });
   const [applyToAll, setApplyToAll] = useState(true);
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
+  // Preview-only cursor: which page the right-hand preview shows. Kept
+  // strictly separate from `selectedPages` (what actually gets cropped)
+  // so paging the preview never changes the output.
+  const [selectedPage, setSelectedPage] = useState(0);
   // Determinate progress for the auto-crop geometry pass on large documents.
   const [autoProgress, setAutoProgress] = useState<{ current: number; total: number } | null>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -74,6 +79,7 @@ export default function CropPages() {
       setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
       setSelectedPages(new Set());
       setAutoProgress(null);
+      setSelectedPage(0);
     },
   });
   const task = useAsyncProcess();
@@ -91,6 +97,7 @@ export default function CropPages() {
     setMargins({ top: 0, right: 0, bottom: 0, left: 0 });
     setApplyToAll(true);
     setSelectedPages(new Set());
+    setSelectedPage(0);
   }, []);
 
   const isDirty =
@@ -247,7 +254,7 @@ export default function CropPages() {
   // Suppress unused ref warning — it's used for layout
   useEffect(() => void previewRef.current, []);
 
-  const firstThumb = allThumbs[0] ?? null;
+  const previewThumb = allThumbs[selectedPage] ?? null;
 
   return (
     <div className="space-y-6">
@@ -575,17 +582,28 @@ export default function CropPages() {
 
                 {/* Right: preview */}
                 <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-dark-text mb-2">
-                    Preview (first page)
-                  </p>
-                  {firstThumb && (
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+                      Preview — Page {selectedPage + 1}
+                    </p>
+                    <PagePreviewNav
+                      page={selectedPage}
+                      total={allThumbs.length}
+                      onChange={setSelectedPage}
+                    />
+                  </div>
+                  {/* The crop overlay below is derived from page 0's
+                      dimensions, so on mixed-size documents the mask edges
+                      are approximate when previewing other pages. The
+                      cropped output bytes are unaffected. */}
+                  {previewThumb && (
                     <div
                       ref={previewRef}
                       className="relative rounded-xl overflow-hidden border border-slate-200 dark:border-dark-border"
                     >
                       <img
-                        src={firstThumb}
-                        alt="Page preview"
+                        src={previewThumb}
+                        alt={`Page ${selectedPage + 1}`}
                         width="800"
                         height="1131"
                         decoding="async"

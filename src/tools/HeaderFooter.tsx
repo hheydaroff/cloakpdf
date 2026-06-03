@@ -7,7 +7,7 @@
  * the first page (e.g. for cover pages or title pages).
  */
 
-import { ChevronLeft, ChevronRight, PanelBottom, PanelTop } from "lucide-react";
+import { PanelBottom, PanelTop } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -17,6 +17,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LabeledSlider } from "../components/LabeledSlider.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ResetButton } from "../components/ResetButton.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -361,29 +362,7 @@ export default function HeaderFooter() {
                     ? `Preview — Page ${selectedPage + 1} (skipped)`
                     : `Preview — Page ${selectedPage + 1}`}
                 </p>
-                {pageCount > 1 && (
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      disabled={selectedPage === 0}
-                      onClick={() => setSelectedPage((p) => p - 1)}
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1">
-                      {selectedPage + 1} / {pageCount}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={selectedPage === pageCount - 1}
-                      onClick={() => setSelectedPage((p) => p + 1)}
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+                <PagePreviewNav page={selectedPage} total={pageCount} onChange={setSelectedPage} />
               </div>
 
               {loading ? (

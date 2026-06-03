@@ -7,12 +7,13 @@
  * Extra pages (when page counts differ) are shown with a notice.
  */
 
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Eye, EyeOff, Layers } from "lucide-react";
+import { ArrowLeftRight, Eye, EyeOff, Layers } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useCallback, useMemo, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { canvas as canvasColors, categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -481,30 +482,13 @@ export default function ComparePdf() {
           ]}
         />
 
-        {/* Page navigation */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
-            disabled={currentPage === 0}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-dark-border hover:bg-slate-50 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            aria-label="Previous page"
-          >
-            <ChevronLeft className="w-4 h-4 text-slate-600 dark:text-dark-text-muted" />
-          </button>
-          <span className="text-sm font-medium text-slate-700 dark:text-dark-text tabular-nums min-w-20 text-center">
-            Page {currentPage + 1} of {comparisons.length}
-          </span>
-          <button
-            type="button"
-            onClick={() => setCurrentPage((p) => Math.min(comparisons.length - 1, p + 1))}
-            disabled={currentPage === comparisons.length - 1}
-            className="p-1.5 rounded-lg border border-slate-200 dark:border-dark-border hover:bg-slate-50 dark:hover:bg-dark-surface-alt disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            aria-label="Next page"
-          >
-            <ChevronRight className="w-4 h-4 text-slate-600 dark:text-dark-text-muted" />
-          </button>
-        </div>
+        {/* Page navigation — shared stepper, prominent bordered pager */}
+        <PagePreviewNav
+          page={currentPage}
+          total={comparisons.length}
+          onChange={setCurrentPage}
+          variant="bordered"
+        />
       </div>
 
       {/* Current page comparison */}

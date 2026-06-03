@@ -11,7 +11,7 @@
  * clicking a bookmark row jumps the preview to its target page.
  */
 
-import { CheckCircle2, ChevronLeft, ChevronRight, Plus, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Plus, Sparkles, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -19,6 +19,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -334,35 +335,11 @@ export default function AddBookmarks() {
                     <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
                       Preview — Page {selectedPage + 1}
                     </p>
-                    {pageCount > 1 && (
-                      <div className="flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          disabled={selectedPage === 0}
-                          onClick={() => setSelectedPage((p) => Math.max(0, p - 1))}
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          aria-label="Previous page"
-                        >
-                          <ChevronLeft className="w-4 h-4" />
-                        </button>
-                        <span
-                          role="status"
-                          aria-live="polite"
-                          className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1"
-                        >
-                          {selectedPage + 1} / {pageCount}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={selectedPage === pageCount - 1}
-                          onClick={() => setSelectedPage((p) => Math.min(pageCount - 1, p + 1))}
-                          className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                          aria-label="Next page"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
+                    <PagePreviewNav
+                      page={selectedPage}
+                      total={pageCount}
+                      onChange={setSelectedPage}
+                    />
                   </div>
 
                   {thumbnails[selectedPage] ? (

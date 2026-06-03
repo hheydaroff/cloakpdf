@@ -6,7 +6,7 @@
  * is downloaded immediately after processing.
  */
 
-import { ChevronLeft, ChevronRight, Hash, Move } from "lucide-react";
+import { Hash, Move } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -15,6 +15,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LabeledSlider } from "../components/LabeledSlider.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ResetButton } from "../components/ResetButton.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -344,31 +345,7 @@ export default function AddPageNumbers() {
                     ? `Preview — Page ${selectedPage + 1}`
                     : `Preview — Page ${selectedPage + 1} (no number)`}
                 </p>
-                {pageCount > 1 && (
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      disabled={selectedPage === 0}
-                      onClick={() => setSelectedPage((p) => p - 1)}
-                      aria-label="Previous page"
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    <span className="text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1">
-                      {selectedPage + 1} / {pageCount}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={selectedPage === pageCount - 1}
-                      onClick={() => setSelectedPage((p) => p + 1)}
-                      aria-label="Next page"
-                      className="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
+                <PagePreviewNav page={selectedPage} total={pageCount} onChange={setSelectedPage} />
               </div>
 
               {pdf.loading ? (

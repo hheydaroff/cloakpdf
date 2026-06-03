@@ -19,6 +19,7 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { LabeledSlider } from "../components/LabeledSlider.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { PageThumbnail } from "../components/PageThumbnail.tsx";
 import { SegmentedControl } from "../components/SegmentedControl.tsx";
 import { SignaturePad } from "../components/SignaturePad.tsx";
@@ -592,9 +593,16 @@ export default function AddSignature() {
             </div>
 
             <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-dark-text mb-1.5">
-                Preview — {applyToAllPages ? "All Pages" : `Page ${selectedPage + 1}`}
-              </p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+                  Preview — {applyToAllPages ? "All Pages" : `Page ${selectedPage + 1}`}
+                </p>
+                <PagePreviewNav
+                  page={selectedPage}
+                  total={thumbnails.length}
+                  onChange={setSelectedPage}
+                />
+              </div>
               {loading ? (
                 <LoadingSpinner className="aspect-3/4 bg-slate-100 dark:bg-dark-surface-alt rounded-lg flex items-center justify-center" />
               ) : thumbnails[selectedPage] ? (

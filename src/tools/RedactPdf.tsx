@@ -15,12 +15,13 @@
  * preview side-by-side on desktop, stacked on mobile.
  */
 
-import { ChevronLeft, ChevronRight, ScanSearch, Trash2, Undo2 } from "lucide-react";
+import { ScanSearch, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
 import { canvas as canvasColors, categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -542,31 +543,12 @@ export default function RedactPdf() {
                       Clear page
                     </button>
                   )}
-                  {pageCount > 1 && (
-                    <div className="flex items-center gap-0.5">
-                      <button
-                        type="button"
-                        aria-label="Previous page"
-                        disabled={selectedPage === 0}
-                        onClick={() => setSelectedPage((p) => Math.max(0, p - 1))}
-                        className="inline-flex min-w-11 min-h-11 items-center justify-center rounded text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <span className="text-xs text-slate-500 dark:text-dark-text-muted tabular-nums px-1">
-                        {selectedPage + 1} / {pageCount}
-                      </span>
-                      <button
-                        type="button"
-                        aria-label="Next page"
-                        disabled={selectedPage === pageCount - 1}
-                        onClick={() => setSelectedPage((p) => Math.min(pageCount - 1, p + 1))}
-                        className="inline-flex min-w-11 min-h-11 items-center justify-center rounded text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+                  <PagePreviewNav
+                    page={selectedPage}
+                    total={pageCount}
+                    onChange={setSelectedPage}
+                    size="touch"
+                  />
                 </div>
               </div>
 

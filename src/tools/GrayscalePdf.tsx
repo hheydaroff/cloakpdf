@@ -7,11 +7,13 @@
  * black-and-white documents.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { FileInfoBar } from "../components/FileInfoBar.tsx";
+import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
+import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -19,44 +21,31 @@ import { usePdfFile } from "../hooks/usePdfFile.ts";
 import { useToolOutput } from "../hooks/useToolOutput.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
 import { grayscalePdf } from "../utils/pdf-operations.ts";
-import { PREVIEW_SCALE, renderPageThumbnail, revokeThumbnails } from "../utils/pdf-renderer.ts";
+import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 
 export default function GrayscalePdf() {
   const [result, setResult] = useState<Uint8Array | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
+  // Preview-only cursor. Grayscaling converts every page unconditionally,
+  // so paging never affects the output — the "After" column is just a CSS
+  // filter on the rendered thumbnail.
+  const [selectedPage, setSelectedPage] = useState(0);
 
-  const pdf = usePdfFile({
-    onReset: () => {
-      revokeThumbnails(preview ? [preview] : []);
+  // Pre-render every page once so paging the preview is a cheap array
+  // index — the same thumbnail source every other preview tool uses.
+  const pdf = usePdfFile<string[]>({
+    load: (file) => renderAllThumbnails(file, PREVIEW_SCALE),
+    onReset: (data) => {
+      revokeThumbnails(data ?? []);
       setResult(null);
-      setPreview(null);
+      setSelectedPage(0);
     },
   });
   const task = useAsyncProcess();
   const output = useToolOutput();
 
-  // Render first page thumbnail whenever a file is selected. Kept as a side
-  // effect because the preview is best-effort and shouldn't block the main
-  // conversion workflow — if preview rendering fails, the user can still
-  // convert.
-  useEffect(() => {
-    const file = pdf.file;
-    if (!file) return;
-    let cancelled = false;
-    file
-      .arrayBuffer()
-      .then((buf) => renderPageThumbnail(buf, 1, PREVIEW_SCALE))
-      .then((url) => {
-        if (!cancelled) setPreview(url);
-      })
-      .catch(() => {
-        // Preview is best-effort; a failure here doesn't block conversion.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pdf.file]);
+  const thumbnails = pdf.data ?? [];
+  const pageCount = thumbnails.length;
 
   const handleConvert = useCallback(async () => {
     if (!pdf.file) return;
@@ -95,12 +84,12 @@ export default function GrayscalePdf() {
         <>
           <FileInfoBar
             fileName={pdf.file.name}
-            details={formatFileSize(pdf.file.size)}
+            details={pdf.loading ? "loading…" : formatFileSize(pdf.file.size)}
             onChangeFile={pdf.reset}
           />
 
           {/* Before / After preview */}
-          {preview && (
+          {pdf.loading ? (
             <div className="grid grid-cols-2 gap-4">
               {(["Before", "After"] as const).map((label) => (
                 <div
@@ -112,17 +101,43 @@ export default function GrayscalePdf() {
                       {label}
                     </p>
                   </div>
-                  <div className="p-2 flex items-center justify-center bg-slate-50 dark:bg-dark-surface-alt">
-                    <img
-                      src={preview}
-                      alt={`${label} — page 1`}
-                      className={`max-h-52 w-auto rounded shadow-sm${label === "After" ? " grayscale" : ""}`}
-                    />
+                  <div className="p-2 flex items-center justify-center bg-slate-50 dark:bg-dark-surface-alt h-56">
+                    <LoadingSpinner />
                   </div>
                 </div>
               ))}
             </div>
-          )}
+          ) : pageCount > 0 ? (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+                  Preview — Page {selectedPage + 1}
+                </p>
+                <PagePreviewNav page={selectedPage} total={pageCount} onChange={setSelectedPage} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {(["Before", "After"] as const).map((label) => (
+                  <div
+                    key={label}
+                    className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border overflow-hidden"
+                  >
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-dark-border">
+                      <p className="text-xs font-semibold text-slate-500 dark:text-dark-text-muted uppercase tracking-widest">
+                        {label}
+                      </p>
+                    </div>
+                    <div className="p-2 flex items-center justify-center bg-slate-50 dark:bg-dark-surface-alt">
+                      <img
+                        src={thumbnails[selectedPage]}
+                        alt={`${label} — page ${selectedPage + 1}`}
+                        className={`max-h-52 w-auto rounded shadow-sm${label === "After" ? " grayscale" : ""}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {!result ? (
             <div className="space-y-4">
