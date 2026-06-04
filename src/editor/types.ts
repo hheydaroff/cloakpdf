@@ -25,11 +25,14 @@ export interface FractionRect {
 }
 
 /** Pan/zoom of the focus-mode stage. `zoom` is a multiplier on fit-scale
- *  (1 === fit-to-stage); pan is in screen pixels from the centered origin. */
+ *  (1 === fit-to-stage); pan is in screen pixels from the centered origin.
+ *  `gridCols` is the overview-mode page-grid density (columns per row) chosen
+ *  via the top-bar density control; ignored in focus mode. */
 export interface ViewState {
   zoom: number;
   panX: number;
   panY: number;
+  gridCols: number;
 }
 
-export const DEFAULT_VIEW: ViewState = { zoom: 1, panX: 0, panY: 0 };
+export const DEFAULT_VIEW: ViewState = { zoom: 1, panX: 0, panY: 0, gridCols: 3 };

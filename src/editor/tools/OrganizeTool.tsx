@@ -57,7 +57,7 @@ function readState(slice: Record<string, unknown>, pageCount: number): OrganizeS
 // ── Board (center, overview mode) ────────────────────────────────────
 
 export function Board() {
-  const { doc } = useEditorRead();
+  const { doc, view } = useEditorRead();
   const { patchToolState } = useEditorActions();
   const slice = useToolSlice(ORGANIZE_ID);
   const dragFrom = useRef<number | null>(null);
@@ -101,7 +101,10 @@ export function Board() {
 
   return (
     <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
-      <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div
+        className="mx-auto grid max-w-5xl gap-3"
+        style={{ gridTemplateColumns: `repeat(${view.gridCols}, minmax(0, 1fr))` }}
+      >
         {state.order.map((origIdx, pos) => {
           const page = doc.pages[origIdx];
           if (!page) return null;

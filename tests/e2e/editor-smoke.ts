@@ -136,6 +136,17 @@ async function main() {
     await (input as { uploadFile: (...p: string[]) => Promise<void> }).uploadFile(FIXTURE_PATH);
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 20_000 });
 
+    // 1b. Density control: single page ↔ multi-column browse grid, then back.
+    const gridBtn = await page.$('button[aria-label="3-column grid"]');
+    if (!gridBtn) fail("Density grid control not found.");
+    await gridBtn.click();
+    await page.waitForSelector('button[aria-label="Open page 1"]', { timeout: 10_000 });
+    const singleBtn = await page.$('button[aria-label="Single page"]');
+    if (!singleBtn) fail("Density single-page control not found.");
+    await singleBtn.click();
+    await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
+    console.log("  ✓ density control (single ↔ grid)");
+
     // 2. Redact (destructive-drag): select tool, draw a box, apply the burn.
     const redactBtn = await page.$('button[aria-label="Redact"]');
     if (!redactBtn) fail("Redact rail tool not found.");

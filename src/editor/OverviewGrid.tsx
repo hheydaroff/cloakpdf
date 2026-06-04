@@ -6,7 +6,7 @@
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
 
 export function OverviewGrid() {
-  const { doc, selectedPage } = useEditorRead();
+  const { doc, selectedPage, view } = useEditorRead();
   const { setSelectedPage, setViewMode } = useEditorActions();
 
   if (!doc) return null;
@@ -18,7 +18,10 @@ export function OverviewGrid() {
 
   return (
     <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
-      <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div
+        className="mx-auto grid max-w-5xl gap-3"
+        style={{ gridTemplateColumns: `repeat(${view.gridCols}, minmax(0, 1fr))` }}
+      >
         {doc.pages.map((page) => {
           const active = page.index === selectedPage;
           return (
