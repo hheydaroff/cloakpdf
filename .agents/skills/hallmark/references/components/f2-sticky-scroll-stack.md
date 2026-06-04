@@ -26,7 +26,7 @@ _Don't confuse with:_ F4 Step sequence (which is linearly numbered, not synced).
 }
 /* `calc(--banner-height + --space-xl)` so the sticky pane docks below the
    nav with breathing room. Falls back to --space-xl alone when no sticky
-   nav is on the page (slop-test gate 68). */
+   nav is on the page (slop-test gate 56). */
 .pane-sticky {
   position: sticky;
   top: calc(var(--banner-height, 0px) + var(--space-xl));

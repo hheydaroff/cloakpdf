@@ -1,7 +1,7 @@
 ### Ft6 · Letter close
 
 Closes the page like a letter — `Yours, the team. 2026.` Optional postscript line beneath. Sets the page as a piece of writing rather than a product.
-_Use when:_ the page voice is warm, hand-written, editorial-quiet — Garden, Atelier, Salon, personal sites.
+_Use when:_ the page voice is warm, hand-written, editorial-quiet — Garden, Atelier, personal sites.
 _Don't confuse with:_ Ft1 Mast-headed (which is a wordmark anchor, not a signoff).
 
 ```html

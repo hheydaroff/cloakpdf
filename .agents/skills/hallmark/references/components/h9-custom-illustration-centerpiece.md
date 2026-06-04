@@ -4,7 +4,7 @@ A single hand-built SVG (Tier B in the enrichment hierarchy — or pure CSS at T
 _Use when:_ the brand has a _thing_ that benefits from being drawn — a craft, a character, a process.
 _Don't confuse with:_ H6 Photographic (real photography) or H8 Mockup (a product screenshot, not artwork).
 
-The illustration itself is _built_, not picked from Storyset / Humaaans / unDraw / Lottie. See [`custom-craft.md`](custom-craft.md) for full recipes (CSS art, hand-built SVG, declarative animation). The cookbook entry below is the page-level structural sketch.
+The illustration itself is _built_, not picked from Storyset / Humaaans / unDraw / Lottie. See [`custom-craft.md`](../custom-craft.md) for full recipes (CSS art, hand-built SVG, declarative animation). The cookbook entry below is the page-level structural sketch.
 
 ```html
 <section class="hero-art">

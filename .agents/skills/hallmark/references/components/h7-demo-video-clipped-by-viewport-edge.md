@@ -4,7 +4,7 @@ Display headline left, demo video right, the rightmost ~10–20 % extending past
 _Use when:_ the brief is SaaS / dev-tool / dashboard / platform AND you have real footage of the product (or a hand-built CSS-art mockup of it).
 _Don't confuse with:_ H4 Stat-Led (number-led, no video) or H8 Mockup Split (still screenshot, not video).
 
-See [`hero-enrichment.md`](hero-enrichment.md) for the full E1 recipe (codec chain, autoplay rules, `prefers-reduced-motion` fallback, mobile collapse). The cookbook entry below is the structural sketch.
+See [`hero-enrichment.md`](../hero-enrichment.md) for the full E1 recipe (codec chain, autoplay rules, `prefers-reduced-motion` fallback, mobile collapse). The cookbook entry below is the structural sketch.
 
 ```html
 <section class="hero hero--clipped">

@@ -19,6 +19,6 @@ Reference: Frank Chimero's site, founder farewell posts, indie newsletter front 
 
 > _"Hello, I'm Anya."_ — Anya (test 06) — single line, name, full stop
 > _"Saturday, 6:14 a.m. The dough went in at midnight."_ — opens on a moment, then explains it
-> _"Hey there. This page is soft because the surface should be soft."_ — Hallmark Plume — colloquial open + a principle
+> _"Hey there. This page is soft because the surface should be soft."_ — Hallmark Hum — colloquial open + a principle
 
 ---

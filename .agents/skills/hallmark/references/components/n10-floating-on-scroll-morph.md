@@ -15,7 +15,7 @@ _Don't confuse with:_ N5 Floating pill (always-on, no scroll behaviour). N10 is 
 </header>
 ```
 
-The full recipe — the four laws (height-constant, transform-for-offset, cross-fade-everything, single-curve), the property-morph table, the scroll-handler script, and the eight anti-patterns Hallmark refuses — lives in [`floating-nav.md`](floating-nav.md). Reach for that file _before_ building this archetype. Skipping the four laws is what makes 90% of attempts read as broken.
+The full recipe — the four laws (height-constant, transform-for-offset, cross-fade-everything, single-curve), the property-morph table, the scroll-handler script, and the eight anti-patterns Hallmark refuses — lives in [`floating-nav.md`](../floating-nav.md). Reach for that file _before_ building this archetype. Skipping the four laws is what makes 90% of attempts read as broken.
 
 _Anti-pattern (one of eight in floating-nav.md):_ swapping two `<header>` elements via opacity instead of cross-fading one DOM. Doubles markup, fights focus order, desyncs content.
 

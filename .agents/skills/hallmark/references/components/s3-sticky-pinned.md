@@ -13,7 +13,7 @@ _Don't confuse with:_ S1 Left-margin (which doesn't move).
 
 ```css
 /* If the page has a sticky top nav, offset by its height so the sticky
-   head docks BENEATH it instead of bleeding over (slop-test gate 68).
+   head docks BENEATH it instead of bleeding over (slop-test gate 56).
    Use --z-sticky (in-page) so the nav's --z-sticky-nav out-paints it. */
 .head-sticky {
   position: sticky;
@@ -25,4 +25,4 @@ _Don't confuse with:_ S1 Left-margin (which doesn't move).
 }
 ```
 
-**Sticky pairing rule:** if the page emits a sticky `<header>` / `<nav>` / `.banner` (anything with `position: sticky; top: 0`), you MUST also declare `--banner-height` (a px value matching the nav's height) and `--z-sticky-nav` (≥ 1 above `--z-sticky`) in `tokens.css`. The S3 recipe above pulls both. Without those tokens the section head paints over the nav during scroll — see slop-test gate 68.
+**Sticky pairing rule:** if the page emits a sticky `<header>` / `<nav>` / `.banner` (anything with `position: sticky; top: 0`), you MUST also declare `--banner-height` (a px value matching the nav's height) and `--z-sticky-nav` (≥ 1 above `--z-sticky`) in `tokens.css`. The S3 recipe above pulls both. Without those tokens the section head paints over the nav during scroll — see slop-test gate 56.

@@ -8,7 +8,9 @@ Brief mentions any of: _fun, consumer, casual, family, kids, friendly, approacha
 
 ## Themes that belong
 
-`Plume` (canonical). The genre is small intentionally — playful is easy to overdo.
+`Hum` (vibrant, alive) is the genre's canonical theme — the post-Brilliant-alive register: multi-accent cream + pear + cyan + coral, mandatory motion, a single character moment. Pick it when the brief wants "feels alive in the room with you." For the quieter, more restrained end of friendly — "friendly but soft" rather than "alive" — reach instead for modern-minimal (Coral): a single low-chroma accent on warm paper, smooth easings, motion optional.
+
+`Hum` is the catalog's only **rounded-sans-multi-accent** theme — it relaxes several playful defaults: bouncy spring easings are allowed (and canonical) on its primary CTA, accent chroma goes higher than 0.16, and motion is mandatory not optional. It answers a specific brief: a learning platform for curious adults, a daily-curiosity app, a habit tracker with character — products that should feel warm and alive, not merely tidy.
 
 ## Voice
 
@@ -29,20 +31,23 @@ Brief mentions any of: _fun, consumer, casual, family, kids, friendly, approacha
 
 ## What this genre disallows
 
-- **Saturated consumer-app pinks / purples** — colour stays low chroma even if friendly.
+- **Saturated consumer-app pinks / purples** — playful keeps chroma low by default. **Hum is the documented exception** — pear-yellow at chroma 0.18, sky-cyan at 0.18, coral at 0.24 are allowed and canonical for Hum builds only.
 - **Emoji-as-decoration** — emoji can appear in copy ("we built X 🌱") but never as visual ornament replacing iconography.
-- **Comic Sans, Comic Neue, anything that signals "we're zany"** — playful stays sophisticated.
-- **Bouncy / overshoot easings** — gate 13 universal. Even playful uses smooth easings.
+- **Comic Sans, Comic Neue, anything that signals "we're zany"** — playful stays sophisticated, even at full vibrancy.
+- **Bouncy / overshoot easings** — playful uses smooth easings by default. **Hum is the documented exception** — spring overshoot (`cubic-bezier(0.34, 1.56, 0.64, 1)`) is canonical on the primary CTA and character moment (one each per page).
 - **Glassmorphism** — banned across all genres.
-- **Gradient text** — gate 5 universal. Stays banned.
+- **Gradient text** — gate 2 universal. Stays banned.
 
 ## Voice fixtures
 
-- _"Made for teams who write together."_
-- _"Soft, but exact."_
-- _"Software can be soft and exact at once. That's the trick."_
-- _"For the people who keep things tidy."_
-- _"A small tool, gently opinionated."_
+- _"Made for teams who write together."_ — Hum voice
+- _"Soft, but exact."_ — Hum voice
+- _"Software can be soft and exact at once. That's the trick."_ — Hum voice
+- _"A small tool, gently opinionated."_ — Hum voice
+- _"Your daily 30-second curio."_ — Hum voice
+- _"Get really good at one thing this quarter."_ — Hum voice
+- _"Notice yourself, in 30 seconds."_ — Hum voice
+- _"Learn something genuinely new today."_ — Hum voice
 
 ## Nav and footer voice
 

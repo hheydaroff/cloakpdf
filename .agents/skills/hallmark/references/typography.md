@@ -53,34 +53,34 @@ Three sources, in priority order:
 
 ### Free display faces
 
-| Family                    | Source    | Voice                                                                                   | Best for                               |
-| ------------------------- | --------- | --------------------------------------------------------------------------------------- | -------------------------------------- |
-| **Fraunces**              | Google    | Variable serif, deeply expressive italic, optical-size axis                             | Editorial, Salon, Atelier, brand-heavy |
-| **Newsreader**            | Google    | Roman serif with optical-size + italic                                                  | Editorial, magazine, long-form         |
-| **Instrument Serif**      | Google    | Tight contrast, italic available, smart for short heads                                 | Brand, atelier, intimate editorial     |
-| **Cormorant Garamond**    | Google    | Classical, high contrast, luxury register                                               | Luxury, fashion, fine arts             |
-| **EB Garamond**           | Google    | Honest classical Garamond, body-grade                                                   | Editorial body, longform reading       |
-| **Cardo**                 | Google    | Scholarly serif, generous x-height                                                      | Reference, academic, slow reading      |
-| **Source Serif 4**        | Google    | Modern transitional, big OT family                                                      | SaaS marketing with serif tone         |
-| **DM Serif Display**      | Google    | Bracketed serif, high-contrast display                                                  | Headlines that need to feel printed    |
-| **Bodoni Moda**           | Google    | Modern Bodoni revival, dramatic                                                         | Fashion, editorial, luxury display     |
-| **Playfair Display**      | Google    | Use only as display; banned as body                                                     | Marketing display moments — sparingly  |
-| **Geist**                 | Google    | Modern grotesque, geometric, 7 weights                                                  | Modern minimal, SaaS, dev tools        |
-| **Inter Tight**           | Google    | Tighter Inter — allowed _only_ as a body fallback in technical themes; never as display | UI body in restrained themes           |
-| **Bricolage Grotesque**   | Google    | Variable display sans, bold weights, condensable                                        | Brutal, playful, riso-bold             |
-| **Space Grotesk**         | Google    | Geometric grotesque, slightly quirky                                                    | Brutalist, technical                   |
-| **Anton**                 | Google    | Heavy condensed grotesque                                                               | Posters, manifestos                    |
-| **Big Shoulders Display** | Google    | Industrial condensed                                                                    | Sports, manifestos, declarative        |
-| **Tomorrow**              | Google    | Variable optical condensed                                                              | Tech, atmospheric, near-future         |
-| **Outfit**                | Google    | Modern geometric (banned as default; use only when _picked_ deliberately)               | Restrained tech — sparingly            |
-| **General Sans**          | Fontshare | Modern grotesque, Geist-adjacent                                                        | Modern minimal alternative to Geist    |
-| **Switzer**               | Fontshare | Neutral sans, broad weight range                                                        | SaaS body, restrained                  |
-| **Cabinet Grotesk**       | Fontshare | Display grotesque, 9 weights                                                            | Editorial display, magazine            |
-| **Clash Display**         | Fontshare | Ultra-condensed display                                                                 | Posters, brand moments                 |
-| **Satoshi**               | Fontshare | Playful geometric sans                                                                  | Playful, consumer                      |
-| **Sentient**              | Fontshare | Variable serif, soft contrast                                                           | Soft editorial, atmospheric            |
-| **Erode**                 | Fontshare | Distressed serif, hand-set feel                                                         | Riso, tactile-rebellion, brand-y       |
-| **Tanker**                | Fontshare | Heavy condensed grotesque, pure display                                                 | One-word posters, mastheads            |
+| Family                    | Source    | Voice                                                                                   | Best for                              |
+| ------------------------- | --------- | --------------------------------------------------------------------------------------- | ------------------------------------- |
+| **Fraunces**              | Google    | Variable serif, deeply expressive italic, optical-size axis                             | Editorial, Atelier, brand-heavy       |
+| **Newsreader**            | Google    | Roman serif with optical-size + italic                                                  | Editorial, magazine, long-form        |
+| **Instrument Serif**      | Google    | Tight contrast, italic available, smart for short heads                                 | Brand, atelier, intimate editorial    |
+| **Cormorant Garamond**    | Google    | Classical, high contrast, luxury register                                               | Luxury, fashion, fine arts            |
+| **EB Garamond**           | Google    | Honest classical Garamond, body-grade                                                   | Editorial body, longform reading      |
+| **Cardo**                 | Google    | Scholarly serif, generous x-height                                                      | Reference, academic, slow reading     |
+| **Source Serif 4**        | Google    | Modern transitional, big OT family                                                      | SaaS marketing with serif tone        |
+| **DM Serif Display**      | Google    | Bracketed serif, high-contrast display                                                  | Headlines that need to feel printed   |
+| **Bodoni Moda**           | Google    | Modern Bodoni revival, dramatic                                                         | Fashion, editorial, luxury display    |
+| **Playfair Display**      | Google    | Use only as display; banned as body                                                     | Marketing display moments — sparingly |
+| **Geist**                 | Google    | Modern grotesque, geometric, 7 weights                                                  | Modern minimal, SaaS, dev tools       |
+| **Inter Tight**           | Google    | Tighter Inter — allowed _only_ as a body fallback in technical themes; never as display | UI body in restrained themes          |
+| **Bricolage Grotesque**   | Google    | Variable display sans, bold weights, condensable                                        | Brutal, playful, riso-bold            |
+| **Space Grotesk**         | Google    | Geometric grotesque, slightly quirky                                                    | Brutalist, technical                  |
+| **Anton**                 | Google    | Heavy condensed grotesque                                                               | Posters, manifestos                   |
+| **Big Shoulders Display** | Google    | Industrial condensed                                                                    | Sports, manifestos, declarative       |
+| **Tomorrow**              | Google    | Variable optical condensed                                                              | Tech, atmospheric, near-future        |
+| **Outfit**                | Google    | Modern geometric (banned as default; use only when _picked_ deliberately)               | Restrained tech — sparingly           |
+| **General Sans**          | Fontshare | Modern grotesque, Geist-adjacent                                                        | Modern minimal alternative to Geist   |
+| **Switzer**               | Fontshare | Neutral sans, broad weight range                                                        | SaaS body, restrained                 |
+| **Cabinet Grotesk**       | Fontshare | Display grotesque, 9 weights                                                            | Editorial display, magazine           |
+| **Clash Display**         | Fontshare | Ultra-condensed display                                                                 | Posters, brand moments                |
+| **Satoshi**               | Fontshare | Playful geometric sans                                                                  | Playful, consumer                     |
+| **Sentient**              | Fontshare | Variable serif, soft contrast                                                           | Soft editorial, atmospheric           |
+| **Erode**                 | Fontshare | Distressed serif, hand-set feel                                                         | Riso, tactile-rebellion, brand-y      |
+| **Tanker**                | Fontshare | Heavy condensed grotesque, pure display                                                 | One-word posters, mastheads           |
 
 ### Free body faces
 
@@ -137,7 +137,7 @@ Each tone gets two rows: a **free baseline** (Google Fonts / Fontshare; works ou
 
 ## Wordmark / logo typography
 
-The wordmark in the navbar and footer **may use a different display face than the body**. On tone-rich themes (Editorial, Salon, Atelier, Linen, Quiet) it **should** — collapsing the wordmark into the body family flattens the visual hierarchy and the page reads as un-branded.
+The wordmark in the navbar and footer **may use a different display face than the body**. On tone-rich themes (Editorial, Atelier, Specimen) it **should** — collapsing the wordmark into the body family flattens the visual hierarchy and the page reads as un-branded.
 
 ```css
 :root {
@@ -221,7 +221,7 @@ Use no more than five sizes on a single page. If you need more hierarchy, use we
 ## Body text rules
 
 - Minimum 16px. Below 14px is accessibility-hostile.
-- Line-height 1.5–1.65 on body copy, tighter (1.1–1.3) on display. **Floor for all-caps display heads (`text-transform: uppercase` on `.hero__display` / `.section__title` / `h1` / `h2`) is `1.0` — recommended `1.02–1.08`.** Below 1.0 the cap-tops of line N+1 collide with the baseline of line N (no descenders to cushion the gap); the comma + cap-D on a wrapped "PROMPT, / DIFFERENT" fuse into a single glyph blob. Condensed display faces (Anton, Inter Tight 900, Bebas Neue) make this worse. Gate 67 auto-fails the pattern.
+- Line-height 1.5–1.65 on body copy, tighter (1.1–1.3) on display. **Floor for all-caps display heads (`text-transform: uppercase` on `.hero__display` / `.section__title` / `h1` / `h2`) is `1.0` — recommended `1.02–1.08`.** Below 1.0 the cap-tops of line N+1 collide with the baseline of line N (no descenders to cushion the gap); the comma + cap-D on a wrapped "PROMPT, / DIFFERENT" fuse into a single glyph blob. Condensed display faces (Anton, Inter Tight 900, Bebas Neue) make this worse. Gate 55 auto-fails the pattern.
 - Measure 45–75 characters (`max-width: 65ch`).
 - Never all-caps body copy. Never justified text without hyphenation. Never letter-spacing above 0.05em on body.
 

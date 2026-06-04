@@ -5,7 +5,7 @@
       "source": "nutlope/hallmark",
       "sourceType": "github",
       "skillPath": "skills/hallmark/SKILL.md",
-      "computedHash": "099306f12b9980eb6196a441af8290412d2cb8884b09c675672e3ffbb268b3c7"
+      "computedHash": "87ec9977431b4882ef33bcf029c55c54e7e98e68a781a6c6b00585672b08fd62"
     },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",
