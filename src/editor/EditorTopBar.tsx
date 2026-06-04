@@ -5,7 +5,6 @@
 
 import {
   ChevronLeft,
-  Download,
   Grid2x2,
   Grid3x3,
   Maximize2,
@@ -17,8 +16,8 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { ExportMenu } from "./ExportMenu.tsx";
 import { DEFAULT_VIEW } from "./types.ts";
-import { downloadPdf, pdfFilename } from "../utils/file-helpers.ts";
 
 // Page-density options for the view control: single page (focus, editable) vs
 // a 2- or 3-column browse grid. The active icon reflects the current density.
@@ -35,11 +34,6 @@ export function EditorTopBar() {
   const { doc, viewMode, view, canUndo, canRedo, canReset, layout } = useEditorRead();
   const { exit, setViewMode, setView, undo, redo, reset } = useEditorActions();
   const isMobile = layout === "mobile";
-
-  const onExport = () => {
-    if (!doc) return;
-    downloadPdf(doc.bytes, pdfFilename(doc.fileName, "_edited"));
-  };
 
   const zoomPct = Math.round(view.zoom * 100);
 
@@ -171,15 +165,7 @@ export function EditorTopBar() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={onExport}
-        disabled={!doc}
-        className="ml-1 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-      >
-        <Download className="h-4 w-4" />
-        <span className="hidden sm:inline">Export</span>
-      </button>
+      <ExportMenu />
     </header>
   );
 }

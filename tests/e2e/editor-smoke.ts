@@ -8,6 +8,7 @@
  *   crop (drag → apply) → signature (pad → place → embed) → OCR panel mounts →
  *   organize (delete → assemble) → overview/focus → flatten → metadata/scrub →
  *   extract → page numbers → fill-form → bookmarks → attachments →
+ *   export menu (contact-sheet download) →
  *   draft autosave + restore (reload → recover from IndexedDB).
  * OCR's engine is never run here (it would fetch model weights); the step only
  * asserts the panel is wired.
@@ -18,8 +19,9 @@
  * Run:  node --experimental-strip-types tests/e2e/editor-smoke.ts
  */
 
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdtempSync, readdirSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import type { Page } from "puppeteer-core";
 import { launch } from "puppeteer-core";
 
@@ -93,6 +95,20 @@ async function clickOnPage(page: Page, fx: number, fy: number): Promise<void> {
   await page.mouse.click(bb.x + bb.width * fx, bb.y + bb.height * fy);
 }
 
+/** Poll a directory until a finished (non-.crdownload) file matching `re`
+ *  appears with non-zero size. Returns its name. */
+async function waitForFile(dir: string, re: RegExp, timeout = 30_000): Promise<string> {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const hit = readdirSync(dir).find(
+      (f) => re.test(f) && !f.endsWith(".crdownload") && statSync(join(dir, f)).size > 0,
+    );
+    if (hit) return hit;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  fail(`No file matching ${re} appeared in ${dir} within ${timeout}ms.`);
+}
+
 /** Scribble one stroke on the signature pad so it emits a PNG data-URL. */
 async function scribbleOnPad(page: Page): Promise<void> {
   const pad = await page.$('canvas[aria-label^="Signature drawing area"]');
@@ -125,6 +141,12 @@ async function main() {
     page.on("pageerror", (e: unknown) =>
       errors.push(`pageerror: ${e instanceof Error ? e.message : String(e)}`),
     );
+
+    // Route downloads to a temp dir so the Export-menu step can verify a file
+    // actually lands (headless Chrome blocks downloads unless told otherwise).
+    const downloadDir = mkdtempSync(join(tmpdir(), "editor-smoke-dl-"));
+    const cdp = await page.target().createCDPSession();
+    await cdp.send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: downloadDir });
 
     console.log(`→ Loading ${DEV_URL}`);
     await page.goto(DEV_URL, { waitUntil: "networkidle2" });
@@ -298,6 +320,16 @@ async function main() {
     await attBtn.click();
     await waitForText(page, /No files attached yet|Reading attachments/i, 10_000);
     console.log("  ✓ attachments panel loads");
+
+    // 13b. Export menu: open, then run a real "Contact sheet" export (runTask →
+    //      nupPages → download) and assert a PDF lands in the download dir.
+    if (!(await clickByText(page, "Export"))) fail("Export menu button not found.");
+    await waitForText(page, /Export as/i, 5_000);
+    const csItem = await page.$('button[aria-label="Contact sheet"]');
+    if (!csItem) fail("Contact-sheet export item not found.");
+    await csItem.click();
+    const dl = await waitForFile(downloadDir, /\.pdf$/i, 60_000);
+    console.log(`  ✓ export menu (contact sheet → ${dl})`);
 
     // 14. Draft autosave + restore: the edits above persisted a draft (debounced
     //     to IndexedDB). Reload (view state isn't URL-persisted → back to home),
