@@ -10,7 +10,7 @@ import { editorToolGroups } from "./tools.ts";
 
 export const ToolRail = memo(function ToolRail() {
   const activeTool = useActiveTool();
-  const { setActiveTool } = useEditorActions();
+  const { setActiveTool, setViewMode } = useEditorActions();
   const groups = editorToolGroups();
 
   return (
@@ -25,7 +25,15 @@ export const ToolRail = memo(function ToolRail() {
               <button
                 key={tool.id}
                 type="button"
-                onClick={() => setActiveTool(active ? null : tool.id)}
+                onClick={() => {
+                  if (active) {
+                    setActiveTool(null);
+                    return;
+                  }
+                  setActiveTool(tool.id);
+                  if (tool.mode === "focus") setViewMode("focus");
+                  else if (tool.mode === "overview") setViewMode("overview");
+                }}
                 title={tool.name}
                 aria-label={tool.name}
                 aria-pressed={active}

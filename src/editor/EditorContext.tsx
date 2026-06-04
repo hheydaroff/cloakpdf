@@ -37,8 +37,13 @@ import { DEFAULT_VIEW, type Layout, type ViewMode, type ViewState } from "./type
 
 /** A serializable byte transform — the single funnel every byte mutation runs
  *  through (canvas Apply buttons, right-panel Apply, headless workflow runner).
- *  Receives the live doc, returns new bytes + a history label. */
-export type DocTransform = (doc: CanvasDoc) => Promise<{ bytes: Uint8Array; label: string }>;
+ *  Receives the live doc, returns new bytes + a history label, and optionally
+ *  the overlay object list to keep. Destructive/overlay-burn tools (redact,
+ *  annotate) return `objects` to DROP the marks they just baked into pixels;
+ *  omitting it preserves the current objects (valid in fraction space). */
+export type DocTransform = (
+  doc: CanvasDoc,
+) => Promise<{ bytes: Uint8Array; label: string; objects?: CanvasObject[] }>;
 
 interface ActionsValue {
   loadFile: (file: File) => Promise<void>;
@@ -50,6 +55,8 @@ interface ActionsValue {
   /** Apply a byte transform under the busy spinner, re-render pages, commit. */
   applyTransform: (t: DocTransform) => Promise<void>;
   addObject: (obj: Omit<CanvasObject, "id">) => void;
+  /** Add many overlay objects in a single history entry (e.g. PII auto-detect). */
+  addObjects: (objs: Omit<CanvasObject, "id">[], label?: string) => void;
   updateObject: (id: string, patch: Partial<CanvasObject>) => void;
   removeObject: (id: string) => void;
   commit: (label: string) => void;
@@ -277,6 +284,21 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
     setHistoryVersion((v) => v + 1);
   }, []);
 
+  const addObjects = useCallback((objs: Omit<CanvasObject, "id">[], label?: string) => {
+    const cur = docRef.current;
+    if (!cur || objs.length === 0) return;
+    const full = objs.map((o) => ({ ...o, id: nextId(o.kind) }));
+    const next: CanvasDoc = { ...cur, objects: [...cur.objects, ...full] };
+    setDoc(next);
+    historyRef.current.push({
+      label: label ?? `Add ${objs.length} objects`,
+      bytes: next.bytes,
+      pages: next.pages,
+      objects: next.objects,
+    });
+    setHistoryVersion((v) => v + 1);
+  }, []);
+
   const updateObject = useCallback((id: string, patch: Partial<CanvasObject>) => {
     const cur = docRef.current;
     if (!cur) return;
@@ -305,12 +327,13 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
       const cur = docRef.current;
       if (!cur) return;
       await runBusy("Applying…", async () => {
-        const { bytes, label } = await t(cur);
-        // Re-derive page geometry + thumbnails from the new bytes, preserving
-        // overlay objects (they remain valid in fraction space).
+        const { bytes, label, objects } = await t(cur);
+        // Re-derive page geometry + thumbnails from the new bytes. Keep the
+        // objects the transform returned (used to drop just-burned marks), or
+        // preserve the current ones (still valid in fraction space).
         const rebuilt = await createDocFromBytes(bytes, cur.fileName);
         revokeDocThumbnails(cur);
-        commitDoc({ ...rebuilt, id: cur.id, objects: cur.objects }, label);
+        commitDoc({ ...rebuilt, id: cur.id, objects: objects ?? cur.objects }, label);
       });
     },
     [runBusy, commitDoc],
@@ -358,6 +381,7 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
       setSelectedPage,
       applyTransform,
       addObject,
+      addObjects,
       updateObject,
       removeObject,
       commit,
@@ -379,6 +403,7 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
       setSelectedPage,
       applyTransform,
       addObject,
+      addObjects,
       updateObject,
       removeObject,
       commit,

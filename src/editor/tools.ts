@@ -71,7 +71,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: EyeOff,
     group: "security",
     mode: "focus",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "pdf-scrub",
@@ -97,7 +97,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Highlighter,
     group: "annotate",
     mode: "focus",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "signature",

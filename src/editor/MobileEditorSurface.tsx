@@ -9,14 +9,14 @@
 import { Check, Grid2x2, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useActiveTool, useEditorActions } from "./EditorContext.tsx";
-import { ToolPanelBody } from "./PropertiesPanel.tsx";
+import { ToolControls } from "./ToolControls.tsx";
 import { EDITOR_TOOLS, findEditorTool } from "./tools.ts";
 
 type Mode = "collapsed" | "picker";
 
 export function MobileEditorSurface() {
   const activeTool = useActiveTool();
-  const { setActiveTool, cancelCurrentTool } = useEditorActions();
+  const { setActiveTool, setViewMode, cancelCurrentTool } = useEditorActions();
   const [mode, setMode] = useState<Mode>("collapsed");
 
   const tool = findEditorTool(activeTool);
@@ -25,9 +25,12 @@ export function MobileEditorSurface() {
   const pick = useCallback(
     (id: string) => {
       setActiveTool(id);
+      const picked = findEditorTool(id);
+      if (picked?.mode === "focus") setViewMode("focus");
+      else if (picked?.mode === "overview") setViewMode("overview");
       setMode("collapsed"); // tool mode is driven by activeTool, not local mode
     },
-    [setActiveTool],
+    [setActiveTool, setViewMode],
   );
 
   const done = useCallback(() => {
@@ -101,7 +104,7 @@ export function MobileEditorSurface() {
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {tool ? (
-          <ToolPanelBody toolId={tool.id} />
+          <ToolControls />
         ) : (
           <div className="grid grid-cols-4 gap-x-1 gap-y-3">
             {EDITOR_TOOLS.map((t) => {

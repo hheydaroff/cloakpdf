@@ -6,22 +6,8 @@
 
 import { X } from "lucide-react";
 import { useActiveTool, useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { ToolControls } from "./ToolControls.tsx";
 import { EDITOR_GROUP_LABELS, findEditorTool } from "./tools.ts";
-
-/** Per-tool options body. Today every tool is a placeholder; this is the seam
- *  where each tool's real Panel mounts as it's migrated (M1+). */
-export function ToolPanelBody({ toolId }: { toolId: string }) {
-  const tool = findEditorTool(toolId);
-  if (!tool) return null;
-  return (
-    <div className="rounded-xl border border-dashed border-slate-300 dark:border-dark-border bg-slate-50/60 dark:bg-dark-bg/40 p-4 text-center">
-      <p className="text-sm font-medium text-slate-600 dark:text-dark-text">{tool.name}</p>
-      <p className="mt-1 text-xs text-slate-400 dark:text-dark-text-muted">
-        This tool moves into the editor in a later milestone.
-      </p>
-    </div>
-  );
-}
 
 export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) {
   const activeTool = useActiveTool();
@@ -58,7 +44,7 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {tool ? (
-          <ToolPanelBody toolId={tool.id} />
+          <ToolControls />
         ) : (
           <div className="text-sm text-slate-500 dark:text-dark-text-muted">
             <p>Pick a tool from the left to edit this PDF.</p>

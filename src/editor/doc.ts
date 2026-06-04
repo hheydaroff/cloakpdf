@@ -34,13 +34,15 @@ export type CanvasObjectKind =
   | "watermark"
   | "pageNumber";
 
-/** A non-destructive overlay placed on one page in fraction-rect space. */
+/** A non-destructive overlay placed on one page. `rect` carries simple
+ *  box-shaped marks (redaction, stamp); freeform marks (pen strokes) keep
+ *  their geometry in `payload` instead, so `rect` is optional. */
 export interface CanvasObject {
   id: string;
   kind: CanvasObjectKind;
   pageIndex: number;
-  rect: FractionRect;
-  /** Tool-specific data (colour, text, image bytes, …). Typed per tool. */
+  rect?: FractionRect;
+  /** Tool-specific data (the Annotation shape, colour, text, …). Typed per tool. */
   payload?: unknown;
 }
 

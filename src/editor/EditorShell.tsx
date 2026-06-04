@@ -8,6 +8,7 @@ import { AlertTriangle } from "lucide-react";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { EditorToolStage } from "./EditorToolStage.tsx";
 import { EditorTopBar } from "./EditorTopBar.tsx";
 import { MobileEditorSurface } from "./MobileEditorSurface.tsx";
 import { OverviewGrid } from "./OverviewGrid.tsx";
@@ -30,7 +31,15 @@ export function EditorShell() {
   const isMobile = layout === "mobile";
   const isTablet = layout === "tablet";
 
-  const center = viewMode === "overview" ? <OverviewGrid /> : <PdfStage />;
+  const center =
+    viewMode === "overview" ? (
+      <OverviewGrid />
+    ) : (
+      <>
+        <PdfStage />
+        <EditorToolStage />
+      </>
+    );
 
   return (
     <main className="fixed inset-0 z-100 flex flex-col bg-slate-50 dark:bg-dark-bg font-sans text-slate-800 dark:text-dark-text">
