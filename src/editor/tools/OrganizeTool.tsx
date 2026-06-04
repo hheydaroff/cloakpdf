@@ -216,10 +216,17 @@ export function Panel() {
   const [blanks, setBlanks] = useState<number[] | null>(null);
   const [scanning, setScanning] = useState(false);
 
-  // Drop stale blank-scan results whenever the page set changes (after Apply).
+  // Latest doc id, read inside the async scan callback to discard a result that
+  // resolved after the document was replaced (Apply rebuilds the doc → new id).
+  const liveDocId = useRef(doc?.id);
+  liveDocId.current = doc?.id;
+
+  // Drop stale blank-scan results whenever the document identity changes (any
+  // Apply rebuilds the doc, even when the page count is unchanged).
   useEffect(() => {
     setBlanks(null);
-  }, [pageCount]);
+    setScanning(false);
+  }, [doc?.id]);
 
   const kept = state.order.filter((i) => !state.deleted.includes(i));
   const rotatedCount = Object.values(state.rotations).filter((d) => d % 360 !== 0).length;
@@ -234,16 +241,20 @@ export function Panel() {
 
   const findBlanks = () => {
     if (!doc) return;
+    const scanDocId = doc.id;
     setScanning(true);
     void renderThumbnailsAndScores(docToFile(doc)).then(
       ({ thumbnails, scores }) => {
         revokeThumbnails(thumbnails);
-        setBlanks(scores.map((s, i) => (s >= BLANK_THRESHOLD ? i : -1)).filter((i) => i >= 0));
         setScanning(false);
+        // Discard if the doc was replaced mid-scan — these indices are stale.
+        if (liveDocId.current !== scanDocId) return;
+        setBlanks(scores.map((s, i) => (s >= BLANK_THRESHOLD ? i : -1)).filter((i) => i >= 0));
       },
       () => {
-        setBlanks([]);
         setScanning(false);
+        if (liveDocId.current !== scanDocId) return;
+        setBlanks([]);
       },
     );
   };

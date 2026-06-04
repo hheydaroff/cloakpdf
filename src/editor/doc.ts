@@ -139,20 +139,6 @@ export function revokeDocThumbnails(doc: CanvasDoc | null): void {
   revokeThumbnails(doc.pages.map((p) => p.thumbUrl ?? "").filter(Boolean));
 }
 
-/**
- * Remap overlay objects after a transform that changes the page set (extract,
- * remove-blank, reorder). `survivors` lists the surviving original page indices
- * in their new output order; objects on dropped pages are removed and the rest
- * are re-pointed to their new index.
- */
-export function remapObjects(objects: CanvasObject[], survivors: number[]): CanvasObject[] {
-  const newIndex = new Map<number, number>();
-  survivors.forEach((origIdx, pos) => newIndex.set(origIdx, pos));
-  return objects
-    .filter((o) => newIndex.has(o.pageIndex))
-    .map((o) => ({ ...o, pageIndex: newIndex.get(o.pageIndex)! }));
-}
-
 /** Wrap the doc's current bytes as a File so the existing `pdf-operations`
  *  writers (which take a File) can run against the live document. */
 export function docToFile(doc: CanvasDoc): File {

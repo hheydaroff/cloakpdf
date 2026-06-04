@@ -84,7 +84,7 @@ export function Segmented<T extends string>({
             {o.label}
             {o.sub && (
               <span
-                className={`text-[10px] ${on ? "text-white/80" : "text-slate-400 dark:text-dark-text-muted"}`}
+                className={`text-xxs ${on ? "text-white/80" : "text-slate-400 dark:text-dark-text-muted"}`}
               >
                 {o.sub}
               </span>

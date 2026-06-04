@@ -53,9 +53,12 @@ const LANGUAGES = [
 
 type PreviewMode = "layout" | "text";
 
-/** Whether this tool has an extraction ready to preview / apply. */
-export function ocrHasPreview(slice: Record<string, unknown>): boolean {
-  return Array.isArray(slice.pageTexts);
+/** Whether this tool has an extraction ready to preview / apply for THIS doc.
+ *  The extraction is tagged with the doc id at write time, so a stale result —
+ *  a different document, or an in-flight extraction that resolved after the doc
+ *  was replaced — is never shown or applied. */
+export function ocrHasPreview(slice: Record<string, unknown>, docId: string | undefined): boolean {
+  return Array.isArray(slice.pageTexts) && slice.docId === docId;
 }
 
 // ── Center surface: source page ↔ recognised text, per page ──────────
@@ -68,7 +71,7 @@ export function OcrPreview() {
   const previewMode = (slice.previewMode as PreviewMode) ?? "layout";
   const { patchToolState } = useEditorActions();
 
-  if (!doc) return null;
+  if (!doc || !ocrHasPreview(slice, doc.id)) return null;
   const page = doc.pages[selectedPage];
   const lp = layout?.[selectedPage];
   const hasLayout = layout != null && layout.length > 0;
@@ -100,7 +103,7 @@ export function OcrPreview() {
       <div className="mx-auto grid min-h-0 w-full max-w-5xl flex-1 gap-4 md:grid-cols-2">
         {/* Recognised text */}
         <pre
-          className={`thin-scrollbar min-h-0 overflow-auto rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-3 text-slate-700 dark:text-dark-text ${
+          className={`thin-scrollbar min-h-0 min-w-0 overflow-auto rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-3 text-slate-700 dark:text-dark-text ${
             previewMode === "layout" && hasLayout
               ? "whitespace-pre text-xs"
               : "whitespace-pre-wrap text-sm"
@@ -133,7 +136,7 @@ export function Panel() {
   const { applyTransform, patchToolState } = useEditorActions();
   const slice = useToolSlice(OCR_ID);
   const language = (slice.language as string) ?? "auto";
-  const hasPreview = ocrHasPreview(slice);
+  const hasPreview = ocrHasPreview(slice, doc?.id);
   const [extracting, setExtracting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const busy = busyLabel !== null;
@@ -153,6 +156,7 @@ export function Panel() {
 
   const extract = () => {
     if (!doc) return;
+    const docId = doc.id;
     setExtracting(true);
     setProgress("Analysing pages…");
     const lang = language === "auto" ? "eng" : language;
@@ -166,6 +170,7 @@ export function Panel() {
           const dense = texts.join("").replace(/\s+/g, "").length;
           if (dense > 0) {
             patchToolState(OCR_ID, {
+              docId,
               layout: layoutPages,
               pageTexts: texts,
               previewMode: "layout",
@@ -177,7 +182,7 @@ export function Panel() {
           const flat = await extractTextOcr(docToFile(doc), language, (done, total) =>
             setProgress(`Recognising page ${done} / ${total}…`),
           );
-          patchToolState(OCR_ID, { layout: null, pageTexts: flat, previewMode: "text" });
+          patchToolState(OCR_ID, { docId, layout: null, pageTexts: flat, previewMode: "text" });
         },
         () => setProgress("Couldn't read this document."),
       )

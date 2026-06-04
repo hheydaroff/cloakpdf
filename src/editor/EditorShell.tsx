@@ -34,9 +34,10 @@ export function EditorShell() {
   const isMobile = layout === "mobile";
   const isTablet = layout === "tablet";
 
-  // OCR's side-by-side preview takes over the center once an extraction exists,
-  // regardless of focus/overview; otherwise the normal stage / page grid.
-  const showOcrPreview = activeTool === OCR_ID && ocrHasPreview(ocrSlice);
+  // OCR's side-by-side preview takes over the center once an extraction exists
+  // for the current doc, regardless of focus/overview; otherwise the normal
+  // stage / page grid. Desktop-only, mirroring the OCR Panel's mobile guard.
+  const showOcrPreview = activeTool === OCR_ID && !isMobile && ocrHasPreview(ocrSlice, doc?.id);
   const center = showOcrPreview ? (
     <OcrPreview />
   ) : viewMode === "overview" ? (

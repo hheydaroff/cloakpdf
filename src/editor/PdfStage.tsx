@@ -176,9 +176,16 @@ export function PdfStage() {
           style={{
             transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`,
             transformOrigin: "center center",
-            width: fit ? `${fit.w}px` : "0px",
-            height: fit ? `${fit.h}px` : "0px",
             cursor,
+            // Before the first measure, fall back to the page's natural aspect
+            // (max-constrained) so it's never invisible and never stretched.
+            ...(fit
+              ? { width: `${fit.w}px`, height: `${fit.h}px` }
+              : {
+                  aspectRatio: `${page.widthPt} / ${page.heightPt}`,
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                }),
           }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

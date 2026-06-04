@@ -75,7 +75,11 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
   const svAreaRef = useRef<HTMLDivElement>(null);
 
-  const isPreset = colorPresets.some((p) => p.hex === value);
+  // Hex compared case-insensitively: presets are stored uppercase (theme.ts)
+  // but values round-trip through rgbToHex / manual entry as lowercase, so a
+  // strict === would never flag a preset as selected.
+  const eqHex = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const isPreset = colorPresets.some((p) => eqHex(p.hex, value));
 
   // Internal HSV state for the popover – synced from value when opening
   const [hsv, setHsv] = useState(() => hexToHsv(value));
@@ -188,16 +192,16 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
         {colorPresets.map((p) => (
           <button
             key={p.hex}
-            aria-label={`${p.label} color${value === p.hex ? " (selected)" : ""}`}
+            aria-label={`${p.label} color${eqHex(value, p.hex) ? " (selected)" : ""}`}
             onClick={() => {
               onChange(p.hex);
               setOpen(false);
             }}
             className={`relative w-6 h-6 sm:w-5 sm:h-5 rounded-full border-2 touch-manipulation motion-safe:transition-transform ${
-              value === p.hex
+              eqHex(value, p.hex)
                 ? "border-primary-500 scale-125"
                 : "border-slate-300 dark:border-dark-border hover:scale-110"
-            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1`}
+            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2`}
             style={{ backgroundColor: p.hex }}
           />
         ))}
@@ -211,7 +215,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
             open || !isPreset
               ? "border-primary-500 scale-125"
               : "border-slate-300 dark:border-dark-border hover:scale-110"
-          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1`}
+          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2`}
           style={{
             background: !isPreset
               ? value
@@ -264,7 +268,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
             max={360}
             value={Math.round(hsv.h)}
             onChange={handleHueChange}
-            className="w-full h-3 rounded-full appearance-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-slate-300 [&::-webkit-slider-thumb]:shadow-md [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-slate-300 [&::-moz-range-thumb]:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1"
+            className="w-full h-3 rounded-full appearance-none cursor-pointer touch-manipulation [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-slate-300 [&::-webkit-slider-thumb]:shadow-md [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-slate-300 [&::-moz-range-thumb]:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
             style={{
               background: "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
             }}
