@@ -230,6 +230,12 @@ export function findEditorTool(id: string | null): EditorTool | null {
   return EDITOR_TOOLS.find((t) => t.id === id) ?? null;
 }
 
+/** Ids of the single-PDF tools that live INSIDE the editor. Home tool cards for
+ *  these route into the editor (tool preselected) rather than a standalone view.
+ *  Plain strings only — safe to import on the home critical path without pulling
+ *  the editor's component graph (that lives in registry.tsx). */
+export const EDITOR_TOOL_IDS: ReadonlySet<string> = new Set(EDITOR_TOOLS.map((t) => t.id));
+
 /** Rail groups in display order, each with its tools. */
 export function editorToolGroups(): {
   group: EditorToolGroup;

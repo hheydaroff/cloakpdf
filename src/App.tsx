@@ -34,6 +34,8 @@ import { PrivacyPolicy } from "./components/PrivacyPolicy.tsx";
 import { ReloadPrompt } from "./components/ReloadPrompt.tsx";
 import { ToolCard } from "./components/ToolCard.tsx";
 import { categories, findTool, findToolComponent, tools } from "./config/tool-registry.ts";
+// Plain id set (no editor component graph) — safe on the home critical path.
+import { EDITOR_TOOL_IDS } from "./editor/tools.ts";
 import type { Tool, ToolId } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
 import { NAVIGATE_TOOL_EVENT, OPEN_EDITOR_EVENT } from "./utils/nav.ts";
@@ -559,7 +561,7 @@ function WorkflowHeroCard({ onOpen }: WorkflowHeroCardProps) {
 type View =
   | { kind: "home" }
   | { kind: "tool"; toolId: ToolId }
-  | { kind: "editor"; file: File | null }
+  | { kind: "editor"; file: File | null; tool?: string | null }
   | { kind: "privacy" }
   | { kind: "workflows-home" }
   | { kind: "workflow-builder"; workflowId: string | null }
@@ -577,12 +579,15 @@ export function App() {
 
   const goHome = useCallback(() => setView({ kind: "home" }), []);
 
+  // Editor-first routing: single-PDF tools that live in the editor open it (with
+  // that tool preselected); multi-file / terminal / AI surfaces stay standalone.
   const handleSelectTool = useCallback((id: ToolId) => {
-    setView({ kind: "tool", toolId: id });
+    if (EDITOR_TOOL_IDS.has(id)) setView({ kind: "editor", file: null, tool: id });
+    else setView({ kind: "tool", toolId: id });
   }, []);
 
-  const openEditor = useCallback((file: File | null = null) => {
-    setView({ kind: "editor", file });
+  const openEditor = useCallback((file: File | null = null, tool: string | null = null) => {
+    setView({ kind: "editor", file, tool });
   }, []);
 
   const handlePrivacy = useCallback(() => {
@@ -619,7 +624,7 @@ export function App() {
     // output PDF to the editor.
     function onOpenEditor(event: Event) {
       const file = (event as CustomEvent<File>).detail;
-      setView({ kind: "editor", file });
+      setView({ kind: "editor", file, tool: null });
     }
     window.addEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
     window.addEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
@@ -637,7 +642,7 @@ export function App() {
     return (
       <>
         <Suspense fallback={<LoadingSpinner />}>
-          <EditorView initialFile={view.file} onExit={goHome} />
+          <EditorView initialFile={view.file} initialTool={view.tool ?? null} onExit={goHome} />
         </Suspense>
         <ReloadPrompt />
       </>

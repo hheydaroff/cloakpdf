@@ -41,6 +41,7 @@ import {
   saveDraft,
 } from "./draft-store.ts";
 import { EditorHistory } from "./history.ts";
+import { findEditorTool } from "./tools.ts";
 import { DEFAULT_VIEW, type Layout, type ViewMode, type ViewState } from "./types.ts";
 
 /** A serializable byte transform — the single funnel every byte mutation runs
@@ -120,11 +121,17 @@ const ActiveToolCtx = createContext<string | null>(null);
 
 interface ProviderProps {
   initialFile?: File | null;
+  initialTool?: string | null;
   onExit: () => void;
   children: ReactNode;
 }
 
-export function EditorProvider({ initialFile = null, onExit, children }: ProviderProps) {
+export function EditorProvider({
+  initialFile = null,
+  initialTool = null,
+  onExit,
+  children,
+}: ProviderProps) {
   const [doc, setDoc] = useState<CanvasDoc | null>(null);
   const [loading, setLoading] = useState(false);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
@@ -320,6 +327,20 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
   }, []);
   const setViewMode = useCallback((m: ViewMode) => setViewModeState(m), []);
   const setSelectedPage = useCallback((i: number) => setSelectedPageState(i), []);
+
+  // Preselect the tool the editor was opened with (a home card routed here),
+  // once. Mirrors the rail's click behaviour — set the active tool and the view
+  // mode it drives. Independent of the file load: the tool stays active through
+  // the dropzone until a PDF arrives.
+  const initialToolLoadedRef = useRef(false);
+  useEffect(() => {
+    if (initialToolLoadedRef.current || !initialTool) return;
+    initialToolLoadedRef.current = true;
+    setActiveTool(initialTool);
+    const t = findEditorTool(initialTool);
+    if (t?.mode === "focus") setViewModeState("focus");
+    else if (t?.mode === "overview") setViewModeState("overview");
+  }, [initialTool, setActiveTool]);
 
   const addObject = useCallback((obj: Omit<CanvasObject, "id">) => {
     const cur = docRef.current;

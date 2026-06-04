@@ -1,13 +1,14 @@
 /**
- * End-to-end smoke for the M3c multi-file constructor → editor hand-off.
+ * End-to-end smoke for the M4 editor-first home routing.
  *
- * Merge and Images-to-PDF produce one PDF with no single source file to edit in
- * place, so they hand their output to the canvas editor (OPEN_EDITOR_EVENT →
- * App routes to {kind:"editor"}). This drives the Merge path in a real browser:
- *   home → Merge PDFs card → drop 2 PDFs → "Merge 2 files & edit" → editor opens.
+ * Two behaviours the home now owns:
+ *   1. Editor-eligible tool cards open the canvas editor with that tool
+ *      preselected (click "Redact" → editor → drop a PDF → Redact already live).
+ *   2. The multi-file constructors hand their output to the editor (M3c):
+ *      Merge → drop 2 PDFs → "Merge 2 files & edit" → editor opens on the result.
  *
  * Requirements: Chrome at CHROME_PATH and the dev server at http://localhost:5173.
- * Run:  node --experimental-strip-types tests/e2e/constructor-handoff.ts
+ * Run:  node --experimental-strip-types tests/e2e/home-routing.ts
  */
 
 import { existsSync } from "node:fs";
@@ -43,6 +44,23 @@ async function clickByText(page: Page, label: string): Promise<boolean> {
   }, label);
 }
 
+/** Wait until the page's visible text matches `re` (flags preserved). */
+async function waitForText(page: Page, re: RegExp, timeout = 20_000): Promise<void> {
+  await page.waitForFunction(
+    (src: string, flags: string) => new RegExp(src, flags).test(document.body.innerText),
+    { timeout },
+    re.source,
+    re.flags,
+  );
+}
+
+async function uploadInto(page: Page, ...fixtures: string[]): Promise<void> {
+  await page.waitForSelector("input[type=file]", { timeout: 15_000 });
+  const input = await page.$("input[type=file]");
+  if (!input) fail("File input not found.");
+  await (input as { uploadFile: (...p: string[]) => Promise<void> }).uploadFile(...fixtures);
+}
+
 async function main() {
   const errors: string[] = [];
   const browser = await launch({
@@ -63,18 +81,19 @@ async function main() {
     console.log(`→ Loading ${DEV_URL}`);
     await page.goto(DEV_URL, { waitUntil: "networkidle2" });
 
-    // Home → Merge PDFs tool.
-    if (!(await clickByText(page, "Merge PDFs"))) fail("'Merge PDFs' tool card not found.");
-    await page.waitForSelector("input[type=file]", { timeout: 15_000 });
-    const input = await page.$("input[type=file]");
-    if (!input) fail("Merge file input not found.");
+    // 1. Editor-eligible card → editor with the tool preselected. Clicking the
+    //    "Redact" card opens the empty editor; after a PDF loads, the Redact
+    //    panel is already active WITHOUT touching the rail.
+    if (!(await clickByText(page, "Redact PDF"))) fail("'Redact PDF' tool card not found.");
+    await uploadInto(page, FIXTURE_A);
+    await page.waitForSelector('img[alt="Page 1"]', { timeout: 30_000 });
+    await waitForText(page, /Detect & add boxes/i, 10_000);
+    console.log("  ✓ editor card routing (Redact preselected)");
 
-    // Drop two PDFs. The drop handler runs an async per-file encryption check,
-    // so the merge action appears a tick later — wait for it.
-    await (input as { uploadFile: (...p: string[]) => Promise<void> }).uploadFile(
-      FIXTURE_A,
-      FIXTURE_B,
-    );
+    // 2. Constructor hand-off: back home, merge two PDFs, land in the editor.
+    await page.goto(DEV_URL, { waitUntil: "networkidle2" });
+    if (!(await clickByText(page, "Merge PDFs"))) fail("'Merge PDFs' tool card not found.");
+    await uploadInto(page, FIXTURE_A, FIXTURE_B);
     await page
       .waitForFunction(
         () =>
@@ -93,22 +112,20 @@ async function main() {
       return true;
     });
     if (!clicked) fail("Merge action button vanished before click.");
-
-    // Hand-off lands in the editor: the focus page renders.
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 30_000 });
     console.log("  ✓ merge → editor hand-off (focus page rendered)");
 
     if (errors.length > 0) {
-      console.error("✗ Console/page errors during hand-off:");
+      console.error("✗ Console/page errors during home routing:");
       for (const e of errors) console.error(`   ${e}`);
       process.exit(1);
     }
-    console.log("✓ Constructor hand-off smoke passed — Merge output opens in the editor.");
+    console.log("✓ Home routing smoke passed — editor-card preselect + constructor hand-off.");
   } catch (e) {
-    console.error(`✗ Hand-off smoke failed: ${e instanceof Error ? e.message : String(e)}`);
+    console.error(`✗ Home routing smoke failed: ${e instanceof Error ? e.message : String(e)}`);
     try {
-      await page.screenshot({ path: "/tmp/constructor-handoff-fail.png" });
-      console.error("screenshot → /tmp/constructor-handoff-fail.png");
+      await page.screenshot({ path: "/tmp/home-routing-fail.png" });
+      console.error("screenshot → /tmp/home-routing-fail.png");
     } catch {
       /* ignore */
     }
