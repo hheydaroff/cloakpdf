@@ -50,6 +50,10 @@ const WorkflowRunner = lazy(() =>
 const WorkflowsHome = lazy(() =>
   import("./workflow/WorkflowsHome.tsx").then((m) => ({ default: m.WorkflowsHome })),
 );
+// The canvas editor is the primary single-PDF surface (editor-first redesign).
+// Lazy-loaded so its pdf-lib / PDF.js graph stays off the home critical path,
+// and rendered full-screen outside <Layout> (it owns its own chrome).
+const EditorView = lazy(() => import("./editor/EditorView.tsx"));
 
 // ── Platform detection (module-level, computed once) ──────────────
 
@@ -144,6 +148,8 @@ function DesktopOnlyNotice({ tool }: { tool: Tool }) {
 interface HomeScreenProps {
   /** Stable callback invoked with a tool ID when the user picks a tool. */
   onSelectTool: (id: ToolId) => void;
+  /** Open the canvas editor (optionally with a file). The primary entry. */
+  onOpenEditor: (file?: File | null) => void;
   /** Open the workflows landing page. */
   onOpenWorkflows: () => void;
 }
@@ -158,7 +164,7 @@ interface HomeScreenProps {
  * navigates to a tool this component unmounts, naturally discarding
  * the query; returning to the home screen starts with a fresh search.
  */
-function HomeScreen({ onSelectTool, onOpenWorkflows }: HomeScreenProps) {
+function HomeScreen({ onSelectTool, onOpenEditor, onOpenWorkflows }: HomeScreenProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -222,6 +228,19 @@ function HomeScreen({ onSelectTool, onOpenWorkflows }: HomeScreenProps) {
               Edit, merge, sign, secure, and convert PDFs entirely in your browser. No uploads, no
               accounts, no tracking.
             </p>
+
+            {/* Editor-first primary CTA — opens the canvas editor where a
+                single PDF is the focus and tools live around it. The tool
+                grid below remains for multi-file + terminal tools. */}
+            <button
+              type="button"
+              onClick={() => onOpenEditor(null)}
+              className="group mt-6 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-card-title font-semibold text-white shadow-sm hover:bg-primary-700 active:translate-y-px transition-[background-color,transform] animate-fade-in-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+              style={{ animationDelay: "120ms" }}
+            >
+              Open the editor
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </button>
           </div>
 
           {!searchQuery && (
@@ -540,6 +559,7 @@ function WorkflowHeroCard({ onOpen }: WorkflowHeroCardProps) {
 type View =
   | { kind: "home" }
   | { kind: "tool"; toolId: ToolId }
+  | { kind: "editor"; file: File | null }
   | { kind: "privacy" }
   | { kind: "workflows-home" }
   | { kind: "workflow-builder"; workflowId: string | null }
@@ -559,6 +579,10 @@ export function App() {
 
   const handleSelectTool = useCallback((id: ToolId) => {
     setView({ kind: "tool", toolId: id });
+  }, []);
+
+  const openEditor = useCallback((file: File | null = null) => {
+    setView({ kind: "editor", file });
   }, []);
 
   const handlePrivacy = useCallback(() => {
@@ -595,6 +619,21 @@ export function App() {
     return () => window.removeEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
   }, []);
 
+  // The editor owns the full viewport and its own chrome, so it renders
+  // outside <Layout> (no centered max-width, no app header/footer). Orientation
+  // is intentionally unlocked here — the editor adapts to landscape the way
+  // CloakIMG's does, rather than forcing portrait like the standalone tools.
+  if (view.kind === "editor") {
+    return (
+      <>
+        <Suspense fallback={<LoadingSpinner />}>
+          <EditorView initialFile={view.file} onExit={goHome} />
+        </Suspense>
+        <ReloadPrompt />
+      </>
+    );
+  }
+
   const showBack = view.kind !== "home";
 
   return (
@@ -603,6 +642,7 @@ export function App() {
         <ViewContent
           view={view}
           onSelectTool={handleSelectTool}
+          onOpenEditor={openEditor}
           onOpenWorkflowsHome={openWorkflowsHome}
           onOpenWorkflowBuilder={openWorkflowBuilder}
           onOpenWorkflowRunner={openWorkflowRunner}
@@ -618,6 +658,7 @@ export function App() {
 interface ViewContentProps {
   view: View;
   onSelectTool: (id: ToolId) => void;
+  onOpenEditor: (file?: File | null) => void;
   onOpenWorkflowsHome: () => void;
   onOpenWorkflowBuilder: (workflowId: string | null) => void;
   onOpenWorkflowRunner: (workflowId: string) => void;
@@ -627,6 +668,7 @@ interface ViewContentProps {
 function ViewContent({
   view,
   onSelectTool,
+  onOpenEditor,
   onOpenWorkflowsHome,
   onOpenWorkflowBuilder,
   onOpenWorkflowRunner,
@@ -634,14 +676,30 @@ function ViewContent({
 }: ViewContentProps) {
   switch (view.kind) {
     case "home":
-      return <HomeScreen onSelectTool={onSelectTool} onOpenWorkflows={onOpenWorkflowsHome} />;
+      return (
+        <HomeScreen
+          onSelectTool={onSelectTool}
+          onOpenEditor={onOpenEditor}
+          onOpenWorkflows={onOpenWorkflowsHome}
+        />
+      );
     case "tool": {
       const meta = findTool(view.toolId);
       const Component = findToolComponent(view.toolId);
       if (!meta || !Component)
-        return <HomeScreen onSelectTool={onSelectTool} onOpenWorkflows={onOpenWorkflowsHome} />;
+        return (
+          <HomeScreen
+            onSelectTool={onSelectTool}
+            onOpenEditor={onOpenEditor}
+            onOpenWorkflows={onOpenWorkflowsHome}
+          />
+        );
       return <ToolView tool={meta} Component={Component} />;
     }
+    case "editor":
+      // Rendered full-screen in App before <Layout>; never reached here. The
+      // case satisfies the exhaustiveness check below.
+      return null;
     case "privacy":
       return <PrivacyPolicy />;
     case "workflows-home":
