@@ -1,26 +1,38 @@
-// OcrTool.tsx — Make a scanned / image-only PDF searchable in place. Reads
-// digital pages from the text layer (layout-aware, via liteparse) and OCRs
-// scanned pages with Tesseract, then burns an invisible, correctly-positioned
-// text layer over the original pages via createSearchablePdfFromLayout — so the
-// page visuals are untouched but the text becomes selectable & searchable (and
-// the editor's own PII auto-detect can then find it). Falls back to the proven
-// Tesseract-only path if the layout parse comes back empty. Panel-only.
+// OcrTool.tsx — Make a scanned / image-only PDF searchable, with a layout-aware
+// side-by-side preview. Two phases:
+//   1. Extract — read digital pages from the text layer (liteparse) and OCR
+//      scanned pages (Tesseract); show the recognised text NEXT TO the source
+//      page so the user can verify it before committing.
+//   2. Make searchable — burn an invisible, correctly-positioned text layer over
+//      the original pages (createSearchablePdfFromLayout); page visuals are
+//      untouched, the text becomes selectable/searchable (and the editor's own
+//      PII auto-detect can then find it).
+// Falls back to the Tesseract-only path (line-stacked text, no geometry) when
+// the layout parse comes back empty. The preview lives in the center stage
+// (OcrPreview, rendered by EditorShell when this tool has an extraction); the
+// Panel owns the language picker + the two actions.
 //
 // Desktop-only: the OCR engine + page rasterisation need more memory than a
-// phone provides, mirroring the standalone OCR tool's `desktopOnly` flag. The
-// editor smoke only mounts this panel (asserting it's wired) — it never runs
-// the engine, which would download model weights.
+// phone provides, mirroring the standalone OCR tool's `desktopOnly` flag.
 
 import { Loader2, ScanText } from "lucide-react";
 import { useState } from "react";
-import { extractLayout, layoutToReadingOrderText } from "../../utils/layout-extract.ts";
+import { PagePreviewNav } from "../../components/PagePreviewNav.tsx";
+import {
+  extractLayout,
+  type LayoutPage,
+  layoutToReadingOrderText,
+} from "../../utils/layout-extract.ts";
 import {
   createSearchablePdf,
   createSearchablePdfFromLayout,
   extractTextOcr,
 } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
-import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { Segmented } from "./WholeDocPanel.tsx";
+
+export const OCR_ID = "ocr";
 
 const LANGUAGES = [
   { code: "auto", label: "Auto detect" },
@@ -39,14 +51,94 @@ const LANGUAGES = [
   { code: "spa", label: "Spanish" },
 ] as const;
 
+type PreviewMode = "layout" | "text";
+
+/** Whether this tool has an extraction ready to preview / apply. */
+export function ocrHasPreview(slice: Record<string, unknown>): boolean {
+  return Array.isArray(slice.pageTexts);
+}
+
+// ── Center surface: source page ↔ recognised text, per page ──────────
+export function OcrPreview() {
+  const { doc, selectedPage } = useEditorRead();
+  const { setSelectedPage } = useEditorActions();
+  const slice = useToolSlice(OCR_ID);
+  const layout = (slice.layout as LayoutPage[] | null) ?? null;
+  const pageTexts = (slice.pageTexts as string[] | undefined) ?? [];
+  const previewMode = (slice.previewMode as PreviewMode) ?? "layout";
+  const { patchToolState } = useEditorActions();
+
+  if (!doc) return null;
+  const page = doc.pages[selectedPage];
+  const lp = layout?.[selectedPage];
+  const hasLayout = layout != null && layout.length > 0;
+  const text = previewMode === "layout" && lp ? lp.text : (pageTexts[selectedPage] ?? "");
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
+      <div className="mx-auto mb-3 flex w-full max-w-5xl items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+          Recognised text
+        </span>
+        <div className="flex items-center gap-3">
+          {hasLayout && (
+            <div className="w-44">
+              <Segmented<PreviewMode>
+                value={previewMode}
+                onChange={(v) => patchToolState(OCR_ID, { previewMode: v })}
+                options={[
+                  { value: "layout", label: "Layout" },
+                  { value: "text", label: "Plain text" },
+                ]}
+              />
+            </div>
+          )}
+          <PagePreviewNav page={selectedPage} total={doc.pageCount} onChange={setSelectedPage} />
+        </div>
+      </div>
+
+      <div className="mx-auto grid min-h-0 w-full max-w-5xl flex-1 gap-4 md:grid-cols-2">
+        {/* Recognised text */}
+        <pre
+          className={`thin-scrollbar min-h-0 overflow-auto rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-3 text-slate-700 dark:text-dark-text ${
+            previewMode === "layout" && hasLayout
+              ? "whitespace-pre text-xs"
+              : "whitespace-pre-wrap text-sm"
+          }`}
+        >
+          {text.trim() || "(No text detected on this page)"}
+        </pre>
+
+        {/* Source page */}
+        <div className="flex min-h-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-2">
+          {page?.thumbUrl ? (
+            <img
+              src={page.thumbUrl}
+              alt={`Page ${selectedPage + 1}`}
+              className="max-h-full max-w-full object-contain"
+              draggable={false}
+            />
+          ) : (
+            <div className="h-full w-full bg-white" />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Panel: language + extract + make searchable ──────────────────────
 export function Panel() {
-  const { busyLabel, layout } = useEditorRead();
-  const { applyTransform } = useEditorActions();
-  const [language, setLanguage] = useState("auto");
+  const { doc, busyLabel, layout: screen } = useEditorRead();
+  const { applyTransform, patchToolState } = useEditorActions();
+  const slice = useToolSlice(OCR_ID);
+  const language = (slice.language as string) ?? "auto";
+  const hasPreview = ocrHasPreview(slice);
+  const [extracting, setExtracting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const busy = busyLabel !== null;
 
-  if (layout === "mobile") {
+  if (screen === "mobile") {
     return (
       <div className="flex flex-col gap-2">
         <p className="text-sm text-slate-500 dark:text-dark-text-muted">
@@ -59,35 +151,73 @@ export function Panel() {
     );
   }
 
-  const apply = () => {
+  const extract = () => {
+    if (!doc) return;
+    setExtracting(true);
     setProgress("Analysing pages…");
-    void applyTransform(async (d) => {
-      const lang = language === "auto" ? "eng" : language;
-      let bytes: Uint8Array;
-      try {
-        const layoutPages = await extractLayout(docToFile(d), {
-          language: lang,
-          onOcrPage: (done, total) => setProgress(`Recognising page ${done} / ${total}…`),
-        });
-        const dense = layoutPages
-          .map((p) => layoutToReadingOrderText(p))
-          .join("")
-          .replace(/\s+/g, "").length;
-        // liteparse can resolve empty on an image-only page it didn't flag as
-        // scanned — treat that as a miss so the Tesseract-only path still runs.
-        if (dense === 0) throw new Error("empty-layout");
-        setProgress("Building searchable layer…");
-        bytes = await createSearchablePdfFromLayout(docToFile(d), layoutPages);
-      } catch {
-        setProgress("Recognising text…");
-        const pageTexts = await extractTextOcr(docToFile(d), language, (done, total) =>
-          setProgress(`Recognising page ${done} / ${total}…`),
-        );
-        bytes = await createSearchablePdf(docToFile(d), pageTexts);
-      }
-      return { bytes, label: "OCR — searchable text" };
-    }).finally(() => setProgress(null));
+    const lang = language === "auto" ? "eng" : language;
+    void extractLayout(docToFile(doc), {
+      language: lang,
+      onOcrPage: (done, total) => setProgress(`Recognising page ${done} / ${total}…`),
+    })
+      .then(
+        async (layoutPages) => {
+          const texts = layoutPages.map((p) => layoutToReadingOrderText(p));
+          const dense = texts.join("").replace(/\s+/g, "").length;
+          if (dense > 0) {
+            patchToolState(OCR_ID, {
+              layout: layoutPages,
+              pageTexts: texts,
+              previewMode: "layout",
+            });
+            return;
+          }
+          // liteparse came back empty — fall back to Tesseract-only (no geometry).
+          setProgress("Recognising text…");
+          const flat = await extractTextOcr(docToFile(doc), language, (done, total) =>
+            setProgress(`Recognising page ${done} / ${total}…`),
+          );
+          patchToolState(OCR_ID, { layout: null, pageTexts: flat, previewMode: "text" });
+        },
+        () => setProgress("Couldn't read this document."),
+      )
+      .finally(() => {
+        setExtracting(false);
+        setProgress(null);
+      });
   };
+
+  const makeSearchable = () => {
+    void applyTransform(async (d) => {
+      const layout = (slice.layout as LayoutPage[] | null) ?? null;
+      const pageTexts = (slice.pageTexts as string[] | undefined) ?? [];
+      const bytes =
+        layout && layout.length > 0
+          ? await createSearchablePdfFromLayout(docToFile(d), layout)
+          : await createSearchablePdf(docToFile(d), pageTexts);
+      return { bytes, label: "OCR — searchable text" };
+    }).then(() => patchToolState(OCR_ID, { layout: null, pageTexts: undefined }));
+  };
+
+  const langPicker = (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+        Language
+      </span>
+      <select
+        value={language}
+        onChange={(e) => patchToolState(OCR_ID, { language: e.target.value })}
+        disabled={extracting || busy}
+        className="w-full rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50"
+      >
+        {LANGUAGES.map((l) => (
+          <option key={l.code} value={l.code}>
+            {l.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -96,33 +226,45 @@ export function Panel() {
         visuals stay exactly as they are.
       </p>
 
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
-          Language
-        </span>
-        <select
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-          disabled={busy}
-          className="w-full rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50"
-        >
-          {LANGUAGES.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {langPicker}
 
-      <button
-        type="button"
-        onClick={apply}
-        disabled={busy}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-      >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanText className="h-4 w-4" />}
-        {busy ? "Working…" : "Make searchable"}
-      </button>
+      {!hasPreview ? (
+        <button
+          type="button"
+          onClick={extract}
+          disabled={extracting}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+        >
+          {extracting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ScanText className="h-4 w-4" />
+          )}
+          {extracting ? "Working…" : "Extract text"}
+        </button>
+      ) : (
+        <>
+          <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
+            Recognised text is shown beside each page in the center. Step through to verify, then
+            embed it as a searchable layer.
+          </p>
+          <button
+            type="button"
+            onClick={makeSearchable}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+          >
+            {busy ? "Working…" : "Make searchable"}
+          </button>
+          <button
+            type="button"
+            onClick={() => patchToolState(OCR_ID, { layout: null, pageTexts: undefined })}
+            className="text-xs text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text"
+          >
+            Re-extract
+          </button>
+        </>
+      )}
 
       {progress && (
         <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">

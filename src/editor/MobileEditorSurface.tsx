@@ -53,7 +53,7 @@ export function MobileEditorSurface() {
           aria-label="Open tools"
         >
           <Grid2x2 className="h-[18px] w-[18px]" />
-          <span className="text-[13px] font-semibold">Tools</span>
+          <span className="text-card-desc font-semibold">Tools</span>
         </button>
       </div>
     );

@@ -7,7 +7,7 @@
 import { AlertTriangle } from "lucide-react";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
-import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { useActiveTool, useEditorActions, useEditorRead, useToolSlice } from "./EditorContext.tsx";
 import { EditorToolStage } from "./EditorToolStage.tsx";
 import { EditorTopBar } from "./EditorTopBar.tsx";
 import { MobileEditorSurface } from "./MobileEditorSurface.tsx";
@@ -15,6 +15,7 @@ import { OverviewMode } from "./OverviewMode.tsx";
 import { PdfStage } from "./PdfStage.tsx";
 import { PropertiesPanel } from "./PropertiesPanel.tsx";
 import { ToolRail } from "./ToolRail.tsx";
+import { OCR_ID, OcrPreview, ocrHasPreview } from "./tools/OcrTool.tsx";
 
 function Spinner({ label }: { label: string }) {
   return (
@@ -28,18 +29,24 @@ function Spinner({ label }: { label: string }) {
 export function EditorShell() {
   const { doc, loading, busyLabel, error, layout, viewMode } = useEditorRead();
   const { loadFile } = useEditorActions();
+  const activeTool = useActiveTool();
+  const ocrSlice = useToolSlice(OCR_ID);
   const isMobile = layout === "mobile";
   const isTablet = layout === "tablet";
 
-  const center =
-    viewMode === "overview" ? (
-      <OverviewMode />
-    ) : (
-      <>
-        <PdfStage />
-        <EditorToolStage />
-      </>
-    );
+  // OCR's side-by-side preview takes over the center once an extraction exists,
+  // regardless of focus/overview; otherwise the normal stage / page grid.
+  const showOcrPreview = activeTool === OCR_ID && ocrHasPreview(ocrSlice);
+  const center = showOcrPreview ? (
+    <OcrPreview />
+  ) : viewMode === "overview" ? (
+    <OverviewMode />
+  ) : (
+    <>
+      <PdfStage />
+      <EditorToolStage />
+    </>
+  );
 
   return (
     <main className="fixed inset-0 z-100 flex flex-col overflow-hidden bg-slate-50 dark:bg-dark-bg font-sans text-slate-800 dark:text-dark-text">
@@ -91,7 +98,7 @@ export function EditorShell() {
         >
           <div className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-dark-border bg-white/95 dark:bg-dark-surface/95 px-5 py-4 shadow-xl">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-200 border-t-primary-600" />
-            <span className="text-[13px] font-medium text-slate-700 dark:text-dark-text">
+            <span className="text-card-desc font-medium text-slate-700 dark:text-dark-text">
               {busyLabel}
             </span>
           </div>

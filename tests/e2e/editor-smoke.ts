@@ -198,7 +198,7 @@ async function main() {
     const ocrBtn = await page.$('button[aria-label="OCR"]');
     if (!ocrBtn) fail("OCR rail tool not found.");
     await ocrBtn.click();
-    await waitForText(page, /Make searchable/i, 5_000);
+    await waitForText(page, /Extract text/i, 5_000); // phase 1; engine not run here
     console.log("  ✓ OCR panel mounts (engine not run)");
 
     // 5. Organize (page-board): delete a page, apply via assemblePdf (40 → 39).
