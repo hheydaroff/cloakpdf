@@ -13,22 +13,22 @@ import {
   AlignCenter,
   Archive,
   ArrowLeftRight,
-  ArrowUpDown,
   BookMarked,
   ClipboardList,
   Contrast,
-  Copy,
   Crop,
+  Eraser,
   EyeOff,
   FileImage,
   FileKey2,
   FileOutput,
-  FilePlus,
   FileSearch,
   FileText,
   FileX,
   GitMerge,
+  Grid2x2,
   Hash,
+  Highlighter,
   ImageDown,
   Images,
   Layers,
@@ -39,12 +39,10 @@ import {
   Paperclip,
   PenTool,
   Repeat2,
-  RotateCw,
   Scale,
   ScanText,
   Scissors,
   Stamp,
-  Trash2,
   Wrench,
 } from "lucide-react";
 import { lazy } from "react";
@@ -54,17 +52,12 @@ import type { Tool, ToolId } from "../types.ts";
 
 const MergePdf = lazy(() => import("../tools/MergePdf.tsx"));
 const CompressPdf = lazy(() => import("../tools/CompressPdf.tsx"));
-const RotatePages = lazy(() => import("../tools/RotatePages.tsx"));
-const DeletePages = lazy(() => import("../tools/DeletePages.tsx"));
-const ReorderPages = lazy(() => import("../tools/ReorderPages.tsx"));
 const ImagesToPdf = lazy(() => import("../tools/ImagesToPdf.tsx"));
 const AddSignature = lazy(() => import("../tools/AddSignature.tsx"));
 const EditMetadata = lazy(() => import("../tools/EditMetadata.tsx"));
 const OcrPdf = lazy(() => import("../tools/OcrPdf.tsx"));
 const PdfPassword = lazy(() => import("../tools/PdfPassword.tsx"));
 const FlattenPdf = lazy(() => import("../tools/FlattenPdf.tsx"));
-const AddBlankPage = lazy(() => import("../tools/AddBlankPage.tsx"));
-const DuplicatePage = lazy(() => import("../tools/DuplicatePage.tsx"));
 const AddPageNumbers = lazy(() => import("../tools/AddPageNumbers.tsx"));
 const HeaderFooter = lazy(() => import("../tools/HeaderFooter.tsx"));
 const CropPages = lazy(() => import("../tools/CropPages.tsx"));
@@ -87,6 +80,9 @@ const SplitPdf = lazy(() => import("../tools/SplitPdf.tsx"));
 const ExtractImages = lazy(() => import("../tools/ExtractImages.tsx"));
 const ComparePdf = lazy(() => import("../tools/ComparePdf.tsx"));
 const DigitalSignature = lazy(() => import("../tools/DigitalSignature.tsx"));
+const PdfScrub = lazy(() => import("../tools/PdfScrub.tsx"));
+const OrganizePages = lazy(() => import("../tools/OrganizePages.tsx"));
+const AnnotatePdf = lazy(() => import("../tools/AnnotatePdf.tsx"));
 const AskPdf = lazy(() => import("../tools/AskPdf.tsx"));
 
 // ── Tool metadata ────────────────────────────────────────────────
@@ -98,6 +94,14 @@ export const tools: Tool[] = [
     title: "Merge PDFs",
     description: "Combine multiple PDF files into one document",
     icon: GitMerge,
+    category: "organise",
+  },
+  {
+    id: "organize-pages",
+    title: "Organize Pages",
+    description:
+      "Reorder, rotate, duplicate, delete, add blanks & splice in other PDFs — all in one view",
+    icon: Grid2x2,
     category: "organise",
   },
   {
@@ -115,45 +119,10 @@ export const tools: Tool[] = [
     category: "organise",
   },
   {
-    id: "reorder",
-    title: "Reorder Pages",
-    description: "Drag and drop to rearrange page order",
-    icon: ArrowUpDown,
-    category: "organise",
-  },
-  {
-    id: "delete",
-    title: "Delete Pages",
-    description: "Remove unwanted pages from a PDF",
-    icon: Trash2,
-    category: "organise",
-  },
-  {
-    id: "rotate",
-    title: "Rotate Pages",
-    description: "Rotate individual pages in any direction",
-    icon: RotateCw,
-    category: "organise",
-  },
-  {
     id: "reverse-pages",
     title: "Reverse Pages",
     description: "Flip the page order of a PDF in one click",
     icon: Repeat2,
-    category: "organise",
-  },
-  {
-    id: "add-blank-page",
-    title: "Add Blank Page",
-    description: "Insert a blank page at any position in the document",
-    icon: FilePlus,
-    category: "organise",
-  },
-  {
-    id: "duplicate-page",
-    title: "Duplicate Page",
-    description: "Copy a page and insert it at any position",
-    icon: Copy,
     category: "organise",
   },
   {
@@ -259,6 +228,14 @@ export const tools: Tool[] = [
 
   // ── Annotate & Sign ──────────────────────────────────────
   {
+    id: "annotate-pdf",
+    title: "Annotate PDF",
+    description:
+      "Draw, highlight, add shapes & arrows, and place text — kept as crisp vector marks",
+    icon: Highlighter,
+    category: "annotate",
+  },
+  {
     id: "signature",
     title: "Add Signature",
     description: "Draw or upload a custom signature image and place it on a page",
@@ -316,6 +293,14 @@ export const tools: Tool[] = [
     description:
       "Auto-detect emails, links, phones & IDs — or box regions — and permanently remove them",
     icon: EyeOff,
+    category: "security",
+  },
+  {
+    id: "pdf-scrub",
+    title: "PDF Scrub",
+    description:
+      "Find and permanently remove hidden metadata, scripts, embedded files & tracking data",
+    icon: Eraser,
     category: "security",
   },
   {
@@ -391,17 +376,12 @@ export const tools: Tool[] = [
 export const toolComponents: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
   merge: MergePdf,
   compress: CompressPdf,
-  rotate: RotatePages,
-  delete: DeletePages,
-  reorder: ReorderPages,
   "images-to-pdf": ImagesToPdf,
   signature: AddSignature,
   metadata: EditMetadata,
   ocr: OcrPdf,
   "pdf-password": PdfPassword,
   flatten: FlattenPdf,
-  "add-blank-page": AddBlankPage,
-  "duplicate-page": DuplicatePage,
   "add-page-numbers": AddPageNumbers,
   "header-footer": HeaderFooter,
   "crop-pages": CropPages,
@@ -424,6 +404,9 @@ export const toolComponents: Record<string, React.LazyExoticComponent<React.Comp
   "extract-images": ExtractImages,
   "compare-pdf": ComparePdf,
   "digital-signature": DigitalSignature,
+  "pdf-scrub": PdfScrub,
+  "organize-pages": OrganizePages,
+  "annotate-pdf": AnnotatePdf,
   "ask-pdf": AskPdf,
 };
 

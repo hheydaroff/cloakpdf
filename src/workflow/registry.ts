@@ -26,13 +26,9 @@ import type { ToolId } from "../types.ts";
 
 const ELIGIBLE_TOOL_IDS: ReadonlyArray<ToolId> = [
   // Organise
+  "organize-pages",
   "extract-pages",
-  "reorder",
-  "delete",
-  "rotate",
   "reverse-pages",
-  "add-blank-page",
-  "duplicate-page",
   "remove-blank-pages",
   "add-bookmarks",
   "file-attachment",
@@ -44,6 +40,7 @@ const ELIGIBLE_TOOL_IDS: ReadonlyArray<ToolId> = [
   "repair-pdf",
   "crop-pages",
   // Annotate
+  "annotate-pdf",
   "add-page-numbers",
   "header-footer",
   "bates-numbering",
@@ -51,6 +48,7 @@ const ELIGIBLE_TOOL_IDS: ReadonlyArray<ToolId> = [
   "signature",
   // Security
   "metadata",
+  "pdf-scrub",
 ];
 
 const ELIGIBLE_SET: ReadonlySet<string> = new Set(ELIGIBLE_TOOL_IDS);

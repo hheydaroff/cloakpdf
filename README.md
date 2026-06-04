@@ -27,7 +27,7 @@
 
 ## ✨ Features
 
-CloakPDF offers **36 powerful PDF tools**, all running 100% client-side. Features are grouped by what they do; the order roughly tracks day-to-day usefulness, with the differentiating on-device AI feature leading.
+CloakPDF offers **34 powerful PDF tools**, all running 100% client-side. Features are grouped by what they do; the order roughly tracks day-to-day usefulness, with the differentiating on-device AI feature leading.
 
 ### 🤖 AI Tools _(on-device)_
 
@@ -41,20 +41,16 @@ _Chat with your PDF using a small AI model running entirely in your browser — 
 
 _Rearrange, combine, and manage your PDF pages_
 
-| Tool                   | Description                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------------ |
-| **Merge PDFs**         | Combine multiple PDF files into a single document with drag-to-reorder support                   |
-| **Split PDF**          | Divide a PDF into multiple separate files — split every page, every N pages, or at custom points |
-| **Extract Pages**      | Select pages visually or by range (e.g., `1-3, 5, 7-9`) and save as a new PDF                    |
-| **Reorder Pages**      | Drag and drop to rearrange page order with smooth animations                                     |
-| **Delete Pages**       | Select and remove unwanted pages visually                                                        |
-| **Rotate Pages**       | Rotate individual pages by 90°, -90°, or 180° — or rotate all at once                            |
-| **Reverse Pages**      | Flip the entire page order of a PDF in one click                                                 |
-| **Add Blank Page**     | Insert a blank page at any position — dimensions match the adjacent page                         |
-| **Duplicate Page**     | Copy any page and insert it at a chosen position in the document                                 |
-| **Remove Blank Pages** | Auto-detect and remove empty pages — adjustable sensitivity with manual override                 |
-| **Add Bookmarks**      | Add a clickable outline so readers can jump to any page instantly                                |
-| **File Attachments**   | View, add, extract, or remove files embedded in a PDF                                            |
+| Tool                   | Description                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| **Merge PDFs**         | Combine multiple PDF files into a single document with drag-to-reorder support                                      |
+| **Organize Pages**     | Reorder, rotate, duplicate, delete, add blank pages, and splice in pages from other PDFs — all in one visual canvas |
+| **Split PDF**          | Divide a PDF into multiple separate files — split every page, every N pages, or at custom points                    |
+| **Extract Pages**      | Select pages visually or by range (e.g., `1-3, 5, 7-9`) and save as a new PDF                                       |
+| **Reverse Pages**      | Flip the entire page order of a PDF in one click                                                                    |
+| **Remove Blank Pages** | Auto-detect and remove empty pages — adjustable sensitivity with manual override                                    |
+| **Add Bookmarks**      | Add a clickable outline so readers can jump to any page instantly                                                   |
+| **File Attachments**   | View, add, extract, or remove files embedded in a PDF                                                               |
 
 ### ⚡ Transform & Convert
 
@@ -80,6 +76,7 @@ _Add watermarks, signatures, and overlays_
 
 | Tool                  | Description                                                                                                                                                        |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Annotate PDF**      | Draw with a pen or highlighter, add shapes (line, arrow, rectangle, ellipse), and place text — kept as crisp vector marks (your page text stays selectable)        |
 | **Add Signature**     | Draw or upload a custom signature image and place it on any page with adjustable size and position                                                                 |
 | **Fill PDF Form**     | Fill text fields, checkboxes, dropdowns, and radio groups in interactive PDF forms                                                                                 |
 | **Stamp & Watermark** | Apply pre-built stamps (DRAFT, APPROVED, CONFIDENTIAL, etc.) in text or seal style, or add a custom text watermark with configurable colour, rotation, and opacity |
@@ -91,14 +88,15 @@ _Add watermarks, signatures, and overlays_
 
 _Protect your PDFs and manage metadata_
 
-| Tool                  | Description                                                                                  |
-| --------------------- | -------------------------------------------------------------------------------------------- |
-| **PDF Password**      | Add or remove a password and control print, copy, and edit rights                            |
-| **Redact PDF**        | Permanently black out sensitive text and images                                              |
-| **Edit Metadata**     | View, edit, or redact document properties like title, author, subject, keywords, and dates   |
-| **Digital Signature** | Sign PDFs with a PKCS#12 certificate or a generated self-signed certificate for authenticity |
-| **Compare PDFs**      | Visual side-by-side diff of two PDFs with pixel-level change detection and diff overlay      |
-| **PDF Inspector**     | View version, page count, dimensions, metadata, and encryption status without modifying      |
+| Tool                  | Description                                                                                                                               |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **PDF Password**      | Add or remove a password and control print, copy, and edit rights                                                                         |
+| **Redact PDF**        | Permanently black out sensitive text and images                                                                                           |
+| **PDF Scrub**         | Find and permanently remove hidden data — metadata, XMP packets, JavaScript, embedded files, and annotations — by rebuilding the document |
+| **Edit Metadata**     | View, edit, or redact document properties like title, author, subject, keywords, and dates                                                |
+| **Digital Signature** | Sign PDFs with a PKCS#12 certificate or a generated self-signed certificate for authenticity                                              |
+| **Compare PDFs**      | Visual side-by-side diff of two PDFs with pixel-level change detection and diff overlay                                                   |
+| **PDF Inspector**     | View version, page count, dimensions, metadata, and encryption status without modifying                                                   |
 
 ---
 

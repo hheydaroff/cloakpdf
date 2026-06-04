@@ -24,6 +24,7 @@ import {
   decodePDFRawStream,
   rgb,
   degrees,
+  LineCapStyle,
   StandardFonts,
 } from "@pdfme/pdf-lib";
 
@@ -2323,6 +2324,429 @@ export async function removeAttachmentsFromPdf(
   }
 
   efDict.set(PDFName.of("Names"), newArray);
+
+  return pdf.save();
+}
+
+// ── PDF Scrub — privacy sanitiser ────────────────────────────────
+
+/**
+ * The categories of hidden / non-visible data that {@link scrubPdf}
+ * removes. Surfaced one-to-one in the PDF Scrub findings report.
+ */
+export const SCRUB_CATEGORIES = [
+  "metadata",
+  "xmp",
+  "javascript",
+  "attachments",
+  "annotations",
+] as const;
+
+export type ScrubCategory = (typeof SCRUB_CATEGORIES)[number];
+
+/** Per-category count of hidden-data items detected in a PDF. */
+export interface ScrubAnalysis {
+  counts: Record<ScrubCategory, number>;
+}
+
+/**
+ * Scan a PDF for hidden / non-visible data that leaks identity or poses
+ * a security risk, returning a per-category count. This powers the PDF
+ * Scrub findings report; it never mutates the document.
+ *
+ * The five vectors:
+ *
+ * - **metadata** — populated standard Info-dictionary fields (author,
+ *   creator/producer software fingerprints, creation/modification dates).
+ * - **xmp** — the catalog `/Metadata` XMP packet, which can carry GPS
+ *   tags, original author, and an edit history the Info dict doesn't.
+ * - **javascript** — embedded JavaScript (`/Names → /JavaScript`) plus
+ *   auto-run hooks (`/OpenAction`, document `/AA`, per-page `/AA`).
+ * - **attachments** — files embedded via the `/EmbeddedFiles` name tree.
+ * - **annotations** — sticky notes, highlights, and other markup whose
+ *   `/T` author and `/Contents` text travel with the page.
+ *
+ * @param file - The PDF file to inspect.
+ * @returns Counts keyed by {@link ScrubCategory}.
+ */
+export async function analyzePdfHiddenData(file: File): Promise<ScrubAnalysis> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await PDFDocument.load(arrayBuffer, {
+    updateMetadata: false,
+    throwOnInvalidObject: false,
+    ignoreEncryption: true,
+  });
+  const catalog = pdf.catalog;
+
+  // 1. Document metadata — count non-empty standard Info fields. Dates
+  //    are read defensively: a malformed date string makes pdf-lib's
+  //    getter throw, which shouldn't fail the whole scan.
+  let metadata = 0;
+  for (const value of [
+    pdf.getTitle(),
+    pdf.getAuthor(),
+    pdf.getSubject(),
+    pdf.getKeywords(),
+    pdf.getCreator(),
+    pdf.getProducer(),
+  ]) {
+    if (value && value.trim()) metadata++;
+  }
+  try {
+    if (pdf.getCreationDate()) metadata++;
+  } catch {
+    /* unparseable date still counts as present */ metadata++;
+  }
+  try {
+    if (pdf.getModificationDate()) metadata++;
+  } catch {
+    metadata++;
+  }
+
+  // 2. XMP metadata packet (catalog /Metadata stream).
+  const xmp = catalog.lookup(PDFName.of("Metadata")) ? 1 : 0;
+
+  // The /Names dictionary backs both the JavaScript and EmbeddedFiles
+  // name trees, so resolve it once.
+  const namesDict = catalog.lookup(PDFName.of("Names"));
+
+  // 3. Scripts & auto-actions.
+  let javascript = 0;
+  if (namesDict instanceof PDFDict) {
+    const jsTree = namesDict.lookup(PDFName.of("JavaScript"));
+    if (jsTree instanceof PDFDict) {
+      const arr = jsTree.lookup(PDFName.of("Names"));
+      if (arr instanceof PDFArray) javascript += Math.floor(arr.size() / 2);
+    }
+  }
+  if (catalog.lookup(PDFName.of("OpenAction"))) javascript++;
+  if (catalog.lookup(PDFName.of("AA"))) javascript++;
+  for (const page of pdf.getPages()) {
+    if (page.node.lookup(PDFName.of("AA"))) javascript++;
+  }
+
+  // 4. Embedded files.
+  let attachments = 0;
+  if (namesDict instanceof PDFDict) {
+    const efTree = namesDict.lookup(PDFName.of("EmbeddedFiles"));
+    if (efTree instanceof PDFDict) {
+      const arr = efTree.lookup(PDFName.of("Names"));
+      if (arr instanceof PDFArray) attachments = Math.floor(arr.size() / 2);
+    }
+  }
+
+  // 5. Annotations & comments.
+  let annotations = 0;
+  for (const page of pdf.getPages()) {
+    const annots = page.node.lookup(PDFName.of("Annots"));
+    if (annots instanceof PDFArray) annotations += annots.size();
+  }
+
+  return { counts: { metadata, xmp, javascript, attachments, annotations } };
+}
+
+/**
+ * Permanently strip hidden / non-visible data from a PDF.
+ *
+ * **Why a rebuild, not in-place deletion.** pdf-lib does not
+ * garbage-collect: deleting a `/Names` or `/Annots` reference leaves the
+ * underlying JavaScript / attachment / annotation objects orphaned but
+ * still written into the saved bytes — useless for a privacy tool. So we
+ * instead rebuild the document from page content only. A fresh
+ * `PDFDocument` inherits none of the source catalog, and `copyPages`
+ * copies just the objects reachable from each page (content streams,
+ * fonts, images, kept annotations). Every catalog-level vector —
+ * embedded JavaScript, `/OpenAction`, the `/Names` trees (JavaScript +
+ * EmbeddedFiles), the XMP `/Metadata` packet, and the Info dictionary —
+ * is simply never reached, so it is physically absent from the output,
+ * not merely dereferenced. (Verified by scanning the output bytes in the
+ * unit tests.)
+ *
+ * Page-level vectors are stripped on the source *before* copying so the
+ * reachability walk can't pull them across: per-page `/AA` actions
+ * always, and `/Annots` when `removeAnnotations` is set.
+ *
+ * Trade-off, surfaced in the UI: the document outline/bookmarks and any
+ * interactive form registration live at catalog level and do not survive
+ * the rebuild.
+ *
+ * @param file - The source PDF (must be decrypted).
+ * @param removeAnnotations - Also strip annotations/comments (sticky
+ *   notes, highlights, markup). Off by default so visible markup is
+ *   preserved unless the user opts in.
+ * @returns Scrubbed PDF bytes.
+ */
+export async function scrubPdf(file: File, removeAnnotations = false): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const src = await PDFDocument.load(arrayBuffer, {
+    updateMetadata: false,
+    throwOnInvalidObject: false,
+    ignoreEncryption: true,
+  });
+
+  // Strip page-level vectors on the SOURCE first so copyPages' reachable-
+  // object walk never reaches them (see the function doc for why this
+  // matters — orphaned objects would otherwise persist in the bytes).
+  for (const page of src.getPages()) {
+    page.node.delete(PDFName.of("AA"));
+    if (removeAnnotations) page.node.delete(PDFName.of("Annots"));
+  }
+
+  // Rebuild from page content only — the new catalog carries no
+  // JavaScript, attachments, XMP, OpenAction, or Info metadata.
+  const out = await PDFDocument.create();
+  const copied = await out.copyPages(src, src.getPageIndices());
+  for (const page of copied) out.addPage(page);
+
+  // PDFDocument.create() stamps a default Producer string and
+  // creation/modification timestamps. Clear them so the scrubbed file
+  // carries no software fingerprint or "scrubbed-at" timestamp.
+  const infoDict = (out as unknown as { getInfoDict(): PDFDict }).getInfoDict();
+  for (const key of [
+    "Title",
+    "Author",
+    "Subject",
+    "Keywords",
+    "Creator",
+    "Producer",
+    "CreationDate",
+    "ModDate",
+  ]) {
+    infoDict.delete(PDFName.of(key));
+  }
+
+  return out.save();
+}
+
+// ── Organize Pages — unified page assembly ───────────────────────
+
+/** One page in an Organize-Pages assembly plan. */
+export interface AssembleOp {
+  /** `"page"` copies an existing page; `"blank"` inserts an empty page. */
+  kind: "page" | "blank";
+  /** Index into the `sources` array — required for `kind: "page"`. */
+  sourceIndex?: number;
+  /** 0-based page index within that source — required for `kind: "page"`. */
+  pageIndex?: number;
+  /** Clockwise rotation in degrees to add on top of the page's own rotation. */
+  rotation?: number;
+  /** Blank-page width in points (defaults to US Letter). */
+  width?: number;
+  /** Blank-page height in points (defaults to US Letter). */
+  height?: number;
+}
+
+/**
+ * Assemble a new PDF from an ordered plan of page operations.
+ *
+ * This is the engine behind the Organize Pages tool: a single pass that
+ * reorders, rotates, duplicates, deletes (by omission), inserts blanks,
+ * and splices pages drawn from several source PDFs — all expressed as a
+ * flat list of {@link AssembleOp}s in final output order.
+ *
+ * Each `page` op copies its source page fresh, so the same source page
+ * can appear multiple times (duplication) and in any order. Source
+ * documents are loaded lazily and at most once. Like merge/reorder, the
+ * output is rebuilt from page content, so catalog-level extras
+ * (bookmarks, form registration) do not carry over.
+ *
+ * @param sources - Raw bytes of every source PDF referenced by the plan.
+ * @param ops - The output pages, in order.
+ * @returns The assembled PDF bytes.
+ */
+export async function assemblePdf(sources: Uint8Array[], ops: AssembleOp[]): Promise<Uint8Array> {
+  if (ops.length === 0) {
+    throw new Error("Nothing to assemble — the document has no pages.");
+  }
+
+  const out = await PDFDocument.create();
+  const loaded: (PDFDocument | undefined)[] = Array.from({ length: sources.length });
+  const getSource = async (i: number): Promise<PDFDocument> => {
+    const existing = loaded[i];
+    if (existing) return existing;
+    const doc = await PDFDocument.load(sources[i], {
+      throwOnInvalidObject: false,
+      ignoreEncryption: true,
+    });
+    loaded[i] = doc;
+    return doc;
+  };
+
+  const norm = (deg: number) => ((deg % 360) + 360) % 360;
+
+  for (const op of ops) {
+    if (op.kind === "blank") {
+      const page = out.addPage([op.width ?? 612, op.height ?? 792]);
+      if (op.rotation) page.setRotation(degrees(norm(op.rotation)));
+    } else {
+      const src = await getSource(op.sourceIndex ?? 0);
+      const [page] = await out.copyPages(src, [op.pageIndex ?? 0]);
+      if (op.rotation) {
+        page.setRotation(degrees(norm(page.getRotation().angle + op.rotation)));
+      }
+      out.addPage(page);
+    }
+  }
+
+  return out.save();
+}
+
+// ── Annotate — vector overlay (pen / highlighter / shapes / text) ─
+
+/** RGB colour in the 0–255 range for an annotation. */
+export interface AnnotationColor {
+  r: number;
+  g: number;
+  b: number;
+}
+
+/**
+ * A single annotation, in page-relative fraction coordinates (0–1 from the
+ * top-left) so it maps to any page size. Sizes are fractions too — stroke
+ * thickness as a fraction of page width, text size as a fraction of page
+ * height — so a stroke drawn on the preview lands at the same relative
+ * weight in the output regardless of page dimensions.
+ */
+export type Annotation =
+  | {
+      kind: "stroke";
+      pageIndex: number;
+      points: { x: number; y: number }[];
+      color: AnnotationColor;
+      thicknessFrac: number;
+      opacity: number;
+    }
+  | {
+      kind: "rect" | "ellipse";
+      pageIndex: number;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      color: AnnotationColor;
+      thicknessFrac: number;
+    }
+  | {
+      kind: "line" | "arrow";
+      pageIndex: number;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+      color: AnnotationColor;
+      thicknessFrac: number;
+    }
+  | {
+      kind: "text";
+      pageIndex: number;
+      x: number;
+      y: number;
+      text: string;
+      sizeFrac: number;
+      color: AnnotationColor;
+    };
+
+/**
+ * Burn annotations onto a PDF as vector graphics.
+ *
+ * Unlike redaction, this is additive and non-destructive: the existing
+ * page content (including selectable text) is untouched — pen strokes,
+ * highlights, boxes, and text labels are drawn on top via pdf-lib's
+ * vector primitives, so the result stays a real PDF, not a flattened
+ * image. Coordinates arrive top-left-origin in fractions and are
+ * converted to pdf-lib's bottom-left point space per page.
+ *
+ * @param file - The source PDF.
+ * @param annotations - Annotations to draw, each tagged with its page.
+ * @returns Annotated PDF bytes.
+ */
+export async function annotatePdf(file: File, annotations: Annotation[]): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await PDFDocument.load(arrayBuffer);
+  const pages = pdf.getPages();
+  // Embed the text font lazily — only if a text annotation is present.
+  let font: Awaited<ReturnType<typeof pdf.embedFont>> | null = null;
+
+  for (const a of annotations) {
+    const page = pages[a.pageIndex];
+    if (!page) continue;
+    const { width: W, height: H } = page.getSize();
+    const color = rgb(a.color.r / 255, a.color.g / 255, a.color.b / 255);
+
+    if (a.kind === "stroke") {
+      if (a.points.length < 2) continue;
+      const thickness = Math.max(0.5, a.thicknessFrac * W);
+      for (let i = 1; i < a.points.length; i++) {
+        const p0 = a.points[i - 1];
+        const p1 = a.points[i];
+        page.drawLine({
+          start: { x: p0.x * W, y: (1 - p0.y) * H },
+          end: { x: p1.x * W, y: (1 - p1.y) * H },
+          thickness,
+          color,
+          opacity: a.opacity,
+          lineCap: LineCapStyle.Round,
+        });
+      }
+    } else if (a.kind === "rect") {
+      page.drawRectangle({
+        x: a.x * W,
+        y: (1 - a.y - a.h) * H,
+        width: a.w * W,
+        height: a.h * H,
+        borderColor: color,
+        borderWidth: Math.max(0.5, a.thicknessFrac * W),
+        opacity: 0,
+        borderOpacity: 1,
+      });
+    } else if (a.kind === "ellipse") {
+      page.drawEllipse({
+        x: (a.x + a.w / 2) * W,
+        y: (1 - (a.y + a.h / 2)) * H,
+        xScale: (a.w / 2) * W,
+        yScale: (a.h / 2) * H,
+        borderColor: color,
+        borderWidth: Math.max(0.5, a.thicknessFrac * W),
+        opacity: 0,
+        borderOpacity: 1,
+      });
+    } else if (a.kind === "line" || a.kind === "arrow") {
+      const thickness = Math.max(0.5, a.thicknessFrac * W);
+      const start = { x: a.x1 * W, y: (1 - a.y1) * H };
+      const end = { x: a.x2 * W, y: (1 - a.y2) * H };
+      page.drawLine({ start, end, thickness, color, lineCap: LineCapStyle.Round });
+      if (a.kind === "arrow") {
+        // Two short segments off the end point form the arrowhead.
+        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+        const headLen = Math.max(6, thickness * 3.5);
+        for (const spread of [Math.PI - 0.45, Math.PI + 0.45]) {
+          page.drawLine({
+            start: end,
+            end: {
+              x: end.x + headLen * Math.cos(angle + spread),
+              y: end.y + headLen * Math.sin(angle + spread),
+            },
+            thickness,
+            color,
+            lineCap: LineCapStyle.Round,
+          });
+        }
+      }
+    } else if (a.kind === "text") {
+      if (!a.text) continue;
+      if (!font) font = await pdf.embedFont(StandardFonts.Helvetica);
+      const size = a.sizeFrac * H;
+      // `y` is the top of the text in fraction space; pdf-lib anchors text at
+      // its baseline, so drop one font size below the click point.
+      page.drawText(a.text, {
+        x: a.x * W,
+        y: (1 - a.y) * H - size,
+        size,
+        font,
+        color,
+      });
+    }
+  }
 
   return pdf.save();
 }
