@@ -76,6 +76,29 @@ async function drawOnPage(
   await page.mouse.up();
 }
 
+/** Click the focused page at a fraction of its box (used to place a signature). */
+async function clickOnPage(page: Page, fx: number, fy: number): Promise<void> {
+  const img = await page.$('img[alt="Page 1"]');
+  if (!img) fail("Focus page image not found for placement.");
+  const bb = await img.boundingBox();
+  if (!bb) fail("Focus page image has no layout box.");
+  await page.mouse.click(bb.x + bb.width * fx, bb.y + bb.height * fy);
+}
+
+/** Scribble one stroke on the signature pad so it emits a PNG data-URL. */
+async function scribbleOnPad(page: Page): Promise<void> {
+  const pad = await page.$('canvas[aria-label^="Signature drawing area"]');
+  if (!pad) fail("Signature pad canvas not found.");
+  const bb = await pad.boundingBox();
+  if (!bb) fail("Signature pad has no layout box.");
+  const cy = bb.y + bb.height / 2;
+  await page.mouse.move(bb.x + bb.width * 0.2, cy);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + bb.width * 0.5, cy - bb.height * 0.25, { steps: 5 });
+  await page.mouse.move(bb.x + bb.width * 0.8, cy, { steps: 5 });
+  await page.mouse.up();
+}
+
 async function main() {
   const errors: string[] = [];
   const browser = await launch({
@@ -125,6 +148,32 @@ async function main() {
     await drawOnPage(page, { x: 0.3, y: 0.5 }, { x: 0.7, y: 0.65 });
     await waitForText(page, /\b1 mark\b/, 5_000);
     console.log("  ✓ annotate draw");
+
+    // 3b. Crop (drag a keep rect → per-page crop boxes). Page count unchanged.
+    const cropBtn = await page.$('button[aria-label="Crop"]');
+    if (!cropBtn) fail("Crop rail tool not found.");
+    await cropBtn.click(); // focus mode
+    await waitForText(page, /area to keep/i, 5_000);
+    await drawOnPage(page, { x: 0.12, y: 0.1 }, { x: 0.9, y: 0.85 });
+    await waitForText(page, /Keeping/i, 5_000);
+    if (!(await clickByText(page, "Crop pages"))) fail("Crop Apply button not found.");
+    await waitForText(page, /Working/i, 10_000);
+    await waitForText(page, /area to keep/i, 60_000); // keep resets once applied
+    await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
+    console.log("  ✓ crop drag + apply");
+
+    // 3c. Signature (canvas placement): draw on pad → tap page → embed.
+    const sigBtn = await page.$('button[aria-label="Signature"]');
+    if (!sigBtn) fail("Signature rail tool not found.");
+    await sigBtn.click(); // focus mode
+    await waitForText(page, /Draw or upload a signature/i, 5_000);
+    await scribbleOnPad(page);
+    await waitForText(page, /Tap the page to place/i, 5_000);
+    await clickOnPage(page, 0.5, 0.55);
+    await waitForText(page, /\b1 signature\b/, 5_000);
+    if (!(await clickByText(page, "Apply signature"))) fail("Signature Apply button not found.");
+    await waitForText(page, /\b0 signatures\b/, 60_000); // embed drops the placed object
+    console.log("  ✓ signature place + apply");
 
     // 4. A not-yet-migrated tool still shows its placeholder.
     const soonBtn = await page.$('button[aria-label="Bookmarks"]');

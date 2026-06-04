@@ -105,7 +105,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: PenTool,
     group: "annotate",
     mode: "focus",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "stamp-pdf",
@@ -191,7 +191,14 @@ export const EDITOR_TOOLS: EditorTool[] = [
   },
 
   // Transform
-  { id: "crop-pages", name: "Crop", icon: Crop, group: "transform", mode: "focus", status: "soon" },
+  {
+    id: "crop-pages",
+    name: "Crop",
+    icon: Crop,
+    group: "transform",
+    mode: "focus",
+    status: "ready",
+  },
   {
     id: "compress",
     name: "Compress",

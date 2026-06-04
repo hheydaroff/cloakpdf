@@ -7,12 +7,14 @@
 
 import type { ComponentType } from "react";
 import * as Annotate from "./tools/AnnotateTool.tsx";
+import * as Crop from "./tools/CropTool.tsx";
 import * as Extract from "./tools/ExtractTool.tsx";
 import * as Metadata from "./tools/MetadataTool.tsx";
 import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
 import * as RemoveBlank from "./tools/RemoveBlankTool.tsx";
 import * as Scrub from "./tools/ScrubTool.tsx";
+import * as Signature from "./tools/SignatureTool.tsx";
 import {
   BatesPanel,
   HeaderFooterPanel,
@@ -38,6 +40,9 @@ export interface ToolImpl {
 export const TOOL_IMPL: Record<string, ToolImpl> = {
   "redact-pdf": { Stage: Redact.Stage, Panel: Redact.Panel },
   "annotate-pdf": { Stage: Annotate.Stage, Panel: Annotate.Panel },
+  // Canvas-placement tools: a Stage to place/drag on the page + a Panel.
+  signature: { Stage: Signature.Stage, Panel: Signature.Panel },
+  "crop-pages": { Stage: Crop.Stage, Panel: Crop.Panel },
   // Overview tools: their Board lives in OverviewMode (center), so no focus
   // Stage here — only the Panel.
   "organize-pages": { Panel: Organize.Panel },

@@ -12,7 +12,10 @@ import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/p
 import type { FractionRect } from "./types.ts";
 
 /** Per-page geometry + cached preview. Dimensions are in PDF points (the space
- *  pdf-lib writes in); `rotation` is the page's own /Rotate angle. */
+ *  pdf-lib writes in) and taken from the CropBox — the visible box PDF.js
+ *  renders — so the focus canvas aspect ratio always matches the thumbnail,
+ *  even for cropped pages or inputs that ship a CropBox. `rotation` is the
+ *  page's own /Rotate angle. */
 export interface PageMeta {
   index: number;
   widthPt: number;
@@ -87,7 +90,9 @@ export async function createDocFromFile(
   // pdf-lib gets its own copy so PDF.js's worker-side detach can't strand it.
   const pdf = await PDFDocument.load(bytes.slice(0));
   const pages: PageMeta[] = pdf.getPages().map((p, index) => {
-    const { width, height } = p.getSize();
+    // CropBox (defaults to MediaBox when absent) — the box PDF.js renders, so
+    // the canvas aspect ratio matches the preview for cropped pages too.
+    const { width, height } = p.getCropBox();
     return {
       index,
       widthPt: width,

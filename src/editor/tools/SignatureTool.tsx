@@ -1,0 +1,356 @@
+// SignatureTool.tsx — Canvas-placement tool. The Panel captures a signature
+// (draw on the pad or upload an image) into the tool slice; the Stage lets the
+// user TAP a page to drop it and DRAG a placed signature to reposition it
+// (stored as `signature` overlay objects carrying the PNG data-URL in payload).
+// On Apply, `addSignature` embeds each placed signature as a real image (the
+// page text underneath is untouched), then the signature objects are dropped —
+// they now live in the bytes. Reuses the proven SignaturePad + addSignature
+// pipeline from the standalone Add Signature tool. See REDESIGN.md (canvas
+// placement class, sibling of the overlay-object class).
+
+import { Trash2, Upload } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { SignaturePad } from "../../components/SignaturePad.tsx";
+import { addSignature } from "../../utils/pdf-operations.ts";
+import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { useStageProps } from "../stage.tsx";
+import type { FractionRect } from "../types.ts";
+
+const TOOL_ID = "signature";
+const DEFAULT_WIDTH_PCT = 0.28;
+const FALLBACK_ASPECT = 2.5; // typical signature is wider than tall
+
+const INKS = [
+  { name: "Ink", hex: "#1e293b" },
+  { name: "Blue", hex: "#1d4ed8" },
+  { name: "Red", hex: "#dc2626" },
+] as const;
+
+interface SigPayload {
+  dataUrl: string;
+}
+
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+
+export function Stage() {
+  const { doc, selectedPage } = useEditorRead();
+  const { addObject, updateObject, commit } = useEditorActions();
+  const slice = useToolSlice(TOOL_ID);
+  const dataUrl = (slice.dataUrl as string) ?? "";
+  const widthPct = (slice.widthPct as number) ?? DEFAULT_WIDTH_PCT;
+
+  // Lazy <img> cache so placed signatures can be painted on the overlay canvas.
+  // A version counter flips the paintOverlay identity once an image decodes, so
+  // PdfStage repaints it in (images decode async after the data-URL is set).
+  const imgCache = useRef<Map<string, HTMLImageElement>>(new Map());
+  const [imgVersion, setImgVersion] = useState(0);
+  const getImg = useCallback((url: string): HTMLImageElement | null => {
+    if (!url) return null;
+    const cache = imgCache.current;
+    let img = cache.get(url);
+    if (!img) {
+      img = new Image();
+      img.onload = () => setImgVersion((v) => v + 1);
+      img.src = url;
+      cache.set(url, img);
+    }
+    return img.complete && img.naturalWidth ? img : null;
+  }, []);
+
+  const dragRef = useRef<{ id: string; dx: number; dy: number; moved: boolean } | null>(null);
+
+  const paintOverlay = useCallback(
+    (ctx: CanvasRenderingContext2D, w: number, h: number, pageIndex: number) => {
+      for (const o of doc?.objects ?? []) {
+        if (o.kind !== "signature" || o.pageIndex !== pageIndex || !o.rect) continue;
+        const r = o.rect;
+        const x = r.xPct * w;
+        const y = r.yPct * h;
+        const bw = r.wPct * w;
+        const bh = r.hPct * h;
+        const img = getImg((o.payload as SigPayload | undefined)?.dataUrl ?? "");
+        if (img) ctx.drawImage(img, x, y, bw, bh);
+        ctx.save();
+        ctx.strokeStyle = "rgba(37, 99, 235, 0.9)";
+        ctx.setLineDash([5, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(x, y, bw, bh);
+        ctx.restore();
+      }
+    },
+    // imgVersion: re-derive once a signature image decodes so PdfStage repaints
+    // it in (the overlay identity must change to trigger a repaint).
+    [doc, getImg, imgVersion],
+  );
+
+  // Find the topmost signature on this page whose box contains the point.
+  const hitTest = useCallback(
+    (xPct: number, yPct: number) => {
+      const sigs = (doc?.objects ?? []).filter(
+        (o) => o.kind === "signature" && o.pageIndex === selectedPage && o.rect,
+      );
+      for (let i = sigs.length - 1; i >= 0; i--) {
+        const r = sigs[i].rect!;
+        if (xPct >= r.xPct && xPct <= r.xPct + r.wPct && yPct >= r.yPct && yPct <= r.yPct + r.hPct)
+          return sigs[i];
+      }
+      return null;
+    },
+    [doc, selectedPage],
+  );
+
+  useStageProps({
+    cursor: dataUrl ? "copy" : "default",
+    paintOverlay,
+    onPointerDown: (p) => {
+      const hit = hitTest(p.xPct, p.yPct);
+      if (hit?.rect) {
+        dragRef.current = {
+          id: hit.id,
+          dx: p.xPct - hit.rect.xPct,
+          dy: p.yPct - hit.rect.yPct,
+          moved: false,
+        };
+        return;
+      }
+      if (!dataUrl) return;
+      // Place a new signature centred on the tap, sized from the panel slider
+      // and the image's own aspect ratio so it never looks squashed.
+      const page = doc?.pages[selectedPage];
+      const img = imgCache.current.get(dataUrl);
+      const aspect = img?.naturalWidth ? img.naturalWidth / img.naturalHeight : FALLBACK_ASPECT;
+      const wPct = widthPct;
+      const hPct =
+        page && page.heightPt > 0
+          ? (wPct * (page.widthPt / page.heightPt)) / aspect
+          : wPct / aspect;
+      const rect: FractionRect = {
+        xPct: clamp01(p.xPct - wPct / 2),
+        yPct: clamp01(p.yPct - hPct / 2),
+        wPct,
+        hPct,
+      };
+      addObject({ kind: "signature", pageIndex: selectedPage, rect, payload: { dataUrl } });
+    },
+    onPointerMove: (p) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const obj = (doc?.objects ?? []).find((o) => o.id === d.id);
+      if (!obj?.rect) return;
+      d.moved = true;
+      updateObject(d.id, {
+        rect: {
+          ...obj.rect,
+          xPct: clamp01(p.xPct - d.dx),
+          yPct: clamp01(p.yPct - d.dy),
+        },
+      });
+    },
+    onPointerUp: () => {
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (d?.moved) commit("Move signature");
+    },
+  });
+
+  return null;
+}
+
+function InkRow({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+  return (
+    <div className="flex gap-2">
+      {INKS.map((c) => (
+        <button
+          key={c.hex}
+          type="button"
+          onClick={() => onChange(c.hex)}
+          aria-label={c.name}
+          aria-pressed={value === c.hex}
+          className={`h-7 w-7 rounded-full border-2 transition-transform ${
+            value === c.hex ? "scale-110 border-slate-800 dark:border-white" : "border-transparent"
+          }`}
+          style={{ backgroundColor: c.hex }}
+        />
+      ))}
+    </div>
+  );
+}
+
+export function Panel() {
+  const { doc } = useEditorRead();
+  const { patchToolState, applyTransform, undo } = useEditorActions();
+  const slice = useToolSlice(TOOL_ID);
+  const dataUrl = (slice.dataUrl as string) ?? "";
+  const inkHex = (slice.inkHex as string) ?? INKS[0].hex;
+  const widthPct = (slice.widthPct as number) ?? DEFAULT_WIDTH_PCT;
+  const mode = (slice.mode as "draw" | "upload") ?? "draw";
+  const uploadRef = useRef<HTMLInputElement>(null);
+
+  const count = (doc?.objects ?? []).filter((o) => o.kind === "signature").length;
+
+  const onPadSignature = useCallback(
+    (url: string) => patchToolState(TOOL_ID, { dataUrl: url }),
+    [patchToolState],
+  );
+
+  const onUpload = useCallback(
+    (file: File | undefined) => {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () =>
+        patchToolState(TOOL_ID, {
+          dataUrl: typeof reader.result === "string" ? reader.result : "",
+        });
+      reader.readAsDataURL(file);
+    },
+    [patchToolState],
+  );
+
+  const apply = useCallback(() => {
+    void applyTransform(async (d) => {
+      let bytes = d.bytes;
+      const sigs = d.objects.filter((o) => o.kind === "signature" && o.rect && o.payload);
+      for (const o of sigs) {
+        const page = d.pages[o.pageIndex];
+        if (!page) continue;
+        const r = o.rect!;
+        const url = (o.payload as SigPayload).dataUrl;
+        const widthPt = r.wPct * page.widthPt;
+        const heightPt = r.hPct * page.heightPt;
+        const x = r.xPct * page.widthPt;
+        // PDF user space is bottom-left origin; our yPct is from the top.
+        const y = (1 - r.yPct) * page.heightPt - heightPt;
+        const file = new File([bytes.slice(0)], d.fileName, { type: "application/pdf" });
+        bytes = await addSignature(file, url, [o.pageIndex], {
+          x,
+          y,
+          width: widthPt,
+          height: heightPt,
+        });
+      }
+      return {
+        bytes,
+        label: `Signature ${sigs.length}`,
+        objects: d.objects.filter((o) => o.kind !== "signature"),
+      };
+    });
+  }, [applyTransform]);
+
+  const modes: { id: "draw" | "upload"; label: string }[] = [
+    { id: "draw", label: "Draw" },
+    { id: "upload", label: "Upload" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-1.5">
+        {modes.map((m) => {
+          const on = mode === m.id;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => patchToolState(TOOL_ID, { mode: m.id })}
+              aria-pressed={on}
+              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+                on
+                  ? "border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                  : "border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
+              }`}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {mode === "draw" ? (
+        <div className="space-y-2">
+          <SignaturePad onSignature={onPadSignature} color={inkHex} />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-dark-text-muted">
+              Ink
+            </span>
+            <InkRow value={inkHex} onChange={(hex) => patchToolState(TOOL_ID, { inkHex: hex })} />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => uploadRef.current?.click()}
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-4 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600"
+          >
+            <Upload className="h-4 w-4" />
+            Upload signature image
+          </button>
+          <input
+            ref={uploadRef}
+            type="file"
+            accept="image/png,image/jpeg"
+            className="hidden"
+            onChange={(e) => onUpload(e.target.files?.[0])}
+          />
+          {dataUrl && (
+            <img
+              src={dataUrl}
+              alt="Signature preview"
+              className="mx-auto max-h-20 rounded-md border border-slate-200 dark:border-dark-border bg-white p-1"
+            />
+          )}
+        </div>
+      )}
+
+      <label className="block">
+        <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-dark-text-muted">
+          <span>Size</span>
+          <span className="tabular-nums text-slate-700 dark:text-dark-text">
+            {Math.round(widthPct * 100)}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min={10}
+          max={60}
+          value={Math.round(widthPct * 100)}
+          onChange={(e) => patchToolState(TOOL_ID, { widthPct: Number(e.target.value) / 100 })}
+          className="w-full accent-primary-600"
+        />
+      </label>
+
+      <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
+        {dataUrl
+          ? "Tap the page to place it, then drag to reposition."
+          : "Draw or upload a signature to begin."}
+      </p>
+
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-slate-600 dark:text-dark-text-muted">
+          {count} signature{count === 1 ? "" : "s"}
+        </span>
+        {count > 0 && (
+          <button
+            type="button"
+            onClick={undo}
+            className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Undo last
+          </button>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={apply}
+        disabled={count === 0}
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40"
+      >
+        Apply signature{count === 1 ? "" : "s"}
+      </button>
+      <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+        Signatures embed as images — the page text underneath stays selectable.
+      </p>
+    </div>
+  );
+}
