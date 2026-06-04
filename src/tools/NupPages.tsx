@@ -91,7 +91,7 @@ export default function NupPages() {
           ) : (
             <>
               {/* Layout selector */}
-              <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4">
+              <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4">
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-3">
                   <LayoutGrid className="w-3.5 h-3.5" />
                   Layout

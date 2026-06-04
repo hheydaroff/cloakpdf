@@ -93,7 +93,7 @@ export function OrientationLock() {
         <Smartphone size={32} strokeWidth={1.75} />
       </div>
       <div className="flex flex-col gap-2">
-        <div className="text-[18px] font-semibold tracking-tight">Rotate your phone</div>
+        <div className="text-[17px] font-semibold tracking-tight">Rotate your phone</div>
         <div className="max-w-xs text-[13.5px] leading-relaxed text-slate-500 dark:text-dark-text-muted">
           CloakPDF is designed for portrait mode on phones — there's more room for page thumbnails
           and tools that way. Turn your device upright to keep editing.

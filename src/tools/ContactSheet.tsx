@@ -262,7 +262,7 @@ export default function ContactSheet() {
 
           <div className="grid md:grid-cols-2 gap-6 items-start">
             {/* Left column: controls */}
-            <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 space-y-5">
+            <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4 space-y-5">
               {/* Grid size */}
               <div>
                 <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
@@ -333,7 +333,7 @@ export default function ContactSheet() {
               ) : (
                 <div
                   ref={previewRef}
-                  className="relative bg-white dark:bg-dark-surface rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden shadow-sm"
+                  className="relative bg-white dark:bg-dark-surface rounded-lg border border-slate-200 dark:border-dark-border overflow-hidden"
                   style={{ aspectRatio: "7 / 10" }}
                 >
                   {/* Grid of actual page thumbnails */}

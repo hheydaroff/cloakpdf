@@ -20,7 +20,7 @@ export function ResetButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500${className ? ` ${className}` : ""}`}
+      className={`inline-flex items-center gap-1.5 rounded-lg text-sm text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500${className ? ` ${className}` : ""}`}
     >
       <Icon className="w-4 h-4" />
       {label}

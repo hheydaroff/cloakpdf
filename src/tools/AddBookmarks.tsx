@@ -11,7 +11,7 @@
  * clicking a bookmark row jumps the preview to its target page.
  */
 
-import { CheckCircle2, Plus, Sparkles, X } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -217,7 +217,7 @@ export default function AddBookmarks() {
                     >
                       {detecting ? (
                         <>
-                          <span className="w-3.5 h-3.5 border-2 border-primary-300 border-t-primary-600 rounded-full animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
                           Detecting…
                         </>
                       ) : (

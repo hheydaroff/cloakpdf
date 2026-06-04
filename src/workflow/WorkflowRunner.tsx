@@ -258,8 +258,8 @@ interface StepperProps {
  * just becomes a horizontal scroll graveyard.
  *
  * Desktop (sm+): numbered circles connected by progress lines, with
- * the tool title beneath each circle. Completed segments fill green;
- * the current circle is ringed for emphasis.
+ * the tool title beneath each circle. Completed segments fill with
+ * the primary accent; the current circle is ringed for emphasis.
  */
 function Stepper({ steps, currentIndex, done }: StepperProps) {
   const total = steps.length;
@@ -284,7 +284,7 @@ function Stepper({ steps, currentIndex, done }: StepperProps) {
           <div
             className={`h-full rounded-full transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-300 ${
               done
-                ? "bg-emerald-500"
+                ? "bg-primary-600"
                 : "bg-linear-to-r from-primary-400 to-primary-600 dark:from-primary-500 dark:to-primary-400"
             }`}
             style={{ width: `${progressPct}%` }}
@@ -313,7 +313,7 @@ function Stepper({ steps, currentIndex, done }: StepperProps) {
                     isCurrent
                       ? "bg-primary-500 text-white ring-4 ring-primary-100 dark:ring-primary-900/40"
                       : isComplete
-                        ? "bg-emerald-500 text-white"
+                        ? "bg-primary-600 text-white"
                         : "bg-white dark:bg-dark-surface text-slate-500 dark:text-dark-text-muted border border-slate-200 dark:border-dark-border"
                   }`}
                 >
@@ -324,7 +324,7 @@ function Stepper({ steps, currentIndex, done }: StepperProps) {
                     isCurrent
                       ? "text-primary-700 dark:text-primary-300"
                       : isComplete
-                        ? "text-emerald-700 dark:text-emerald-400"
+                        ? "text-primary-700 dark:text-primary-300"
                         : "text-slate-500 dark:text-dark-text-muted"
                   }`}
                   title={meta?.title ?? toolId}
@@ -336,7 +336,7 @@ function Stepper({ steps, currentIndex, done }: StepperProps) {
                 <div
                   className={`h-0.5 w-6 lg:w-10 mt-3 mx-1 rounded-full transition-colors ${
                     isComplete
-                      ? "bg-emerald-500 dark:bg-emerald-500"
+                      ? "bg-primary-500 dark:bg-primary-400"
                       : "bg-slate-200 dark:bg-dark-border"
                   }`}
                 />

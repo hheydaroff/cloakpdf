@@ -126,7 +126,7 @@ export default function ReorderPages() {
                       >
                         <div className="relative">
                           <div
-                            className={`w-20 sm:w-24 md:w-28 aspect-[3/4] bg-white dark:bg-dark-surface rounded-lg overflow-hidden border-2 transition-colors shadow-sm ${
+                            className={`w-20 sm:w-24 md:w-28 aspect-[3/4] bg-white dark:bg-dark-surface rounded-lg overflow-hidden border-2 transition-colors ${
                               isSource
                                 ? "border-dashed border-slate-300 dark:border-dark-border"
                                 : "border-slate-200 dark:border-dark-border hover:border-primary-300 dark:hover:border-primary-600"
@@ -140,7 +140,7 @@ export default function ReorderPages() {
                             />
                           </div>
                           <div
-                            className={`absolute -top-1.5 -right-1.5 text-white text-xs font-bold tabular-nums w-6 h-6 rounded-full flex items-center justify-center shadow-md z-10 transition-opacity duration-200 ${
+                            className={`absolute -top-1.5 -right-1.5 text-white text-xs font-bold tabular-nums w-6 h-6 rounded-full flex items-center justify-center z-10 transition-opacity duration-200 ${
                               isSource
                                 ? "bg-slate-400 dark:bg-slate-600 opacity-50"
                                 : "bg-primary-600"

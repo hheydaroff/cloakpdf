@@ -12,7 +12,7 @@
  * - Copy per page / Copy all / Download .txt / Download Searchable PDF.
  */
 
-import { Check, Copy, Download, FileText, ScanLine } from "lucide-react";
+import { Check, Copy, Download, FileText, Loader2, ScanLine } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
@@ -334,7 +334,10 @@ export default function OcrPdf() {
               />
             ) : (
               <div role="status" aria-live="polite" className="flex items-center gap-3 py-4">
-                <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+                <Loader2
+                  className="w-5 h-5 animate-spin text-primary-600 dark:text-primary-400"
+                  aria-hidden="true"
+                />
                 <span className="text-sm text-slate-600 dark:text-dark-text-muted">
                   Analyzing document…
                 </span>
@@ -408,7 +411,10 @@ export default function OcrPdf() {
           {/* Initializing spinner */}
           {processing && (!progress || progress.total === 0) && (
             <div role="status" aria-live="polite" className="flex items-center gap-3 py-4">
-              <div className="w-5 h-5 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+              <Loader2
+                className="w-5 h-5 animate-spin text-primary-600 dark:text-primary-400"
+                aria-hidden="true"
+              />
               <span className="text-sm text-slate-600 dark:text-dark-text-muted">
                 {progressStatus || "Initializing OCR engine…"}
               </span>

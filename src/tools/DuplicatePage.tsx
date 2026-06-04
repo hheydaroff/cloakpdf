@@ -167,7 +167,7 @@ export default function DuplicatePage() {
                         >
                           <div className="relative">
                             <div
-                              className={`w-20 sm:w-24 md:w-28 aspect-[3/4] bg-white dark:bg-dark-surface rounded-lg overflow-hidden border-2 transition-colors shadow-sm ${
+                              className={`w-20 sm:w-24 md:w-28 aspect-[3/4] bg-white dark:bg-dark-surface rounded-lg overflow-hidden border-2 transition-colors ${
                                 isSource
                                   ? "border-dashed border-slate-300 dark:border-dark-border"
                                   : "border-primary-400"
@@ -253,12 +253,12 @@ export default function DuplicatePage() {
                         }}
                         {...(hasCopies ? drag.getTouchHandlers(slot) : {})}
                         className={`shrink-0 p-2 flex flex-col items-center gap-1.5 select-none transition-[transform,opacity,color,background-color,border-color,box-shadow] duration-200 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-dark-bg ${
-                          hasCopies ? "active:cursor-grabbing" : "hover:scale-105"
+                          hasCopies ? "active:cursor-grabbing" : ""
                         } ${isSource ? "scale-95 opacity-30" : "scale-100 opacity-100"}`}
                       >
                         <div className="relative">
                           <div
-                            className={`w-20 sm:w-24 md:w-28 aspect-[3/4] bg-white dark:bg-dark-surface rounded-lg overflow-hidden border-2 transition-colors shadow-sm ${
+                            className={`w-20 sm:w-24 md:w-28 aspect-[3/4] bg-white dark:bg-dark-surface rounded-lg overflow-hidden border-2 transition-colors ${
                               isSource
                                 ? "border-dashed border-slate-300 dark:border-dark-border"
                                 : "border-slate-200 dark:border-dark-border hover:border-primary-300 dark:hover:border-primary-600"

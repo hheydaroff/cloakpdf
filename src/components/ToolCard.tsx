@@ -33,7 +33,7 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
       ref={ref}
       onClick={() => onSelect(tool.id as ToolId)}
       {...handlers}
-      className="group relative overflow-hidden bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border px-5 py-6 sm:p-6 text-left cursor-pointer transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md active:-translate-y-0.5 active:border-primary-300 dark:active:border-primary-600 active:shadow-md"
+      className="group relative overflow-hidden bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border px-5 py-6 sm:p-6 text-left cursor-pointer transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md active:-translate-y-0.5 active:border-primary-300 dark:active:border-primary-600 active:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
     >
       <div
         className="pointer-events-none absolute inset-0 rounded-[inherit] transition-opacity duration-300"

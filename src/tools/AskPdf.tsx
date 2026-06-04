@@ -527,7 +527,7 @@ function IndexingCard({ progress }: { progress: IndexingProgress | null }) {
   // "(3/4)" detail.
   const percent = overallIndexingPercent(progress);
   return (
-    <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-6">
+    <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border p-6">
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"

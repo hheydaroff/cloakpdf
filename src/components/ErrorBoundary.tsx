@@ -152,12 +152,12 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
 
           <div className="space-y-8 text-sm text-slate-600 dark:text-dark-text-muted leading-relaxed">
-            <section className="flex items-start gap-2.5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-4">
+            <section className="flex items-start gap-2.5 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800/60 rounded-xl p-4">
               <ShieldCheck
-                className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
+                className="w-5 h-5 text-primary-600 dark:text-primary-400 shrink-0 mt-0.5"
                 aria-hidden="true"
               />
-              <p className="text-emerald-800 dark:text-emerald-200">
+              <p className="text-primary-800 dark:text-primary-200">
                 Your files were never uploaded — everything stays on your device.
               </p>
             </section>
@@ -222,7 +222,7 @@ export class ErrorBoundary extends Component<Props, State> {
                   href={issueUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-primary-600 dark:text-primary-400 hover:underline"
+                  className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 rounded-sm"
                 >
                   report this issue on GitHub
                 </a>{" "}

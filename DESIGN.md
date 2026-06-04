@@ -655,6 +655,15 @@ Cards never have inner dividers; sections never have hairline
 rules. Borders are always 1 px slate-200 and become primary-300 on
 hover — the colour shift is the affordance.
 
+**One sanctioned exception:** read-only *data tables* — the
+key/value metadata lists in PDF Inspector, Edit Metadata, PDF
+Password, Merge, Add Bookmarks, File Attachment and Digital
+Signature — may stack rows with a `divide-y divide-slate-100`
+hairline. A scannable record of `label → value` pairs reads as a
+table, not a card, and the faint row rule aids the eye where pure
+whitespace would not. This applies only to genuine tabular data;
+it is not licence to add dividers inside ordinary content cards.
+
 ## Elevation & Depth
 
 The system layers in three planes:

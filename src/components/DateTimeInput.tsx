@@ -408,7 +408,7 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
               onClick={handlePrevMonth}
               disabled={!canGoPrev || showYearPicker}
               aria-label="Previous month"
-              className={`p-1 rounded-md transition-[colors,transform] active:scale-90 ${
+              className={`p-1 rounded-md transition-[color,background-color,transform] active:scale-90 ${
                 canGoPrev && !showYearPicker
                   ? "hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted"
                   : "text-slate-300 dark:text-slate-600 cursor-not-allowed"
@@ -465,7 +465,7 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
               onClick={handleNextMonth}
               disabled={!canGoNext || showYearPicker}
               aria-label="Next month"
-              className={`p-1 rounded-md transition-[colors,transform] active:scale-90 ${
+              className={`p-1 rounded-md transition-[color,background-color,transform] active:scale-90 ${
                 canGoNext && !showYearPicker
                   ? "hover:bg-slate-100 dark:hover:bg-dark-surface-alt text-slate-500 dark:text-dark-text-muted"
                   : "text-slate-300 dark:text-slate-600 cursor-not-allowed"
@@ -559,7 +559,7 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
                             aria-label={`${day} ${MONTHS[viewMonth]} ${viewYear}${isSelected ? ", selected" : ""}${isToday ? ", today" : ""}`}
                             aria-pressed={isSelected}
                             className={`
-                              h-8 w-full flex items-center justify-center rounded-md text-xs transition-[colors,transform] select-none active:scale-90
+                              h-8 w-full flex items-center justify-center rounded-md text-xs transition-[color,background-color,transform] select-none active:scale-90
                               ${
                                 isSelected
                                   ? "bg-primary-600 text-white font-semibold"

@@ -104,7 +104,7 @@ export default function ReversePages() {
                     <img
                       src={preview.first}
                       alt="First page"
-                      className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
+                      className="w-16 h-auto rounded-lg border border-slate-200 dark:border-dark-border"
                     />
                     <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">Page 1</p>
                   </div>
@@ -118,7 +118,7 @@ export default function ReversePages() {
                       <img
                         src={preview.last}
                         alt="Last page"
-                        className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
+                        className="w-16 h-auto rounded-lg border border-slate-200 dark:border-dark-border"
                       />
                       <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">
                         Page {pageCount}
@@ -135,7 +135,7 @@ export default function ReversePages() {
                       <img
                         src={preview.last}
                         alt="Was last, now first"
-                        className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
+                        className="w-16 h-auto rounded-lg border border-slate-200 dark:border-dark-border"
                       />
                       <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">
                         Page 1
@@ -151,7 +151,7 @@ export default function ReversePages() {
                     <img
                       src={preview.first}
                       alt="Was first, now last"
-                      className="w-16 h-auto rounded border border-slate-200 dark:border-dark-border"
+                      className="w-16 h-auto rounded-lg border border-slate-200 dark:border-dark-border"
                     />
                     <p className="text-xs text-slate-500 dark:text-dark-text-muted mt-1">
                       Page {pageCount}

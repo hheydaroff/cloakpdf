@@ -337,9 +337,9 @@ function DownloadBody({
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-3 text-sm text-slate-700 dark:text-dark-text">
-          <span
+          <Loader2
+            className="w-4 h-4 animate-spin text-primary-600 dark:text-primary-400"
             aria-hidden="true"
-            className="w-4 h-4 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin"
           />
           <span className="font-medium">
             {progress?.status ?? (multi ? "Loading models" : "Loading model")}

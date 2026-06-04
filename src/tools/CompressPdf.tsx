@@ -184,14 +184,14 @@ export default function CompressPdf() {
                   </div>
                   <div>
                     <p className="text-sm text-slate-500 dark:text-dark-text-muted">Compressed</p>
-                    <p className="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    <p className="text-xl font-semibold tabular-nums text-primary-600 dark:text-primary-400">
                       {formatFileSize(result.compressed)}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-slate-500 dark:text-dark-text-muted">Saved</p>
                     <p
-                      className={`text-xl font-semibold tabular-nums ${savings > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-slate-500 dark:text-dark-text-muted"}`}
+                      className={`text-xl font-semibold tabular-nums ${savings > 0 ? "text-primary-600 dark:text-primary-400" : "text-slate-500 dark:text-dark-text-muted"}`}
                     >
                       {savings}%
                     </p>

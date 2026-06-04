@@ -130,7 +130,7 @@ export default function GrayscalePdf() {
                       <img
                         src={thumbnails[selectedPage]}
                         alt={`${label} — page ${selectedPage + 1}`}
-                        className={`max-h-52 w-auto rounded shadow-sm${label === "After" ? " grayscale" : ""}`}
+                        className={`max-h-52 w-auto rounded-lg${label === "After" ? " grayscale" : ""}`}
                       />
                     </div>
                   </div>

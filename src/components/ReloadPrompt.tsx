@@ -93,7 +93,7 @@ export function ReloadPrompt() {
           <p className="text-card-desc font-semibold tracking-[-0.01em] text-slate-800 dark:text-dark-text">
             {title}
           </p>
-          <p className="mt-0.5 text-[12px] leading-[1.45] text-slate-500 dark:text-dark-text-muted">
+          <p className="mt-0.5 text-xs leading-[1.45] text-slate-500 dark:text-dark-text-muted">
             {body}
           </p>
           {needRefresh && (

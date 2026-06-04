@@ -220,7 +220,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
         >
           {isPreset && (
             <span
-              className="text-white text-[9px] font-bold drop-shadow-sm leading-none"
+              className="text-white text-xxs font-bold drop-shadow-sm leading-none"
               aria-hidden="true"
             >
               +

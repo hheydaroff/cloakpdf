@@ -205,7 +205,7 @@ export default function HeaderFooter() {
               </div>
 
               {/* Header row */}
-              <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-primary-50 dark:bg-primary-900/20 border-b border-primary-100 dark:border-primary-800/40">
                   <PanelTop className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
                   <p className="text-xs font-semibold uppercase tracking-widest text-primary-700 dark:text-primary-400">
@@ -246,7 +246,7 @@ export default function HeaderFooter() {
               </div>
 
               {/* Footer row */}
-              <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-2.5 bg-primary-50 dark:bg-primary-900/20 border-b border-primary-100 dark:border-primary-800/40">
                   <PanelBottom className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
                   <p className="text-xs font-semibold uppercase tracking-widest text-primary-700 dark:text-primary-400">

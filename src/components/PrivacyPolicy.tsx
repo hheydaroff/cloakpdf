@@ -65,9 +65,9 @@ export function PrivacyPolicy() {
           </h2>
           <p>
             CloakPDF does not use cookies, local storage for tracking purposes, or any third-party
-            analytics or advertising scripts. The application may use your browser&apos;s cache and
-            a Service Worker to enable offline use after the first visit; this data is stored only
-            on your device and is never sent anywhere.
+            analytics or advertising scripts. The application may use your browser’s cache and a
+            Service Worker to enable offline use after the first visit; this data is stored only on
+            your device and is never sent anywhere.
           </p>
         </section>
 
@@ -79,8 +79,8 @@ export function PrivacyPolicy() {
             CloakPDF does not integrate any third-party analytics, advertising, or data-collection
             services. The application is hosted as a static site; standard web-server access logs
             (IP address, requested path, timestamp) may be retained by the hosting provider for
-            security and operational purposes, subject to the hosting provider&apos;s own privacy
-            policy. No file content is included in these logs.
+            security and operational purposes, subject to the hosting provider’s own privacy policy.
+            No file content is included in these logs.
           </p>
         </section>
 
@@ -94,7 +94,7 @@ export function PrivacyPolicy() {
               href="https://github.com/cloakyard/cloakpdf"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary-600 dark:text-primary-400 hover:underline"
+              className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 rounded-sm"
             >
               github.com/cloakyard/cloakpdf
             </a>{" "}
@@ -114,7 +114,7 @@ export function PrivacyPolicy() {
               href="https://github.com/cloakyard/cloakpdf/issues"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary-600 dark:text-primary-400 hover:underline"
+              className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 rounded-sm"
             >
               GitHub Issues
             </a>

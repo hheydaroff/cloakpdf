@@ -23,6 +23,7 @@ import {
   Globe,
   Hash,
   KeyRound,
+  Loader2,
   Lock,
   Mail,
   MapPin,
@@ -300,8 +301,8 @@ export default function DigitalSignature() {
           {/* Existing signatures */}
           {detectingSignatures && (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-dark-text-muted py-2">
-              <div className="w-4 h-4 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
-              Checking for existing signatures...
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+              Checking for existing signatures…
             </div>
           )}
 
@@ -570,7 +571,7 @@ export default function DigitalSignature() {
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
                     {certLoading ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                     ) : (
                       <ShieldCheck className="w-4 h-4" />
                     )}
@@ -619,7 +620,7 @@ export default function DigitalSignature() {
                       className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     >
                       {certLoading ? (
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                       ) : (
                         <KeyRound className="w-4 h-4" />
                       )}

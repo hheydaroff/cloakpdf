@@ -165,7 +165,7 @@ export function WorkflowsHome({ onCreate, onEdit, onRun }: WorkflowsHomeProps) {
               role="status"
               className={`text-meta font-medium ${
                 notice.kind === "ok"
-                  ? "text-emerald-600 dark:text-emerald-400"
+                  ? "text-primary-600 dark:text-primary-400"
                   : "text-red-600 dark:text-red-400"
               }`}
             >
@@ -201,7 +201,7 @@ export function WorkflowsHome({ onCreate, onEdit, onRun }: WorkflowsHomeProps) {
           role="status"
           className={`text-meta font-medium ${
             notice.kind === "ok"
-              ? "text-emerald-600 dark:text-emerald-400"
+              ? "text-primary-600 dark:text-primary-400"
               : "text-red-600 dark:text-red-400"
           }`}
         >

@@ -204,7 +204,7 @@ async function comparePdfs(
 /** Badge colour based on diff percentage. */
 function diffBadgeClass(pct: number): string {
   if (pct === 0)
-    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+    return "bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300";
   if (pct < 5) return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
   return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 }
@@ -431,7 +431,7 @@ export default function ComparePdf() {
     <div className="space-y-6">
       {/* Summary banner */}
       {summary && (
-        <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4">
+        <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div className="flex items-center gap-4 flex-wrap">
               <div className="text-sm text-slate-600 dark:text-dark-text-muted">
@@ -441,7 +441,7 @@ export default function ComparePdf() {
                 page{summary.total !== 1 && "s"} compared
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
                   {summary.identical} identical
                 </span>
                 {summary.changed > 0 && (
@@ -600,7 +600,7 @@ export default function ComparePdf() {
       )}
 
       {/* Page strip — mini thumbnails for quick navigation */}
-      <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-3">
+      <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-3">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
           All Pages
         </p>
@@ -635,7 +635,7 @@ export default function ComparePdf() {
               <div
                 className={`absolute bottom-0 left-0 right-0 h-1 ${
                   comp.diffPercent === 0
-                    ? "bg-emerald-400"
+                    ? "bg-primary-400"
                     : comp.diffPercent < 5
                       ? "bg-amber-400"
                       : "bg-red-400"

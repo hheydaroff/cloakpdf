@@ -96,6 +96,7 @@ export function ConfirmModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"
+      aria-describedby={description ? "confirm-modal-desc" : undefined}
     >
       {/* Backdrop dim + blur — the layer below; click to dismiss. Inline
           backdrop-filter for the `-webkit-` prefix (Safari). */}
@@ -130,7 +131,10 @@ export function ConfirmModal({
                 {title}
               </h2>
               {description && (
-                <p className="text-sm text-slate-500 dark:text-dark-text-muted mt-1.5 leading-relaxed wrap-anywhere">
+                <p
+                  id="confirm-modal-desc"
+                  className="text-sm text-slate-500 dark:text-dark-text-muted mt-1.5 leading-relaxed wrap-anywhere"
+                >
                   {description}
                 </p>
               )}

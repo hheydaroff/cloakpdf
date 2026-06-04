@@ -249,7 +249,7 @@ function HomeScreen({ onSelectTool, onOpenWorkflows }: HomeScreenProps) {
               visual anchor; the input fills the remaining space; the
               trailing slot holds either the clear button (when active)
               or the ⌘K affordance. */}
-          <div className="relative flex items-center w-full rounded-2xl bg-white/90 dark:bg-dark-surface/90 backdrop-blur-sm border border-slate-200 dark:border-dark-border shadow-sm hover:border-slate-300 dark:hover:border-dark-border focus-within:border-primary-300 dark:focus-within:border-primary-600 focus-within:shadow-md transition-[border-color,box-shadow] duration-200">
+          <div className="relative flex items-center w-full rounded-2xl bg-white/90 dark:bg-dark-surface/90 backdrop-blur-sm border border-slate-200 dark:border-dark-border hover:border-slate-300 dark:hover:border-dark-border focus-within:border-primary-300 dark:focus-within:border-primary-600 focus-within:shadow-md transition-[border-color,box-shadow] duration-200">
             <span
               aria-hidden="true"
               className="shrink-0 ml-2 my-2 w-10 h-10 flex items-center justify-center text-slate-700 dark:text-dark-text"
@@ -487,7 +487,7 @@ function WorkflowHeroCard({ onOpen }: WorkflowHeroCardProps) {
       ref={ref}
       onClick={onOpen}
       {...handlers}
-      className="group relative w-full overflow-hidden bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border px-5 py-5 sm:px-6 sm:py-6 text-left cursor-pointer transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md active:-translate-y-0.5 active:border-primary-300 dark:active:border-primary-600 active:shadow-md"
+      className="group relative w-full overflow-hidden bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border px-5 py-5 sm:px-6 sm:py-6 text-left cursor-pointer transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md active:-translate-y-0.5 active:border-primary-300 dark:active:border-primary-600 active:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
     >
       {/* Cursor / touch spotlight glow */}
       <div

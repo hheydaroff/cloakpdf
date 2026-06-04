@@ -174,7 +174,7 @@ export function AiModelGate({
 
   return (
     <>
-      <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border shadow-sm p-5">
+      <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border p-5">
         <div className="flex items-start gap-3">
           <span
             aria-hidden="true"
