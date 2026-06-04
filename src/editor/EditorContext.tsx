@@ -85,6 +85,8 @@ interface ActionsValue {
   dismissDraft: () => void;
   /** Restore the most-recent draft (the empty editor's "last session" card). */
   restoreLatestDraft: () => Promise<void>;
+  /** Dismiss the error banner. */
+  clearError: () => void;
   exit: () => void;
 }
 
@@ -183,6 +185,7 @@ export function EditorProvider({
 
   const runBusy = useCallback((label: string, fn: () => void | Promise<void>): Promise<void> => {
     return new Promise<void>((resolve, reject) => {
+      setError(null); // clear any stale error from a prior operation
       setBusyLabel(label);
       requestAnimationFrame(() => {
         requestAnimationFrame(async () => {
@@ -190,6 +193,14 @@ export function EditorProvider({
             await fn();
             resolve();
           } catch (e) {
+            // Surface the failure in the editor's error banner. Every byte
+            // transform (Apply) and background task (Export, draft restore)
+            // funnels through here, so this is the one place to wire failure
+            // feedback — without it a thrown transform/export just made the
+            // spinner vanish with no diagnosis. Still reject so success-only
+            // `.then` chains (e.g. OCR "make searchable" clearing its preview)
+            // correctly skip on failure.
+            setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
             reject(e);
           } finally {
             setBusyLabel(null);
@@ -439,6 +450,8 @@ export function EditorProvider({
     setActiveToolState(null);
   }, [restoreEntry]);
 
+  const clearError = useCallback(() => setError(null), []);
+
   const exit = useCallback(() => {
     revokeDocThumbnails(docRef.current);
     onExit();
@@ -523,6 +536,7 @@ export function EditorProvider({
       restoreDraft,
       dismissDraft,
       restoreLatestDraft,
+      clearError,
       exit,
     }),
     [
@@ -549,6 +563,7 @@ export function EditorProvider({
       restoreDraft,
       dismissDraft,
       restoreLatestDraft,
+      clearError,
       exit,
     ],
   );

@@ -4,7 +4,7 @@
 // the empty (no-doc) dropzone, the loading state, the busy overlay, and the
 // error banner. `min-h-0` / `min-w-0` on the growth axes is load-bearing.
 
-import { AlertTriangle, History } from "lucide-react";
+import { AlertTriangle, History, X } from "lucide-react";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useActiveTool, useEditorActions, useEditorRead, useToolSlice } from "./EditorContext.tsx";
@@ -29,7 +29,8 @@ function Spinner({ label }: { label: string }) {
 export function EditorShell() {
   const { doc, loading, busyLabel, error, layout, viewMode, pendingDraft, latestDraft } =
     useEditorRead();
-  const { loadFile, restoreDraft, dismissDraft, restoreLatestDraft } = useEditorActions();
+  const { loadFile, restoreDraft, dismissDraft, restoreLatestDraft, clearError } =
+    useEditorActions();
   const activeTool = useActiveTool();
   const ocrSlice = useToolSlice(OCR_ID);
   const isMobile = layout === "mobile";
@@ -60,7 +61,15 @@ export function EditorShell() {
           className="flex items-center gap-2 border-b border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-sm text-red-700 dark:text-red-300"
         >
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error}
+          <span className="min-w-0 flex-1">{error}</span>
+          <button
+            type="button"
+            onClick={clearError}
+            aria-label="Dismiss error"
+            className="shrink-0 rounded-md p-1 hover:bg-red-100 dark:hover:bg-red-900/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
