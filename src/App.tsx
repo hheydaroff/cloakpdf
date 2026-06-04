@@ -36,7 +36,7 @@ import { ToolCard } from "./components/ToolCard.tsx";
 import { categories, findTool, findToolComponent, tools } from "./config/tool-registry.ts";
 import type { Tool, ToolId } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
-import { NAVIGATE_TOOL_EVENT } from "./utils/nav.ts";
+import { NAVIGATE_TOOL_EVENT, OPEN_EDITOR_EVENT } from "./utils/nav.ts";
 // Workflow views are lazy-loaded: WorkflowRunner is the only static App.tsx
 // import that reaches pdf-lib (through step execution), so code-splitting the
 // three workflow views keeps the ~233 kB-gzip pdf-lib/pako graph off the
@@ -615,8 +615,18 @@ export function App() {
       const id = (event as CustomEvent<ToolId>).detail;
       if (findTool(id)) setView({ kind: "tool", toolId: id });
     }
+    // A multi-file constructor (Merge / Images-to-PDF) finished and handed its
+    // output PDF to the editor.
+    function onOpenEditor(event: Event) {
+      const file = (event as CustomEvent<File>).detail;
+      setView({ kind: "editor", file });
+    }
     window.addEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
-    return () => window.removeEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
+    window.addEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
+    return () => {
+      window.removeEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
+      window.removeEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
+    };
   }, []);
 
   // The editor owns the full viewport and its own chrome, so it renders

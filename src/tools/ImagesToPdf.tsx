@@ -19,7 +19,8 @@ import { TouchDragOverlay } from "../components/TouchDragOverlay.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { type SortableDrag, useSortableDrag } from "../hooks/useSortableDrag.ts";
-import { downloadPdf, formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
+import { formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
+import { openEditorWithFile } from "../utils/nav.ts";
 import { imagesToPdf } from "../utils/pdf-operations.ts";
 
 /** Internal representation of a queued image with its preview URL. */
@@ -172,7 +173,8 @@ export default function ImagesToPdf() {
         pageSize,
         (done, total) => setProgress({ done, total }),
       );
-      downloadPdf(result, "images.pdf");
+      // Hand the assembled PDF straight to the editor (preview, arrange, export).
+      openEditorWithFile(new File([result.slice()], "images.pdf", { type: "application/pdf" }));
     }, "Failed to create PDF from images. Please try again.");
   }, [displayedImages, pageSize, task]);
 
@@ -317,7 +319,7 @@ export default function ImagesToPdf() {
           <ActionButton
             onClick={handleConvert}
             processing={task.processing}
-            label={`Create PDF from ${images.length} Image${images.length > 1 ? "s" : ""}`}
+            label={`Create PDF from ${images.length} image${images.length > 1 ? "s" : ""} & edit`}
             processingLabel="Creating PDF…"
           />
         </>

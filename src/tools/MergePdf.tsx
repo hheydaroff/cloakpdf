@@ -14,7 +14,8 @@ import { FileDropZone } from "../components/FileDropZone.tsx";
 import { type SortMode, SortByNameButton } from "../components/SortByNameButton.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
-import { downloadPdf, formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
+import { formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
+import { openEditorWithFile } from "../utils/nav.ts";
 import { mergePdfs } from "../utils/pdf-operations.ts";
 import { isPdfEncrypted } from "../utils/pdf-security.ts";
 
@@ -84,7 +85,9 @@ export default function MergePdf() {
     if (displayedFiles.length < 2) return;
     await task.run(async () => {
       const result = await mergePdfs(displayedFiles.map((f) => f.file));
-      downloadPdf(result, "merged.pdf");
+      // Hand the merged PDF straight to the editor (preview, arrange, export);
+      // there's no single source file to edit in place.
+      openEditorWithFile(new File([result.slice()], "merged.pdf", { type: "application/pdf" }));
     }, "Failed to merge PDFs. Please check your files and try again.");
   }, [displayedFiles, task]);
 
@@ -164,7 +167,7 @@ export default function MergePdf() {
         <ActionButton
           onClick={handleMerge}
           processing={task.processing}
-          label={`Merge ${displayedFiles.length} Files`}
+          label={`Merge ${displayedFiles.length} files & edit`}
           processingLabel="Merging…"
         />
       )}
