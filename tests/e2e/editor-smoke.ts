@@ -1,11 +1,15 @@
 /**
- * End-to-end smoke test for the canvas editor (M0 shell + M1 tools).
+ * End-to-end smoke test for the canvas editor.
  *
  * Unlike `ai-tools.e2e.ts` this downloads NO model weights — it drives the
- * editor's happy path in a real browser and asserts the chrome + the first
+ * editor's happy path in a real browser and asserts the chrome + the migrated
  * tools work without console errors:
- *   open → render → redact (draw box → destructive apply) → annotate (draw) →
- *   placeholder tool → overview grid → back to focus.
+ *   open → render → redact (draw → destructive burn) → annotate (draw) →
+ *   crop (drag → apply) → signature (pad → place → embed) → OCR panel mounts →
+ *   organize (delete → assemble) → overview/focus → flatten → metadata/scrub →
+ *   extract → page numbers → fill-form → bookmarks → attachments.
+ * OCR's engine is never run here (it would fetch model weights); the step only
+ * asserts the panel is wired.
  *
  * Requirements: Chrome at CHROME_PATH (default macOS path) and the dev server
  * at http://localhost:5173 (`vp dev`). Fixture: tests/fixtures/multipage.pdf.
@@ -175,11 +179,13 @@ async function main() {
     await waitForText(page, /\b0 signatures\b/, 60_000); // embed drops the placed object
     console.log("  ✓ signature place + apply");
 
-    // 4. A not-yet-migrated tool still shows its placeholder (OCR lands later).
-    const soonBtn = await page.$('button[aria-label="OCR"]');
-    if (!soonBtn) fail("OCR rail tool not found.");
-    await soonBtn.click();
-    await waitForText(page, /This tool moves into the editor/i, 5_000);
+    // 4. OCR panel mounts + is wired (we don't run the engine — that would
+    //    download model weights; just assert the desktop controls render).
+    const ocrBtn = await page.$('button[aria-label="OCR"]');
+    if (!ocrBtn) fail("OCR rail tool not found.");
+    await ocrBtn.click();
+    await waitForText(page, /Make searchable/i, 5_000);
+    console.log("  ✓ OCR panel mounts (engine not run)");
 
     // 5. Organize (page-board): delete a page, apply via assemblePdf (40 → 39).
     const orgBtn = await page.$('button[aria-label="Organize"]');
@@ -274,7 +280,7 @@ async function main() {
     }
 
     console.log(
-      `✓ Editor smoke passed — redact burn, annotate, organize (now ${pageButtons.length} pages), placeholder, overview/focus.`,
+      `✓ Editor smoke passed — redact burn, annotate, crop, signature, organize (now ${pageButtons.length} pages), overview/focus, stamps, forms, bookmarks, attachments, OCR wired.`,
     );
   } catch (e) {
     console.error(`✗ Smoke failed: ${e instanceof Error ? e.message : String(e)}`);

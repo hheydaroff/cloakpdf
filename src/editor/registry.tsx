@@ -13,6 +13,7 @@ import * as Crop from "./tools/CropTool.tsx";
 import * as Extract from "./tools/ExtractTool.tsx";
 import * as FillForm from "./tools/FillFormTool.tsx";
 import * as Metadata from "./tools/MetadataTool.tsx";
+import * as Ocr from "./tools/OcrTool.tsx";
 import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
 import * as RemoveBlank from "./tools/RemoveBlankTool.tsx";
@@ -70,6 +71,8 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   "fill-pdf-form": { Panel: FillForm.Panel },
   "add-bookmarks": { Panel: Bookmarks.Panel },
   "file-attachment": { Panel: Attachments.Panel },
+  // OCR: desktop-only searchable-text pipeline (panel-only).
+  ocr: { Panel: Ocr.Panel },
 };
 
 export function toolImpl(id: string | null): ToolImpl | null {

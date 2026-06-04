@@ -231,7 +231,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     mode: "either",
     status: "ready",
   },
-  { id: "ocr", name: "OCR", icon: ScanText, group: "transform", mode: "either", status: "soon" },
+  { id: "ocr", name: "OCR", icon: ScanText, group: "transform", mode: "either", status: "ready" },
 
   // Document
   {
