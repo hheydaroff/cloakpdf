@@ -6,7 +6,7 @@
 // pixels). Reuses the exact geometry + PII pipeline the standalone RedactPdf
 // tool proved. See REDESIGN.md (destructive-drag class).
 
-import { Loader2, ScanSearch, Trash2 } from "lucide-react";
+import { Loader2, ScanSearch } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { canvas as canvasColors } from "../../config/theme.ts";
 import { detectPiiRects, extractTextGeometry } from "../../utils/layout-extract.ts";
@@ -84,7 +84,7 @@ export function Stage() {
 
 export function Panel() {
   const { doc } = useEditorRead();
-  const { addObjects, applyTransform, undo } = useEditorActions();
+  const { addObjects, applyTransform } = useEditorActions();
   const [piiTypes, setPiiTypes] = useState<Set<PiiType>>(
     () => new Set(PII_TYPES.filter((t) => t !== "date")),
   );
@@ -194,21 +194,9 @@ export function Panel() {
         )}
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-slate-600 dark:text-dark-text-muted">
-          {count} redaction{count === 1 ? "" : "s"}
-        </span>
-        {count > 0 && (
-          <button
-            type="button"
-            onClick={undo}
-            className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Undo last
-          </button>
-        )}
-      </div>
+      <span className="text-sm text-slate-600 dark:text-dark-text-muted">
+        {count} redaction{count === 1 ? "" : "s"}
+      </span>
 
       <button
         type="button"

@@ -4,10 +4,30 @@
 // Panel-only — no canvas interaction, so it's identical on desktop + mobile.
 
 import { useEffect, useState } from "react";
+import { DateTimeInput } from "../../components/DateTimeInput.tsx";
 import { getPdfMetadata, setPdfMetadata } from "../../utils/pdf-operations.ts";
 import type { PdfMetadata } from "../../types.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <span className="mb-1 block text-xs font-medium text-slate-500 dark:text-dark-text-muted">
+        {label}
+      </span>
+      <DateTimeInput value={value} onChange={onChange} />
+    </div>
+  );
+}
 
 const EMPTY: PdfMetadata = {
   title: "",
@@ -101,15 +121,13 @@ export function Panel() {
         <Field key={f.key} label={f.label} value={fields[f.key]} onChange={(v) => set(f.key, v)} />
       ))}
       <div className="grid grid-cols-2 gap-2">
-        <Field
+        <DateField
           label="Created"
-          type="datetime-local"
           value={fields.creationDate}
           onChange={(v) => set("creationDate", v)}
         />
-        <Field
+        <DateField
           label="Modified"
-          type="datetime-local"
           value={fields.modificationDate}
           onChange={(v) => set("modificationDate", v)}
         />

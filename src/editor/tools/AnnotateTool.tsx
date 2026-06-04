@@ -8,6 +8,7 @@
 
 import { Highlighter, Pen, Square } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { ColorPicker, hexToRgb } from "../../components/ColorPicker.tsx";
 import type { Annotation } from "../../utils/pdf-operations.ts";
 import { annotatePdf } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
@@ -15,16 +16,9 @@ import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.
 import { useStageProps } from "../stage.tsx";
 
 const TOOL_ID = "annotate-pdf";
+const DEFAULT_HEX = "#1e293b";
 
 type Mode = "pen" | "highlight" | "box";
-
-const COLORS = [
-  { name: "Black", rgb: { r: 30, g: 41, b: 59 } },
-  { name: "Red", rgb: { r: 220, g: 38, b: 38 } },
-  { name: "Blue", rgb: { r: 29, g: 78, b: 216 } },
-  { name: "Green", rgb: { r: 22, g: 163, b: 74 } },
-  { name: "Yellow", rgb: { r: 234, g: 179, b: 8 } },
-] as const;
 
 const PEN_THICK = 0.0035;
 const HIGHLIGHT_THICK = 0.022;
@@ -57,7 +51,7 @@ export function Stage() {
   const { addObject } = useEditorActions();
   const slice = useToolSlice(TOOL_ID);
   const mode = (slice.mode as Mode) ?? "pen";
-  const color = COLORS[(slice.colorIndex as number) ?? 0].rgb;
+  const color = hexToRgb((slice.colorHex as string) ?? DEFAULT_HEX);
 
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const [draftPoints, setDraftPoints] = useState<{ x: number; y: number }[] | null>(null);
@@ -178,10 +172,10 @@ export function Stage() {
 
 export function Panel() {
   const { doc } = useEditorRead();
-  const { patchToolState, applyTransform, undo } = useEditorActions();
+  const { patchToolState, applyTransform } = useEditorActions();
   const slice = useToolSlice(TOOL_ID);
   const mode = (slice.mode as Mode) ?? "pen";
-  const colorIndex = (slice.colorIndex as number) ?? 0;
+  const colorHex = (slice.colorHex as string) ?? DEFAULT_HEX;
 
   const count = (doc?.objects ?? []).filter((o) => o.kind === "annotation").length;
 
@@ -235,43 +229,14 @@ export function Panel() {
         </div>
       </div>
 
-      <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
-          Color
-        </p>
-        <div className="flex gap-2">
-          {COLORS.map((c, i) => (
-            <button
-              key={c.name}
-              type="button"
-              onClick={() => patchToolState(TOOL_ID, { colorIndex: i })}
-              aria-label={c.name}
-              aria-pressed={colorIndex === i}
-              className={`h-7 w-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
-                colorIndex === i
-                  ? "scale-110 border-slate-800 dark:border-white"
-                  : "border-transparent"
-              }`}
-              style={{ backgroundColor: `rgb(${c.rgb.r}, ${c.rgb.g}, ${c.rgb.b})` }}
-            />
-          ))}
-        </div>
-      </div>
+      <ColorPicker
+        value={colorHex}
+        onChange={(hex) => patchToolState(TOOL_ID, { colorHex: hex })}
+      />
 
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-slate-600 dark:text-dark-text-muted">
-          {count} mark{count === 1 ? "" : "s"}
-        </span>
-        {count > 0 && (
-          <button
-            type="button"
-            onClick={undo}
-            className="text-xs text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text"
-          >
-            Undo last
-          </button>
-        )}
-      </div>
+      <span className="text-sm text-slate-600 dark:text-dark-text-muted">
+        {count} mark{count === 1 ? "" : "s"}
+      </span>
 
       <button
         type="button"

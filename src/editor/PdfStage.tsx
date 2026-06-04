@@ -8,7 +8,14 @@
 // absolutely-positioned <canvas> overlay synced by a ResizeObserver, fraction
 // coordinates via getBoundingClientRect.
 
-import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { type StagePoint, useActiveStageProps } from "./stage.tsx";
 
@@ -17,11 +24,39 @@ export function PdfStage() {
   const { setView } = useEditorActions();
   const stageProps = useActiveStageProps();
 
+  const availRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
 
   const page = doc?.pages[selectedPage] ?? null;
+
+  // Fit-contain: size the page box to the largest rect with the page's exact
+  // aspect ratio that fits the available area — never stretches, in either
+  // orientation. (Pure-CSS aspect-ratio + max-height over-constrains and
+  // distorts a portrait page on a wide stage, which is what we're avoiding.)
+  useLayoutEffect(() => {
+    const avail = availRef.current;
+    if (!avail || !page) return;
+    const aspect = page.widthPt / page.heightPt;
+    const measure = () => {
+      const aw = avail.clientWidth;
+      const ah = avail.clientHeight;
+      if (!aw || !ah) return;
+      let w = aw;
+      let h = aw / aspect;
+      if (h > ah) {
+        h = ah;
+        w = ah * aspect;
+      }
+      setFit({ w: Math.round(w), h: Math.round(h) });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(avail);
+    return () => ro.disconnect();
+  }, [page]);
 
   // Keep the overlay canvas's backing store synced to the displayed image size,
   // then let the active tool paint into it.
@@ -131,41 +166,37 @@ export function PdfStage() {
 
   return (
     <div
-      className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-slate-100 dark:bg-dark-bg p-4 sm:p-8"
+      className="relative flex min-h-0 flex-1 overflow-hidden bg-slate-100 dark:bg-dark-bg p-4 sm:p-8"
       onWheel={onWheel}
     >
-      <div
-        ref={wrapRef}
-        className="relative shadow-sm ring-1 ring-slate-200/70 dark:ring-dark-border touch-none select-none"
-        style={{
-          transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`,
-          transformOrigin: "center center",
-          // Fit-contain within the stage while preserving the page aspect ratio:
-          // width:100% + aspect-ratio sets a preferred height; max-height:100%
-          // clamps it and the ratio re-derives width. Works in both orientations.
-          aspectRatio: `${page.widthPt} / ${page.heightPt}`,
-          width: "100%",
-          height: "auto",
-          maxWidth: "100%",
-          maxHeight: "100%",
-          cursor,
-        }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-      >
-        {page.thumbUrl ? (
-          <img
-            src={page.thumbUrl}
-            alt={`Page ${selectedPage + 1}`}
-            className="block h-full w-full pointer-events-none bg-white"
-            draggable={false}
-          />
-        ) : (
-          <div className="h-full w-full bg-white" />
-        )}
-        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+      <div ref={availRef} className="relative flex h-full w-full items-center justify-center">
+        <div
+          ref={wrapRef}
+          className="relative shadow-sm ring-1 ring-slate-200/70 dark:ring-dark-border touch-none select-none"
+          style={{
+            transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`,
+            transformOrigin: "center center",
+            width: fit ? `${fit.w}px` : "0px",
+            height: fit ? `${fit.h}px` : "0px",
+            cursor,
+          }}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
+          {page.thumbUrl ? (
+            <img
+              src={page.thumbUrl}
+              alt={`Page ${selectedPage + 1}`}
+              className="block h-full w-full object-contain pointer-events-none bg-white"
+              draggable={false}
+            />
+          ) : (
+            <div className="h-full w-full bg-white" />
+          )}
+          <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+        </div>
       </div>
     </div>
   );

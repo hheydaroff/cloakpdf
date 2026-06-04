@@ -3,42 +3,23 @@
 // in the narrow right panel AND the mobile bottom sheet: large tap targets,
 // one accent, no cramped rows.
 
+import { ColorPicker, hexToRgb, rgbToHex } from "../../components/ColorPicker.tsx";
+
 export interface Rgb {
   r: number;
   g: number;
   b: number;
 }
 
-const PRESET_COLORS: { name: string; rgb: Rgb }[] = [
-  { name: "Black", rgb: { r: 30, g: 41, b: 59 } },
-  { name: "Grey", rgb: { r: 100, g: 116, b: 139 } },
-  { name: "Blue", rgb: { r: 29, g: 78, b: 216 } },
-  { name: "Red", rgb: { r: 220, g: 38, b: 38 } },
-];
-
-const sameColor = (a: Rgb, b: Rgb) => a.r === b.r && a.g === b.g && a.b === b.b;
-
+/** Colour control — the shared app ColorPicker (preset swatches Black · Grey ·
+ *  Blue · Red, then a manual picker) bridged to the {r,g,b} the writers want.
+ *  One colour UI across every tool, per the design system. */
 export function ColorRow({ value, onChange }: { value: Rgb; onChange: (c: Rgb) => void }) {
   return (
-    <Labeled label="Colour">
-      <div className="flex gap-2">
-        {PRESET_COLORS.map((c) => (
-          <button
-            key={c.name}
-            type="button"
-            onClick={() => onChange(c.rgb)}
-            aria-label={c.name}
-            aria-pressed={sameColor(value, c.rgb)}
-            className={`h-7 w-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
-              sameColor(value, c.rgb)
-                ? "scale-110 border-slate-800 dark:border-white"
-                : "border-transparent"
-            }`}
-            style={{ backgroundColor: `rgb(${c.rgb.r}, ${c.rgb.g}, ${c.rgb.b})` }}
-          />
-        ))}
-      </div>
-    </Labeled>
+    <ColorPicker
+      value={rgbToHex(value.r, value.g, value.b)}
+      onChange={(hex) => onChange(hexToRgb(hex))}
+    />
   );
 }
 

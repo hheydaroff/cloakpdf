@@ -8,8 +8,9 @@
 // pipeline from the standalone Add Signature tool. See REDESIGN.md (canvas
 // placement class, sibling of the overlay-object class).
 
-import { Trash2, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
+import { ColorPicker } from "../../components/ColorPicker.tsx";
 import { SignaturePad } from "../../components/SignaturePad.tsx";
 import { addSignature } from "../../utils/pdf-operations.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
@@ -19,12 +20,7 @@ import type { FractionRect } from "../types.ts";
 const TOOL_ID = "signature";
 const DEFAULT_WIDTH_PCT = 0.28;
 const FALLBACK_ASPECT = 2.5; // typical signature is wider than tall
-
-const INKS = [
-  { name: "Ink", hex: "#1e293b" },
-  { name: "Blue", hex: "#1d4ed8" },
-  { name: "Red", hex: "#dc2626" },
-] as const;
+const DEFAULT_INK = "#1e293b";
 
 interface SigPayload {
   dataUrl: string;
@@ -156,32 +152,12 @@ export function Stage() {
   return null;
 }
 
-function InkRow({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
-  return (
-    <div className="flex gap-2">
-      {INKS.map((c) => (
-        <button
-          key={c.hex}
-          type="button"
-          onClick={() => onChange(c.hex)}
-          aria-label={c.name}
-          aria-pressed={value === c.hex}
-          className={`h-7 w-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
-            value === c.hex ? "scale-110 border-slate-800 dark:border-white" : "border-transparent"
-          }`}
-          style={{ backgroundColor: c.hex }}
-        />
-      ))}
-    </div>
-  );
-}
-
 export function Panel() {
   const { doc } = useEditorRead();
-  const { patchToolState, applyTransform, undo } = useEditorActions();
+  const { patchToolState, applyTransform } = useEditorActions();
   const slice = useToolSlice(TOOL_ID);
   const dataUrl = (slice.dataUrl as string) ?? "";
-  const inkHex = (slice.inkHex as string) ?? INKS[0].hex;
+  const inkHex = (slice.inkHex as string) ?? DEFAULT_INK;
   const widthPct = (slice.widthPct as number) ?? DEFAULT_WIDTH_PCT;
   const mode = (slice.mode as "draw" | "upload") ?? "draw";
   const uploadRef = useRef<HTMLInputElement>(null);
@@ -267,12 +243,10 @@ export function Panel() {
       {mode === "draw" ? (
         <div className="space-y-2">
           <SignaturePad onSignature={onPadSignature} color={inkHex} />
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
-              Ink
-            </span>
-            <InkRow value={inkHex} onChange={(hex) => patchToolState(TOOL_ID, { inkHex: hex })} />
-          </div>
+          <ColorPicker
+            value={inkHex}
+            onChange={(hex) => patchToolState(TOOL_ID, { inkHex: hex })}
+          />
         </div>
       ) : (
         <div className="space-y-2">
@@ -324,21 +298,9 @@ export function Panel() {
           : "Draw or upload a signature to begin."}
       </p>
 
-      <div className="flex items-center justify-between">
-        <span className="text-sm text-slate-600 dark:text-dark-text-muted">
-          {count} signature{count === 1 ? "" : "s"}
-        </span>
-        {count > 0 && (
-          <button
-            type="button"
-            onClick={undo}
-            className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 dark:text-dark-text-muted dark:hover:text-dark-text"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Undo last
-          </button>
-        )}
-      </div>
+      <span className="text-sm text-slate-600 dark:text-dark-text-muted">
+        {count} signature{count === 1 ? "" : "s"}
+      </span>
 
       <button
         type="button"
