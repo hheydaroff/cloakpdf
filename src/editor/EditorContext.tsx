@@ -32,6 +32,14 @@ import {
   nextId,
   revokeDocThumbnails,
 } from "./doc.ts";
+import {
+  deleteDraft,
+  type EditorDraft,
+  getLatestDraft,
+  hashDocBytes,
+  loadDraft,
+  saveDraft,
+} from "./draft-store.ts";
 import { EditorHistory } from "./history.ts";
 import { DEFAULT_VIEW, type Layout, type ViewMode, type ViewState } from "./types.ts";
 
@@ -67,6 +75,15 @@ interface ActionsValue {
   registerPendingApply: (fn: (() => void | Promise<void>) | null) => void;
   flushPendingApply: () => Promise<void>;
   cancelCurrentTool: () => Promise<void>;
+  /** Run an async task under the busy spinner WITHOUT committing to history
+   *  (export, contact-sheet, etc. don't mutate the doc). */
+  runTask: (label: string, fn: () => Promise<void>) => Promise<void>;
+  /** Restore the draft offered for the just-loaded file (the banner's action). */
+  restoreDraft: () => Promise<void>;
+  /** Discard the offered draft and keep the freshly-loaded original. */
+  dismissDraft: () => void;
+  /** Restore the most-recent draft (the empty editor's "last session" card). */
+  restoreLatestDraft: () => Promise<void>;
   exit: () => void;
 }
 
@@ -85,6 +102,11 @@ interface ReadValue {
   canCancelCurrentTool: boolean;
   /** Bumps on every history mutation so consumers re-derive from the doc. */
   historyVersion: number;
+  /** Unsaved edits recovered for the just-loaded file, pending the user's
+   *  Restore / Discard choice (null when none). */
+  pendingDraft: EditorDraft | null;
+  /** Most-recent draft, surfaced on the empty editor as "restore last session". */
+  latestDraft: EditorDraft | null;
 }
 
 interface ToolStateValue {
@@ -114,6 +136,18 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
   const [viewMode, setViewModeState] = useState<ViewMode>("focus");
   const [selectedPage, setSelectedPageState] = useState(0);
   const [historyVersion, setHistoryVersion] = useState(0);
+
+  // Draft autosave: pendingDraft is offered after loading a file that has saved
+  // edits; latestDraft powers the empty editor's "restore last session" card.
+  const [pendingDraft, setPendingDraft] = useState<EditorDraft | null>(null);
+  const [latestDraft, setLatestDraft] = useState<EditorDraft | null>(null);
+  // SHA-256 of the ORIGINAL loaded bytes — the draft key, stable across byte
+  // transforms; null suspends autosave (no file, or hashing in flight).
+  const draftKeyRef = useRef<string | null>(null);
+  const pendingDraftRef = useRef<EditorDraft | null>(null);
+  pendingDraftRef.current = pendingDraft;
+  const latestDraftRef = useRef<EditorDraft | null>(null);
+  latestDraftRef.current = latestDraft;
 
   const [layout, setLayout] = useState<Layout>(() =>
     typeof window === "undefined" ? "desktop" : detectLayout(window.innerWidth, window.innerHeight),
@@ -174,22 +208,40 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
     });
     toolCheckpointRef.current = historyRef.current.index();
     setHistoryVersion((v) => v + 1);
+    // A document is live now — the "restore last session" affordance is moot.
+    setLatestDraft(null);
+  }, []);
+
+  // After installing a freshly-loaded file, key the autosave to its original
+  // bytes and offer back any saved edits for that same file.
+  const detectDraft = useCallback(async (next: CanvasDoc) => {
+    try {
+      const key = await hashDocBytes(next.bytes);
+      draftKeyRef.current = key;
+      const existing = await loadDraft(key);
+      if (existing) setPendingDraft(existing);
+    } catch {
+      // IndexedDB / SubtleCrypto unavailable — autosave silently disabled.
+    }
   }, []);
 
   const loadFile = useCallback(
     async (file: File) => {
       setLoading(true);
       setError(null);
+      setPendingDraft(null);
+      draftKeyRef.current = null; // suspend autosave until re-keyed for this file
       try {
         const next = await createDocFromFile(file);
         installDoc(next);
+        void detectDraft(next);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not open this PDF.");
       } finally {
         setLoading(false);
       }
     },
-    [installDoc],
+    [installDoc, detectDraft],
   );
 
   // Load the file the editor was opened with (if any), once.
@@ -371,6 +423,60 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
     onExit();
   }, [onExit]);
 
+  // ── Draft autosave: restore / discard ───────────────────────────────
+  const applyDraft = useCallback(
+    async (draft: EditorDraft) => {
+      setPendingDraft(null);
+      await runBusy("Restoring your edits…", async () => {
+        const restored = await createDocFromBytes(draft.bytes, draft.fileName);
+        restored.objects = draft.objects;
+        draftKeyRef.current = draft.key; // keep the same original-bytes key
+        installDoc(restored);
+      });
+    },
+    [runBusy, installDoc],
+  );
+
+  const restoreDraft = useCallback(async () => {
+    const draft = pendingDraftRef.current;
+    if (draft) await applyDraft(draft);
+  }, [applyDraft]);
+
+  const restoreLatestDraft = useCallback(async () => {
+    const draft = latestDraftRef.current;
+    if (draft) await applyDraft(draft);
+  }, [applyDraft]);
+
+  const dismissDraft = useCallback(() => {
+    const draft = pendingDraftRef.current;
+    setPendingDraft(null);
+    if (draft) void deleteDraft(draft.key);
+  }, []);
+
+  // Persist the live document, debounced, whenever it carries real edits — so
+  // an accidental unmount / tab-close doesn't destroy unsaved overlay work.
+  useEffect(() => {
+    const key = draftKeyRef.current;
+    if (!key || !doc) return;
+    if (historyRef.current.index() <= 0) return; // pristine — nothing to save yet
+    const id = setTimeout(() => {
+      void saveDraft({
+        key,
+        fileName: doc.fileName,
+        bytes: doc.bytes,
+        objects: doc.objects,
+        savedAt: Date.now(),
+      });
+    }, 800);
+    return () => clearTimeout(id);
+  }, [doc, historyVersion]);
+
+  // On opening the empty editor (no initial file), surface the most-recent draft.
+  useEffect(() => {
+    if (initialFile) return;
+    void getLatestDraft().then(setLatestDraft);
+  }, [initialFile]);
+
   const actions = useMemo<ActionsValue>(
     () => ({
       loadFile,
@@ -392,6 +498,10 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
       registerPendingApply,
       flushPendingApply,
       cancelCurrentTool,
+      runTask: runBusy,
+      restoreDraft,
+      dismissDraft,
+      restoreLatestDraft,
       exit,
     }),
     [
@@ -414,6 +524,10 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
       registerPendingApply,
       flushPendingApply,
       cancelCurrentTool,
+      runBusy,
+      restoreDraft,
+      dismissDraft,
+      restoreLatestDraft,
       exit,
     ],
   );
@@ -437,6 +551,8 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
         (pendingApplyRef.current !== null ||
           historyRef.current.index() > toolCheckpointRef.current),
       historyVersion,
+      pendingDraft,
+      latestDraft,
     }),
     [
       doc,
@@ -450,6 +566,8 @@ export function EditorProvider({ initialFile = null, onExit, children }: Provide
       historyVersion,
       activeTool,
       pendingApplyVersion,
+      pendingDraft,
+      latestDraft,
     ],
   );
 

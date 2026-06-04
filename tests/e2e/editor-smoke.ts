@@ -7,7 +7,8 @@
  *   open → render → redact (draw → destructive burn) → annotate (draw) →
  *   crop (drag → apply) → signature (pad → place → embed) → OCR panel mounts →
  *   organize (delete → assemble) → overview/focus → flatten → metadata/scrub →
- *   extract → page numbers → fill-form → bookmarks → attachments.
+ *   extract → page numbers → fill-form → bookmarks → attachments →
+ *   draft autosave + restore (reload → recover from IndexedDB).
  * OCR's engine is never run here (it would fetch model weights); the step only
  * asserts the panel is wired.
  *
@@ -127,6 +128,17 @@ async function main() {
 
     console.log(`→ Loading ${DEV_URL}`);
     await page.goto(DEV_URL, { waitUntil: "networkidle2" });
+
+    // Start from a clean draft store — the profile is persistent, so a draft
+    // left by a prior run would otherwise pop the "unsaved edits" banner and
+    // perturb the steps below. (No editor connection is open yet on home.)
+    await page.evaluate(
+      () =>
+        new Promise<void>((res) => {
+          const r = indexedDB.deleteDatabase("cloakpdf-editor");
+          r.onsuccess = r.onerror = r.onblocked = () => res();
+        }),
+    );
 
     // 1. Editor-first CTA → editor dropzone → upload fixture → focus render.
     if (!(await clickByText(page, "Open the editor"))) fail("'Open the editor' CTA not found.");
@@ -286,6 +298,21 @@ async function main() {
     await attBtn.click();
     await waitForText(page, /No files attached yet|Reading attachments/i, 10_000);
     console.log("  ✓ attachments panel loads");
+
+    // 14. Draft autosave + restore: the edits above persisted a draft (debounced
+    //     to IndexedDB). Reload (view state isn't URL-persisted → back to home),
+    //     reopen the empty editor, and the "restore last session" card recovers
+    //     the document without a re-upload.
+    await new Promise((r) => setTimeout(r, 1_200)); // let the debounced save flush
+    await page.reload({ waitUntil: "networkidle2" });
+    if (!(await clickByText(page, "Open the editor"))) fail("'Open the editor' CTA not found.");
+    const restoreCard = await page.waitForSelector('button[aria-label="Restore last session"]', {
+      timeout: 15_000,
+    });
+    if (!restoreCard) fail("Restore-last-session card did not appear after reload.");
+    await restoreCard.click();
+    await page.waitForSelector('img[alt="Page 1"]', { timeout: 30_000 });
+    console.log("  ✓ draft autosave + restore (reload → recover)");
 
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");

@@ -4,7 +4,7 @@
 // the empty (no-doc) dropzone, the loading state, the busy overlay, and the
 // error banner. `min-h-0` / `min-w-0` on the growth axes is load-bearing.
 
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, History } from "lucide-react";
 import { FileDropZone } from "../components/FileDropZone.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useActiveTool, useEditorActions, useEditorRead, useToolSlice } from "./EditorContext.tsx";
@@ -27,8 +27,9 @@ function Spinner({ label }: { label: string }) {
 }
 
 export function EditorShell() {
-  const { doc, loading, busyLabel, error, layout, viewMode } = useEditorRead();
-  const { loadFile } = useEditorActions();
+  const { doc, loading, busyLabel, error, layout, viewMode, pendingDraft, latestDraft } =
+    useEditorRead();
+  const { loadFile, restoreDraft, dismissDraft, restoreLatestDraft } = useEditorActions();
   const activeTool = useActiveTool();
   const ocrSlice = useToolSlice(OCR_ID);
   const isMobile = layout === "mobile";
@@ -63,6 +64,29 @@ export function EditorShell() {
         </div>
       )}
 
+      {doc && pendingDraft && (
+        <div className="flex items-center gap-3 border-b border-primary-200 dark:border-primary-900/50 bg-primary-50 dark:bg-primary-900/30 px-4 py-2 text-sm text-primary-800 dark:text-primary-200">
+          <History className="h-4 w-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">
+            Found unsaved edits for this file from a previous session.
+          </span>
+          <button
+            type="button"
+            onClick={() => void restoreDraft()}
+            className="shrink-0 rounded-md bg-primary-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+          >
+            Restore
+          </button>
+          <button
+            type="button"
+            onClick={dismissDraft}
+            className="shrink-0 rounded-md px-2.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-900/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          >
+            Discard
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <Spinner label="Opening PDF…" />
       ) : !doc ? (
@@ -76,6 +100,24 @@ export function EditorShell() {
               label="Drop a PDF to start editing"
               hint="Everything runs in your browser — nothing is uploaded."
             />
+            {latestDraft && (
+              <button
+                type="button"
+                onClick={() => void restoreLatestDraft()}
+                aria-label="Restore last session"
+                className="mt-4 flex w-full items-center gap-3 rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 text-left transition-colors hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              >
+                <History className="h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-slate-800 dark:text-dark-text">
+                    Restore last session
+                  </span>
+                  <span className="block truncate text-card-desc text-slate-500 dark:text-dark-text-muted">
+                    {latestDraft.fileName}
+                  </span>
+                </span>
+              </button>
+            )}
           </div>
         </div>
       ) : (
