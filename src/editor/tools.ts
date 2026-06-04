@@ -156,7 +156,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: FileOutput,
     group: "pages",
     mode: "overview",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "reverse-pages",
@@ -172,7 +172,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: FileX,
     group: "pages",
     mode: "overview",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "nup-pages",

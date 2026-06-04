@@ -7,9 +7,11 @@
 
 import type { ComponentType } from "react";
 import * as Annotate from "./tools/AnnotateTool.tsx";
+import * as Extract from "./tools/ExtractTool.tsx";
 import * as Metadata from "./tools/MetadataTool.tsx";
 import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
+import * as RemoveBlank from "./tools/RemoveBlankTool.tsx";
 import * as Scrub from "./tools/ScrubTool.tsx";
 import {
   CompressPanel,
@@ -30,9 +32,11 @@ export interface ToolImpl {
 export const TOOL_IMPL: Record<string, ToolImpl> = {
   "redact-pdf": { Stage: Redact.Stage, Panel: Redact.Panel },
   "annotate-pdf": { Stage: Annotate.Stage, Panel: Annotate.Panel },
-  // Organize is an overview tool: its Board lives in OverviewMode (center), so
-  // no focus Stage here — only the Panel (Apply/Reset/summary).
+  // Overview tools: their Board lives in OverviewMode (center), so no focus
+  // Stage here — only the Panel.
   "organize-pages": { Panel: Organize.Panel },
+  "extract-pages": { Panel: Extract.Panel },
+  "remove-blank-pages": { Panel: RemoveBlank.Panel },
   // Whole-document, options-only tools (no canvas interaction).
   "reverse-pages": { Panel: ReversePanel },
   grayscale: { Panel: GrayscalePanel },

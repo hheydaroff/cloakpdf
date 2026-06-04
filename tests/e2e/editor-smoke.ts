@@ -172,6 +172,17 @@ async function main() {
     await waitForText(page, /Scrub hidden data/i, 10_000);
     console.log("  ✓ metadata + scrub panels load");
 
+    // 9. Extract (selectable overview): keep 2 pages via extractPages.
+    const extractBtn = await page.$('button[aria-label="Extract"]');
+    if (!extractBtn) fail("Extract rail tool not found.");
+    await extractBtn.click(); // overview + selectable board
+    await page.waitForSelector('button[aria-label="Select page 1"]', { timeout: 10_000 });
+    await page.click('button[aria-label="Select page 1"]');
+    await page.click('button[aria-label="Select page 2"]');
+    if (!(await clickByText(page, "Keep 2 pages"))) fail("Extract Apply button not found.");
+    await waitForText(page, /Keep 0 pages/, 60_000); // selection clears once applied
+    console.log("  ✓ extract keep 2 pages");
+
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");
       for (const e of errors) console.error(`   ${e}`);

@@ -4,9 +4,12 @@
 
 import { useActiveTool } from "./EditorContext.tsx";
 import { OverviewGrid } from "./OverviewGrid.tsx";
+import { Board as ExtractBoard, EXTRACT_ID } from "./tools/ExtractTool.tsx";
 import { Board as OrganizeBoard, ORGANIZE_ID } from "./tools/OrganizeTool.tsx";
 
 export function OverviewMode() {
   const activeTool = useActiveTool();
-  return activeTool === ORGANIZE_ID ? <OrganizeBoard /> : <OverviewGrid />;
+  if (activeTool === ORGANIZE_ID) return <OrganizeBoard />;
+  if (activeTool === EXTRACT_ID) return <ExtractBoard />;
+  return <OverviewGrid />;
 }
