@@ -205,22 +205,32 @@ className="w-full h-auto pointer-events-none">` (PDF.js `renderPageThumbnail` at
 
 ## Milestones (all on `feature/redesign`)
 
-- **M0 — Editor shell + doc core.** `{kind:"editor"}` view; `src/editor/` (`breakpoints.ts`,
+**Status: M0–M2 DONE — all 23 single-PDF rail tools live in the editor.** Verified per
+milestone by `vp check` + 194 unit tests + build + a real-browser `tests/e2e/editor-smoke.ts`
+(13-step chain, no model weights). Next up: M3 (autosave / export / constructors) then M4
+(home cutover + big-bang merge). Commit trail (base dev `53be458`): M0 `e28b257`, M1a
+`1dfd992`, M1b `86bcb14`, M2a `4519d13`, M2b `1b1770f`, M2c `e95a603`, M2d-i `f3ff7e2`,
+M2d-ii `40e156d`, M2e-i `fb45689`, M2e-ii `2be9da6`.
+
+- **M0 — Editor shell + doc core. ✅** `{kind:"editor"}` view; `src/editor/` (`breakpoints.ts`,
   `EditorContext.tsx` w/ 4 sliced contexts + `CanvasDoc` + op-list history, `PdfStage.tsx`
   - `useStageProps`, `EditorShell.tsx`, `MobileEditorSurface.tsx`, `tools.ts`). Load via
     `usePdfFile`+`renderAllThumbnails`; focus + overview modes; zoom/pan/page-nav; undo
     skeleton. Home → minimal launcher routing into the editor. **Exit:** drop a PDF, view /
     navigate / zoom / overview-grid, empty rail.
-- **M1 — Reference tools.** redact (destructive-drag) + annotate (overlay) + organize-pages
+- **M1 — Reference tools. ✅** redact (destructive-drag) + annotate (overlay) + organize-pages
   (overview page-board) — proves persistent-stage → dispatcher → history → deliver on
   desktop + mobile.
-- **M2 — Overlay + whole-doc tranche.** stamp, signature, page-numbers, header/footer,
-  bates; compress, grayscale, flatten, repair, reverse, extract, remove-blank, n-up,
-  metadata, scrub, crop.
-- **M3 — Careful tools + polish.** fill-form, ocr searchable path, bookmarks, attachments;
-  draft autosave (IndexedDB keyed by SHA-256, reusing the RAG persistence idiom); Export
-  menu (pdf-to-image / contact-sheet / split as output formats); multi-file constructors
-  (merge / images-to-pdf) hand-off into the editor.
+- **M2 — Every single-PDF tool. ✅** Landed in tranches: M2a whole-doc options (compress,
+  grayscale, flatten, repair, reverse, n-up); M2b metadata + scrub; M2c extract +
+  remove-blank; M2d-i stamp-family (page-numbers, header/footer, bates, watermark); M2d-ii
+  signature + crop (canvas-placement) + the CropBox geometry fix in `PageMeta`; M2e-i
+  fill-form + bookmarks + attachments (panel-only); M2e-ii OCR searchable-text (desktop-only).
+- **M3 — Polish + constructors.** draft autosave (IndexedDB keyed by SHA-256, reusing the RAG
+  persistence idiom); Export menu (pdf-to-image / contact-sheet / split as output formats);
+  multi-file constructors (merge / images-to-pdf) hand-off into the editor. _(Known follow-up
+  carried from M2: `applyTransform` re-renders ALL page thumbnails on every apply — optimise
+  to re-render only changed pages before large-doc QA.)_
 - **M4 — Editor-first home + cutover.** Thin launcher as the default home; "all tools"
   directory for standalone surfaces (compare, inspector, password, digital-sig, ask-pdf);
   retire migrated standalone tool components; full QA across breakpoints; **big-bang merge
