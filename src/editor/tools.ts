@@ -148,7 +148,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Grid2x2,
     group: "pages",
     mode: "overview",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "extract-pages",

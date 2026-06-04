@@ -7,6 +7,7 @@
 
 import type { ComponentType } from "react";
 import * as Annotate from "./tools/AnnotateTool.tsx";
+import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
 
 export interface ToolImpl {
@@ -19,6 +20,9 @@ export interface ToolImpl {
 export const TOOL_IMPL: Record<string, ToolImpl> = {
   "redact-pdf": { Stage: Redact.Stage, Panel: Redact.Panel },
   "annotate-pdf": { Stage: Annotate.Stage, Panel: Annotate.Panel },
+  // Organize is an overview tool: its Board lives in OverviewMode (center), so
+  // no focus Stage here — only the Panel (Apply/Reset/summary).
+  "organize-pages": { Panel: Organize.Panel },
 };
 
 export function toolImpl(id: string | null): ToolImpl | null {

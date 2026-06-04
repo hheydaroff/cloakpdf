@@ -11,7 +11,7 @@ import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { EditorToolStage } from "./EditorToolStage.tsx";
 import { EditorTopBar } from "./EditorTopBar.tsx";
 import { MobileEditorSurface } from "./MobileEditorSurface.tsx";
-import { OverviewGrid } from "./OverviewGrid.tsx";
+import { OverviewMode } from "./OverviewMode.tsx";
 import { PdfStage } from "./PdfStage.tsx";
 import { PropertiesPanel } from "./PropertiesPanel.tsx";
 import { ToolRail } from "./ToolRail.tsx";
@@ -33,7 +33,7 @@ export function EditorShell() {
 
   const center =
     viewMode === "overview" ? (
-      <OverviewGrid />
+      <OverviewMode />
     ) : (
       <>
         <PdfStage />

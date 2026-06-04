@@ -132,8 +132,18 @@ async function main() {
     await compressBtn.click();
     await waitForText(page, /This tool moves into the editor/i, 5_000);
 
-    // 5. Overview grid + jump back to focus.
-    if (!(await clickByText(page, "overview"))) fail("Overview toggle not found.");
+    // 5. Organize (page-board): delete a page, apply via assemblePdf (40 → 39).
+    const orgBtn = await page.$('button[aria-label="Organize"]');
+    if (!orgBtn) fail("Organize rail tool not found.");
+    await orgBtn.click(); // switches to overview + editable board
+    await page.waitForSelector('button[aria-label="Delete page 1"]', { timeout: 10_000 });
+    await page.click('button[aria-label="Delete page 1"]');
+    if (!(await clickByText(page, "Apply changes"))) fail("Organize Apply button not found.");
+    await waitForText(page, /\b39 pages\b/, 60_000);
+    console.log("  ✓ organize delete + apply (40 → 39 pages)");
+
+    // 6. Browse overview (deselect tool) + jump back to focus.
+    await orgBtn.click(); // toggle organize off → read-only browse grid
     await page.waitForSelector('button[aria-label="Open page 1"]', { timeout: 10_000 });
     const pageButtons = await page.$$('button[aria-label^="Open page "]');
     if (pageButtons.length < 2) fail(`Expected ≥2 pages in overview, got ${pageButtons.length}.`);
@@ -147,7 +157,7 @@ async function main() {
     }
 
     console.log(
-      `✓ Editor smoke passed — ${pageButtons.length} pages, redact burn, annotate, placeholder, overview/focus.`,
+      `✓ Editor smoke passed — redact burn, annotate, organize (now ${pageButtons.length} pages), placeholder, overview/focus.`,
     );
   } finally {
     await browser.close();
