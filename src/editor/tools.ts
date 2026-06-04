@@ -79,7 +79,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Eraser,
     group: "security",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "metadata",
@@ -87,7 +87,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: FileText,
     group: "security",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
 
   // Annotate & Sign

@@ -85,8 +85,8 @@ async function main() {
     defaultViewport: { width: 1280, height: 900 },
   });
 
+  const page = await browser.newPage();
   try {
-    const page = await browser.newPage();
     page.setDefaultTimeout(30_000);
     page.on("console", (m) => {
       if (m.type() === "error") errors.push(m.text());
@@ -161,6 +161,17 @@ async function main() {
     await page.waitForSelector('img[alt="Page 2"]', { timeout: 10_000 });
     console.log("  ✓ whole-doc apply (flatten)");
 
+    // 8. Security panels load their async report on open.
+    const metaBtn = await page.$('button[aria-label="Metadata"]');
+    if (!metaBtn) fail("Metadata rail tool not found.");
+    await metaBtn.click();
+    await waitForText(page, /Save metadata/i, 10_000);
+    const scrubBtn = await page.$('button[aria-label="Scrub"]');
+    if (!scrubBtn) fail("Scrub rail tool not found.");
+    await scrubBtn.click();
+    await waitForText(page, /Scrub hidden data/i, 10_000);
+    console.log("  ✓ metadata + scrub panels load");
+
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");
       for (const e of errors) console.error(`   ${e}`);
@@ -170,6 +181,19 @@ async function main() {
     console.log(
       `✓ Editor smoke passed — redact burn, annotate, organize (now ${pageButtons.length} pages), placeholder, overview/focus.`,
     );
+  } catch (e) {
+    console.error(`✗ Smoke failed: ${e instanceof Error ? e.message : String(e)}`);
+    if (errors.length) {
+      console.error("Console errors:");
+      for (const x of errors) console.error(`   ${x}`);
+    }
+    try {
+      await page.screenshot({ path: "/tmp/editor-smoke-fail.png" });
+      console.error("screenshot → /tmp/editor-smoke-fail.png");
+    } catch {
+      /* ignore */
+    }
+    process.exitCode = 1;
   } finally {
     await browser.close();
   }

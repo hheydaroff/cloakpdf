@@ -7,8 +7,10 @@
 
 import type { ComponentType } from "react";
 import * as Annotate from "./tools/AnnotateTool.tsx";
+import * as Metadata from "./tools/MetadataTool.tsx";
 import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
+import * as Scrub from "./tools/ScrubTool.tsx";
 import {
   CompressPanel,
   FlattenPanel,
@@ -38,6 +40,9 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   "repair-pdf": { Panel: RepairPanel },
   compress: { Panel: CompressPanel },
   "nup-pages": { Panel: NupPanel },
+  // Security panels: load an async report on open, then apply.
+  metadata: { Panel: Metadata.Panel },
+  "pdf-scrub": { Panel: Scrub.Panel },
 };
 
 export function toolImpl(id: string | null): ToolImpl | null {
