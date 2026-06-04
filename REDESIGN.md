@@ -205,12 +205,14 @@ className="w-full h-auto pointer-events-none">` (PDF.js `renderPageThumbnail` at
 
 ## Milestones (all on `feature/redesign`)
 
-**Status: M0–M2 DONE — all 23 single-PDF rail tools live in the editor.** Verified per
-milestone by `vp check` + 194 unit tests + build + a real-browser `tests/e2e/editor-smoke.ts`
-(13-step chain, no model weights). Next up: M3 (autosave / export / constructors) then M4
-(home cutover + big-bang merge). Commit trail (base dev `53be458`): M0 `e28b257`, M1a
-`1dfd992`, M1b `86bcb14`, M2a `4519d13`, M2b `1b1770f`, M2c `e95a603`, M2d-i `f3ff7e2`,
-M2d-ii `40e156d`, M2e-i `fb45689`, M2e-ii `2be9da6`.
+**Status: M0–M3 DONE; M4 first cut (editor-first routing) landed — iterating before merge.**
+Verified per milestone by `vp check` + 194 unit tests + build + real-browser
+`tests/e2e/editor-smoke.ts` (16-step chain incl. export + autosave-restore) and
+`tests/e2e/home-routing.ts` (editor-card preselect + constructor hand-off). The big-bang
+merge to `dev` is **deliberately deferred** — the editor-first surface will be refined over
+several iterations and merged only when ready. Commit trail (base dev `53be458`): M0–M2 per
+the earlier log; revamp R1–R5 + design-review fixes `3e72c7f`; M3a autosave `fb7adf2`, M3b
+export menu `b3b4bf5`, M3c constructors `8674acf`; M4 editor-first routing `f78ab52`.
 
 - **M0 — Editor shell + doc core. ✅** `{kind:"editor"}` view; `src/editor/` (`breakpoints.ts`,
   `EditorContext.tsx` w/ 4 sliced contexts + `CanvasDoc` + op-list history, `PdfStage.tsx`
@@ -226,15 +228,22 @@ M2d-ii `40e156d`, M2e-i `fb45689`, M2e-ii `2be9da6`.
   remove-blank; M2d-i stamp-family (page-numbers, header/footer, bates, watermark); M2d-ii
   signature + crop (canvas-placement) + the CropBox geometry fix in `PageMeta`; M2e-i
   fill-form + bookmarks + attachments (panel-only); M2e-ii OCR searchable-text (desktop-only).
-- **M3 — Polish + constructors.** draft autosave (IndexedDB keyed by SHA-256, reusing the RAG
-  persistence idiom); Export menu (pdf-to-image / contact-sheet / split as output formats);
-  multi-file constructors (merge / images-to-pdf) hand-off into the editor. _(Known follow-up
-  carried from M2: `applyTransform` re-renders ALL page thumbnails on every apply — optimise
-  to re-render only changed pages before large-doc QA.)_
-- **M4 — Editor-first home + cutover.** Thin launcher as the default home; "all tools"
-  directory for standalone surfaces (compare, inspector, password, digital-sig, ask-pdf);
-  retire migrated standalone tool components; full QA across breakpoints; **big-bang merge
-  to `dev`.**
+- **M3 — Polish + constructors. ✅** draft autosave (`src/editor/draft-store.ts`, IndexedDB
+  keyed by SHA-256 of the original bytes, RAG-persistence idiom; restore banner on reload +
+  "restore last session" card on the empty editor); Export menu (`ExportMenu.tsx` — PDF /
+  pages-to-images zip / 3×3 contact-sheet / split-to-pages zip, via the new non-mutating
+  `runTask`); multi-file constructors (merge / images-to-pdf) hand off into the editor
+  (`OPEN_EDITOR_EVENT`). _(Known follow-up still open: `applyTransform` re-renders ALL page
+  thumbnails on every apply — optimise to re-render only changed pages before large-doc QA.)_
+- **M4 — Editor-first home + cutover. 🟡 first cut.** Editor-eligible tool cards now open the
+  editor with that tool preselected (`EDITOR_TOOL_IDS` gate in `App.handleSelectTool`,
+  `initialTool` through `EditorView`/`EditorProvider`); the existing categorised grid serves
+  as the all-tools directory; breakpoint QA (mobile/tablet/desktop) clean. **Deferred for
+  iteration:** a dedicated thin-launcher home; splitting the directory so the 20 editor tools
+  drop off the grid (kept for now for search/discoverability); **retiring** the migrated
+  standalone components (they're non-destructively kept — Workflows still render every tool by
+  id through `toolComponents`, so deletion would break the workflow runner); and the
+  **big-bang merge to `dev`** (held until the surface is ready, per direction).
 
 ## Top risks → mitigations
 
