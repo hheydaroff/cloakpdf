@@ -163,7 +163,7 @@ export function Panel() {
                 onClick={() => toggle(t)}
                 disabled={detecting}
                 aria-pressed={on}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   on
                     ? "bg-primary-600 text-white"
                     : "border border-slate-200 dark:border-dark-border bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted"
@@ -178,7 +178,7 @@ export function Panel() {
           type="button"
           onClick={() => void detect()}
           disabled={detecting || piiTypes.size === 0}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
         >
           {detecting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -214,7 +214,7 @@ export function Panel() {
         type="button"
         onClick={apply}
         disabled={count === 0}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40"
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
       >
         Apply {count} redaction{count === 1 ? "" : "s"}
       </button>

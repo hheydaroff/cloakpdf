@@ -89,7 +89,7 @@ export function Panel() {
                 onClick={() => removeOne(a.name)}
                 disabled={busy}
                 aria-label={`Remove ${a.name}`}
-                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-40 dark:hover:bg-dark-surface-alt"
+                className="shrink-0 rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-40 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -112,7 +112,7 @@ export function Panel() {
         type="button"
         onClick={() => fileRef.current?.click()}
         disabled={busy}
-        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-3 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 disabled:opacity-40"
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-3 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         <Plus className="h-4 w-4" />
         {busy ? "Working…" : "Attach files"}

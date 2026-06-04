@@ -208,7 +208,7 @@ export function Panel() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-dark-text-muted">
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
           Tool
         </p>
         <div className="grid grid-cols-3 gap-1.5">
@@ -221,7 +221,7 @@ export function Panel() {
                 type="button"
                 onClick={() => patchToolState(TOOL_ID, { mode: m.id })}
                 aria-pressed={on}
-                className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors ${
+                className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   on
                     ? "border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
                     : "border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
@@ -236,7 +236,7 @@ export function Panel() {
       </div>
 
       <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-dark-text-muted">
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
           Color
         </p>
         <div className="flex gap-2">
@@ -247,7 +247,7 @@ export function Panel() {
               onClick={() => patchToolState(TOOL_ID, { colorIndex: i })}
               aria-label={c.name}
               aria-pressed={colorIndex === i}
-              className={`h-7 w-7 rounded-full border-2 transition-transform ${
+              className={`h-7 w-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
                 colorIndex === i
                   ? "scale-110 border-slate-800 dark:border-white"
                   : "border-transparent"
@@ -277,7 +277,7 @@ export function Panel() {
         type="button"
         onClick={apply}
         disabled={count === 0}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40"
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
       >
         Apply annotations
       </button>

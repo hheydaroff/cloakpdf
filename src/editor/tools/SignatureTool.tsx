@@ -166,7 +166,7 @@ function InkRow({ value, onChange }: { value: string; onChange: (hex: string) =>
           onClick={() => onChange(c.hex)}
           aria-label={c.name}
           aria-pressed={value === c.hex}
-          className={`h-7 w-7 rounded-full border-2 transition-transform ${
+          className={`h-7 w-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
             value === c.hex ? "scale-110 border-slate-800 dark:border-white" : "border-transparent"
           }`}
           style={{ backgroundColor: c.hex }}
@@ -252,7 +252,7 @@ export function Panel() {
               type="button"
               onClick={() => patchToolState(TOOL_ID, { mode: m.id })}
               aria-pressed={on}
-              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                 on
                   ? "border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
                   : "border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
@@ -268,7 +268,7 @@ export function Panel() {
         <div className="space-y-2">
           <SignaturePad onSignature={onPadSignature} color={inkHex} />
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-dark-text-muted">
+            <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
               Ink
             </span>
             <InkRow value={inkHex} onChange={(hex) => patchToolState(TOOL_ID, { inkHex: hex })} />
@@ -279,7 +279,7 @@ export function Panel() {
           <button
             type="button"
             onClick={() => uploadRef.current?.click()}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-4 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-4 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
           >
             <Upload className="h-4 w-4" />
             Upload signature image
@@ -344,7 +344,7 @@ export function Panel() {
         type="button"
         onClick={apply}
         disabled={count === 0}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40"
+        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
       >
         Apply signature{count === 1 ? "" : "s"}
       </button>

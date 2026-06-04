@@ -76,7 +76,7 @@ export function Panel() {
               type="button"
               onClick={() => remove(r.id)}
               aria-label="Remove bookmark"
-              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-dark-surface-alt"
+              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -87,7 +87,7 @@ export function Panel() {
       <button
         type="button"
         onClick={() => setRows((prev) => [...prev, newRow(selectedPage + 1)])}
-        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-2 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600"
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-2 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         <Plus className="h-4 w-4" />
         Add current page (page {selectedPage + 1})
@@ -97,7 +97,7 @@ export function Panel() {
         type="button"
         onClick={apply}
         disabled={busy || validCount === 0}
-        className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40"
+        className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
       >
         {busy ? "Working…" : `Add ${validCount} bookmark${validCount === 1 ? "" : "s"}`}
       </button>

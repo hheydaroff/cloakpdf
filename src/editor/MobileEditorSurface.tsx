@@ -49,7 +49,7 @@ export function MobileEditorSurface() {
         <button
           type="button"
           onClick={() => setMode("picker")}
-          className="flex items-center gap-2 px-4 py-2 text-slate-700 dark:text-dark-text"
+          className="flex items-center gap-2 rounded-lg px-4 py-2 text-slate-700 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
           aria-label="Open tools"
         >
           <Grid2x2 className="h-[18px] w-[18px]" />
@@ -76,7 +76,7 @@ export function MobileEditorSurface() {
             <button
               type="button"
               onClick={cancel}
-              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-surface-alt"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               aria-label="Cancel"
             >
               <X className="h-4 w-4" />
@@ -84,7 +84,7 @@ export function MobileEditorSurface() {
             <button
               type="button"
               onClick={done}
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white hover:bg-primary-700"
+              className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-600 text-white hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
               aria-label="Done"
             >
               <Check className="h-4 w-4" />
@@ -109,13 +109,19 @@ export function MobileEditorSurface() {
           <div className="grid grid-cols-4 gap-x-1 gap-y-3">
             {EDITOR_TOOLS.map((t) => {
               const Icon = t.icon;
+              const on = t.id === activeTool;
               return (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => pick(t.id)}
                   aria-label={t.name}
-                  className="flex flex-col items-center gap-1.5 rounded-xl border border-transparent px-1 py-2.5 text-slate-700 dark:text-dark-text hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
+                  aria-pressed={on}
+                  className={`flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                    on
+                      ? "border-primary-200 bg-primary-50 text-primary-600 dark:border-primary-900/40 dark:bg-primary-900/30 dark:text-primary-300"
+                      : "border-transparent text-slate-700 hover:bg-slate-50 dark:text-dark-text dark:hover:bg-dark-surface-alt"
+                  }`}
                 >
                   <Icon className="h-6 w-6" />
                   <span className="text-[11px] font-medium leading-tight">

@@ -29,7 +29,7 @@ export function ColorRow({ value, onChange }: { value: Rgb; onChange: (c: Rgb) =
             onClick={() => onChange(c.rgb)}
             aria-label={c.name}
             aria-pressed={sameColor(value, c.rgb)}
-            className={`h-7 w-7 rounded-full border-2 transition-transform ${
+            className={`h-7 w-7 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
               sameColor(value, c.rgb)
                 ? "scale-110 border-slate-800 dark:border-white"
                 : "border-transparent"
@@ -72,7 +72,7 @@ export function PositionGrid<T extends string>({
               onClick={() => onChange(pos as T)}
               aria-label={pos.replace("-", " ")}
               aria-pressed={on}
-              className={`flex h-8 items-center justify-center rounded-md transition-colors ${
+              className={`flex h-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                 on
                   ? "bg-primary-600"
                   : "bg-slate-100 dark:bg-dark-bg hover:bg-slate-200 dark:hover:bg-dark-surface-alt"
@@ -155,7 +155,7 @@ export function TextField({
 export function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-dark-text-muted">
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
         {label}
       </p>
       {children}

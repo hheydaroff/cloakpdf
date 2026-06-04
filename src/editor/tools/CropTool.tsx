@@ -122,7 +122,7 @@ export function Panel() {
       onApply={apply}
     >
       <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-dark-text-muted">
+        <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
           Apply to
         </p>
         <Segmented

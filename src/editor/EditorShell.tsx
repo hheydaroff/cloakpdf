@@ -85,7 +85,7 @@ export function EditorShell() {
 
       {busyLabel && (
         <div
-          className="absolute inset-0 z-150 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+          className="absolute inset-0 z-150 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
           aria-busy="true"
           aria-live="polite"
         >
