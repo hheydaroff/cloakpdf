@@ -177,7 +177,7 @@ export default function ReversePages() {
           )}
 
           {done && (
-            <InfoCallout icon={CheckCircle2} accent="organise">
+            <InfoCallout icon={CheckCircle2}>
               {output.inWorkflow && !output.isLastStep
                 ? "Pages reversed. Sent to the next step."
                 : "Pages reversed successfully. The PDF has been downloaded."}

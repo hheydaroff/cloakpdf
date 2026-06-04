@@ -196,7 +196,7 @@ export default function AddPageNumbers() {
 
               {/* Position grid */}
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                   <Move className="w-3.5 h-3.5" />
                   Position
                 </p>
@@ -227,7 +227,7 @@ export default function AddPageNumbers() {
 
               {/* Format */}
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                   <Hash className="w-3.5 h-3.5" />
                   Format
                 </p>

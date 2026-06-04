@@ -202,7 +202,7 @@ export default function RemoveBlankPages() {
               )}
 
               {done && (
-                <InfoCallout icon={CheckCircle2} accent="organise">
+                <InfoCallout icon={CheckCircle2}>
                   {output.inWorkflow && !output.isLastStep
                     ? "Blank pages removed. Passed to the next step."
                     : "Blank pages removed successfully. The PDF has been downloaded."}

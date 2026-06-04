@@ -214,7 +214,7 @@ export default function FillPdfForm() {
                 </p>
 
                 {totalFields === 0 ? (
-                  <InfoCallout icon={FileX} title="No fillable fields" accent="annotate">
+                  <InfoCallout icon={FileX} title="No fillable fields">
                     This PDF does not contain interactive form fields. Use the Stamp & Watermark or
                     Add Signature tools to annotate it instead.
                   </InfoCallout>

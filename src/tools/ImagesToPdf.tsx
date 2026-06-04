@@ -254,7 +254,7 @@ export default function ImagesToPdf() {
       {images.length > 0 && (
         <>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
               Page Size
             </p>
             <SegmentedControl

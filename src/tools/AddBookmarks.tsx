@@ -245,10 +245,10 @@ export default function AddBookmarks() {
 
                   <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border overflow-hidden">
                     <div className="grid grid-cols-[1fr_auto_auto] px-3 py-2 bg-slate-50 dark:bg-dark-surface-alt border-b border-slate-100 dark:border-dark-border">
-                      <span className="text-xs font-semibold text-slate-400 dark:text-dark-text-muted uppercase tracking-widest">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-dark-text-muted uppercase tracking-widest">
                         Bookmark title
                       </span>
-                      <span className="text-xs font-semibold text-slate-400 dark:text-dark-text-muted uppercase tracking-widest w-20 text-center">
+                      <span className="text-xs font-semibold text-slate-500 dark:text-dark-text-muted uppercase tracking-widest w-20 text-center">
                         Page
                       </span>
                       <span className="w-8" />
@@ -365,7 +365,7 @@ export default function AddBookmarks() {
               />
 
               {done && (
-                <InfoCallout icon={CheckCircle2} accent="organise">
+                <InfoCallout icon={CheckCircle2}>
                   {output.inWorkflow && !output.isLastStep
                     ? "Bookmarks added — passed to the next step."
                     : "Bookmarks added successfully. The PDF has been downloaded."}

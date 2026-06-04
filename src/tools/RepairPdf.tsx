@@ -86,7 +86,7 @@ export default function RepairPdf() {
           )}
 
           {done && (
-            <InfoCallout icon={CheckCircle2} accent="transform">
+            <InfoCallout icon={CheckCircle2}>
               {output.inWorkflow && !output.isLastStep
                 ? `PDF repaired successfully${sizeAfter > 0 ? ` — ${formatFileSize(sizeAfter)}` : ""}. Passed to the next step.`
                 : `PDF repaired successfully${sizeAfter > 0 ? ` — ${formatFileSize(sizeAfter)}` : ""}. The file has been downloaded.`}

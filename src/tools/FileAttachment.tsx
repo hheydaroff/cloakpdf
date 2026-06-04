@@ -294,11 +294,7 @@ export default function FileAttachment() {
         </>
       )}
 
-      {success && (
-        <InfoCallout icon={CheckCircle2} accent="organise">
-          {success}
-        </InfoCallout>
-      )}
+      {success && <InfoCallout icon={CheckCircle2}>{success}</InfoCallout>}
 
       {error && <AlertBox message={error} />}
     </div>

@@ -265,7 +265,7 @@ export default function ContactSheet() {
             <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 space-y-5">
               {/* Grid size */}
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                   <Grid3X3 className="w-3.5 h-3.5" />
                   Grid Layout
                 </p>
@@ -286,7 +286,7 @@ export default function ContactSheet() {
 
               {/* Output format */}
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                   <Image className="w-3.5 h-3.5" />
                   Output Format
                 </p>
@@ -304,7 +304,7 @@ export default function ContactSheet() {
 
               {/* Page labels toggle */}
               <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted mb-2">
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
                   <Tag className="w-3.5 h-3.5" />
                   Page Labels
                 </p>

@@ -255,7 +255,7 @@ export default function EditMetadata() {
               />
 
               {saved && (
-                <InfoCallout icon={CheckCircle2} accent="security">
+                <InfoCallout icon={CheckCircle2}>
                   {output.inWorkflow && !output.isLastStep
                     ? "Metadata updated and PDF passed to the next step."
                     : "Metadata updated and PDF downloaded successfully."}

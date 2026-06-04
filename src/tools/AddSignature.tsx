@@ -468,7 +468,7 @@ export default function AddSignature() {
 
               {/* ---- Signature Size ---- */}
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-sm p-4 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted flex items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted flex items-center gap-1.5">
                   <Maximize2 className="w-3.5 h-3.5" />
                   Signature Size
                 </p>

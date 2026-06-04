@@ -341,19 +341,19 @@ export default function OcrPdf() {
               </div>
             )
           ) : !needsOcr ? (
-            <InfoCallout icon={FileText} title="Digital PDF — no OCR needed" accent="transform">
+            <InfoCallout icon={FileText} title="Digital PDF — no OCR needed">
               All {totalPages} page{totalPages !== 1 ? "s" : ""} have a text layer, so text is read
               directly and extracts instantly — no OCR engine or language download.
             </InfoCallout>
           ) : scannedCount === totalPages ? (
-            <InfoCallout icon={ScanLine} title="Scanned PDF — OCR required" accent="transform">
+            <InfoCallout icon={ScanLine} title="Scanned PDF — OCR required">
               No text layer found, so all {totalPages} page{totalPages !== 1 ? "s" : ""} are read
               with OCR. The engine (<span className="font-medium">~2 MB</span>) and the selected
               language data (<span className="font-medium">~10–15 MB</span>) download once, then
               cache offline.
             </InfoCallout>
           ) : (
-            <InfoCallout icon={ScanLine} title="Mixed PDF — partial OCR" accent="transform">
+            <InfoCallout icon={ScanLine} title="Mixed PDF — partial OCR">
               {scannedCount} of {totalPages} page{totalPages !== 1 ? "s" : ""} are scanned and need
               OCR; the rest have a text layer. Only the scanned pages use the OCR engine (
               <span className="font-medium">~2 MB</span> +{" "}

@@ -29,6 +29,7 @@ import { useCallback, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
+import { FileInfoBar } from "../components/FileInfoBar.tsx";
 import { InfoCallout } from "../components/InfoCallout.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
@@ -290,30 +291,22 @@ export default function PdfPassword() {
           hint="Select a PDF to add or remove a password"
         />
       ) : (
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-slate-600 dark:text-dark-text-muted">
-              <span className="font-medium">{file.name}</span> — {formatFileSize(file.size)}
-            </p>
-            {pdfState === "detecting" && (
-              <span className="text-xs text-slate-500 dark:text-dark-text-muted animate-pulse">
+        <FileInfoBar
+          fileName={file.name}
+          details={formatFileSize(file.size)}
+          onChangeFile={reset}
+          extra={
+            pdfState === "detecting" ? (
+              <span className="ml-2 text-xs text-slate-500 dark:text-dark-text-muted animate-pulse">
                 Detecting…
               </span>
-            )}
-            {pdfState === "encrypted" && (
-              <span className="text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-full px-2 py-0.5">
+            ) : pdfState === "encrypted" ? (
+              <span className="ml-2 text-xs font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 rounded-full px-2 py-0.5">
                 Password protected
               </span>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg"
-          >
-            Change file
-          </button>
-        </div>
+            ) : undefined
+          }
+        />
       )}
 
       {/* Panel: Add Password (unencrypted PDF) */}
@@ -462,7 +455,7 @@ export default function PdfPassword() {
 
       {/* Success */}
       {success && (
-        <InfoCallout icon={CheckCircle2} accent="security">
+        <InfoCallout icon={CheckCircle2}>
           {pdfState === "unencrypted"
             ? "Password added successfully. The protected PDF has been downloaded."
             : "Password removed successfully. The unlocked PDF has been downloaded."}

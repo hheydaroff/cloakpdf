@@ -209,7 +209,7 @@ export default function FlattenPdf() {
             </div>
           ) : (
             <div className="space-y-4">
-              <InfoCallout icon={CheckCircle2} accent="transform">
+              <InfoCallout icon={CheckCircle2}>
                 PDF flattened successfully. Form fields were converted to static text and any
                 comments, highlights, and other annotations were removed.
               </InfoCallout>

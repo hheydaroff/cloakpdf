@@ -230,9 +230,7 @@ export function WorkflowRunner({ workflowId, onExit }: WorkflowRunnerProps) {
           />
 
           {skipNotice && (
-            <InfoCallout icon={Check} accent="organise">
-              {skipNotice} — moved to the next step.
-            </InfoCallout>
+            <InfoCallout icon={Check}>{skipNotice} — moved to the next step.</InfoCallout>
           )}
 
           {runError && <AlertBox message={runError} />}
@@ -397,7 +395,7 @@ interface FinalStateProps {
 function FinalState({ originalFile, onRunAgain, onExit }: FinalStateProps) {
   return (
     <div className="space-y-4">
-      <InfoCallout icon={Check} accent="transform">
+      <InfoCallout icon={Check}>
         <span className="wrap-anywhere">
           Workflow finished. Your processed PDF (based on{" "}
           <span className="font-semibold">{originalFile.name}</span>) has been downloaded.

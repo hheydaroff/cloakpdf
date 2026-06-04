@@ -307,7 +307,7 @@ export default function DigitalSignature() {
 
           {!detectingSignatures && existingSignatures.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted flex items-center gap-2">
                 <BadgeCheck className="w-4 h-4 text-primary-500" />
                 Existing Signatures ({existingSignatures.length})
               </h3>
@@ -488,7 +488,7 @@ export default function DigitalSignature() {
 
           {/* Step 2: Certificate source */}
           <div className="space-y-4">
-            <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted flex items-center gap-2">
+            <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted flex items-center gap-2">
               <FileKey2 className="w-4 h-4 text-primary-500" />
               Certificate
             </h3>
@@ -583,11 +583,7 @@ export default function DigitalSignature() {
             {/* Generate form */}
             {certSource === "generate" && (
               <div className="bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border p-4 space-y-4">
-                <InfoCallout
-                  icon={ShieldQuestion}
-                  title="Self-signed certificate"
-                  accent="security"
-                >
+                <InfoCallout icon={ShieldQuestion} title="Self-signed certificate">
                   Suitable for personal use. Recipients will see the signature is not from a trusted
                   certificate authority.
                 </InfoCallout>
@@ -689,7 +685,7 @@ export default function DigitalSignature() {
           {/* Step 3: Signature details (optional) */}
           {certInfo && (
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-400 dark:text-dark-text-muted flex items-center gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted flex items-center gap-2">
                 <MessageSquareText className="w-4 h-4 text-primary-500" />
                 Signature Details
                 <span className="text-xs font-normal text-slate-400 dark:text-dark-text-muted">
@@ -767,9 +763,7 @@ export default function DigitalSignature() {
           />
 
           {success && (
-            <InfoCallout icon={CheckCircle2} accent="security">
-              PDF signed and downloaded successfully.
-            </InfoCallout>
+            <InfoCallout icon={CheckCircle2}>PDF signed and downloaded successfully.</InfoCallout>
           )}
         </>
       )}

@@ -35,7 +35,7 @@ export function FileInfoBar({ fileName, details, onChangeFile, extra }: FileInfo
         <button
           type="button"
           onClick={onChangeFile}
-          className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
+          className="rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
         >
           Change file
         </button>
