@@ -120,7 +120,7 @@ export default function PdfToImage() {
             onChangeFile={pdf.reset}
             extra={
               selectedPages.size > 0 ? (
-                <span className="text-primary-600 ml-2">
+                <span className="text-primary-600 dark:text-primary-400 ml-2">
                   ({selectedPages.size} of {thumbnails.length} selected)
                 </span>
               ) : undefined
