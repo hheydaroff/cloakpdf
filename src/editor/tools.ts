@@ -145,7 +145,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: ClipboardList,
     group: "annotate",
     mode: "focus",
-    status: "soon",
+    status: "ready",
   },
 
   // Pages
@@ -240,7 +240,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: BookMarked,
     group: "document",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "file-attachment",
@@ -248,7 +248,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Paperclip,
     group: "document",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
 ];
 

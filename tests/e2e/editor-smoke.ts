@@ -175,9 +175,9 @@ async function main() {
     await waitForText(page, /\b0 signatures\b/, 60_000); // embed drops the placed object
     console.log("  ✓ signature place + apply");
 
-    // 4. A not-yet-migrated tool still shows its placeholder.
-    const soonBtn = await page.$('button[aria-label="Bookmarks"]');
-    if (!soonBtn) fail("Bookmarks rail tool not found.");
+    // 4. A not-yet-migrated tool still shows its placeholder (OCR lands later).
+    const soonBtn = await page.$('button[aria-label="OCR"]');
+    if (!soonBtn) fail("OCR rail tool not found.");
     await soonBtn.click();
     await waitForText(page, /This tool moves into the editor/i, 5_000);
 
@@ -241,6 +241,31 @@ async function main() {
     await waitForText(page, /Working/i, 10_000);
     await waitForText(page, /Add page numbers/i, 60_000);
     console.log("  ✓ stamp-family apply (page numbers)");
+
+    // 11. Fill form: the fixture has no AcroForm, so the reader reports it.
+    const formBtn = await page.$('button[aria-label="Fill form"]');
+    if (!formBtn) fail("Fill form rail tool not found.");
+    await formBtn.click();
+    await waitForText(page, /no fillable form fields/i, 10_000);
+    console.log("  ✓ fill-form reads fields (empty)");
+
+    // 12. Bookmarks: add one row + apply, page count unchanged.
+    const bmBtn = await page.$('button[aria-label="Bookmarks"]');
+    if (!bmBtn) fail("Bookmarks rail tool not found.");
+    await bmBtn.click();
+    await waitForText(page, /show in the viewer's outline/i, 5_000);
+    await page.type('input[placeholder="Bookmark title"]', "Intro");
+    if (!(await clickByText(page, "Add 1 bookmark"))) fail("Bookmarks Apply button not found.");
+    await waitForText(page, /Working/i, 10_000);
+    await waitForText(page, /Add 1 bookmark/i, 60_000);
+    console.log("  ✓ bookmarks add + apply");
+
+    // 13. Attachments: list panel loads its async report on open.
+    const attBtn = await page.$('button[aria-label="Attachments"]');
+    if (!attBtn) fail("Attachments rail tool not found.");
+    await attBtn.click();
+    await waitForText(page, /No files attached yet|Reading attachments/i, 10_000);
+    console.log("  ✓ attachments panel loads");
 
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");

@@ -7,8 +7,11 @@
 
 import type { ComponentType } from "react";
 import * as Annotate from "./tools/AnnotateTool.tsx";
+import * as Attachments from "./tools/AttachmentsTool.tsx";
+import * as Bookmarks from "./tools/BookmarksTool.tsx";
 import * as Crop from "./tools/CropTool.tsx";
 import * as Extract from "./tools/ExtractTool.tsx";
+import * as FillForm from "./tools/FillFormTool.tsx";
 import * as Metadata from "./tools/MetadataTool.tsx";
 import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
@@ -63,6 +66,10 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   "header-footer": { Panel: HeaderFooterPanel },
   "bates-numbering": { Panel: BatesPanel },
   "stamp-pdf": { Panel: WatermarkPanel },
+  // Document tools: panel-only field/list editors.
+  "fill-pdf-form": { Panel: FillForm.Panel },
+  "add-bookmarks": { Panel: Bookmarks.Panel },
+  "file-attachment": { Panel: Attachments.Panel },
 };
 
 export function toolImpl(id: string | null): ToolImpl | null {
