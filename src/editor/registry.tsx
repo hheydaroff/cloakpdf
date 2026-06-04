@@ -14,6 +14,12 @@ import * as Redact from "./tools/RedactTool.tsx";
 import * as RemoveBlank from "./tools/RemoveBlankTool.tsx";
 import * as Scrub from "./tools/ScrubTool.tsx";
 import {
+  BatesPanel,
+  HeaderFooterPanel,
+  PageNumbersPanel,
+  WatermarkPanel,
+} from "./tools/StampTools.tsx";
+import {
   CompressPanel,
   FlattenPanel,
   GrayscalePanel,
@@ -47,6 +53,11 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   // Security panels: load an async report on open, then apply.
   metadata: { Panel: Metadata.Panel },
   "pdf-scrub": { Panel: Scrub.Panel },
+  // Content-additive stamp-family option tools.
+  "add-page-numbers": { Panel: PageNumbersPanel },
+  "header-footer": { Panel: HeaderFooterPanel },
+  "bates-numbering": { Panel: BatesPanel },
+  "stamp-pdf": { Panel: WatermarkPanel },
 };
 
 export function toolImpl(id: string | null): ToolImpl | null {

@@ -107,14 +107,21 @@ export const EDITOR_TOOLS: EditorTool[] = [
     mode: "focus",
     status: "soon",
   },
-  { id: "stamp-pdf", name: "Stamp", icon: Stamp, group: "annotate", mode: "focus", status: "soon" },
+  {
+    id: "stamp-pdf",
+    name: "Stamp",
+    icon: Stamp,
+    group: "annotate",
+    mode: "either",
+    status: "ready",
+  },
   {
     id: "add-page-numbers",
     name: "Page numbers",
     icon: Hash,
     group: "annotate",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "header-footer",
@@ -122,7 +129,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: AlignCenter,
     group: "annotate",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "bates-numbering",
@@ -130,7 +137,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Scale,
     group: "annotate",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "fill-pdf-form",

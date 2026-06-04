@@ -183,6 +183,16 @@ async function main() {
     await waitForText(page, /Keep 0 pages/, 60_000); // selection clears once applied
     console.log("  ✓ extract keep 2 pages");
 
+    // 10. Stamp-family option tool: page numbers applies via the option panel.
+    const pnBtn = await page.$('button[aria-label="Page numbers"]');
+    if (!pnBtn) fail("Page numbers rail tool not found.");
+    await pnBtn.click();
+    await waitForText(page, /Add page numbers/i, 5_000);
+    if (!(await clickByText(page, "Add page numbers"))) fail("Page numbers Apply not found.");
+    await waitForText(page, /Working/i, 10_000);
+    await waitForText(page, /Add page numbers/i, 60_000);
+    console.log("  ✓ stamp-family apply (page numbers)");
+
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");
       for (const e of errors) console.error(`   ${e}`);
