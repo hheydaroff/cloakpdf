@@ -48,14 +48,17 @@ async function clickByText(page: Page, label: string): Promise<boolean> {
   }, label);
 }
 
-/** Wait until the page's visible text matches `re`. */
+/** Wait until the page's visible text matches `re`. Preserves the regex flags
+ *  (e.g. `i`) — `document.body.innerText` reflects CSS text-transform, so an
+ *  `uppercase`-styled label only matches case-insensitively. */
 async function waitForText(page: Page, re: RegExp, timeout = 30_000): Promise<void> {
   await page.waitForFunction(
-    (src: string) => new RegExp(src).test(document.body.innerText),
+    (src: string, flags: string) => new RegExp(src, flags).test(document.body.innerText),
     {
       timeout,
     },
     re.source,
+    re.flags,
   );
 }
 
@@ -227,16 +230,16 @@ async function main() {
     await waitForText(page, /Scrub hidden data/i, 10_000);
     console.log("  ✓ metadata + scrub panels load");
 
-    // 9. Extract (selectable overview): keep 2 pages via extractPages.
-    const extractBtn = await page.$('button[aria-label="Extract"]');
-    if (!extractBtn) fail("Extract rail tool not found.");
-    await extractBtn.click(); // overview + selectable board
-    await page.waitForSelector('button[aria-label="Select page 1"]', { timeout: 10_000 });
-    await page.click('button[aria-label="Select page 1"]');
-    await page.click('button[aria-label="Select page 2"]');
-    if (!(await clickByText(page, "Keep 2 pages"))) fail("Extract Apply button not found.");
-    await waitForText(page, /Keep 0 pages/, 60_000); // selection clears once applied
-    console.log("  ✓ extract keep 2 pages");
+    // 9. Merged Organize quick actions (absorbed reverse / extract / blank).
+    //    Organize is the single page-board now — assert the quick actions
+    //    render and the absorbed blank-scan runs to a result (no apply).
+    await orgBtn.click(); // back into the page-board
+    await waitForText(page, /Quick actions/i, 10_000);
+    await waitForText(page, /Reverse order/i, 5_000);
+    if (!(await clickByText(page, "Find blank pages"))) fail("Find blank pages action not found.");
+    await waitForText(page, /No blank pages found|Delete \d+ blank page/i, 60_000);
+    await orgBtn.click(); // toggle back off
+    console.log("  ✓ merged organize (reverse/extract/blank quick actions)");
 
     // 10. Stamp-family option tool: page numbers applies via the option panel.
     const pnBtn = await page.$('button[aria-label="Page numbers"]');

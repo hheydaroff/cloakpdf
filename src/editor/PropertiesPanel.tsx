@@ -26,7 +26,7 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
           <p className="truncate text-sm font-semibold text-slate-800 dark:text-dark-text">
             {tool ? tool.name : "Document"}
           </p>
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+          <p className="text-tag font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
             {tool ? EDITOR_GROUP_LABELS[tool.group] : doc ? `${doc.pageCount} pages` : ""}
           </p>
         </div>
@@ -42,7 +42,7 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
         {tool ? (
           <ToolControls />
         ) : (

@@ -42,7 +42,7 @@ export function EditorShell() {
     );
 
   return (
-    <main className="fixed inset-0 z-100 flex flex-col bg-slate-50 dark:bg-dark-bg font-sans text-slate-800 dark:text-dark-text">
+    <main className="fixed inset-0 z-100 flex flex-col overflow-hidden bg-slate-50 dark:bg-dark-bg font-sans text-slate-800 dark:text-dark-text">
       <EditorTopBar />
 
       {error && (

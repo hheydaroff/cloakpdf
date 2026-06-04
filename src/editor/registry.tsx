@@ -10,13 +10,11 @@ import * as Annotate from "./tools/AnnotateTool.tsx";
 import * as Attachments from "./tools/AttachmentsTool.tsx";
 import * as Bookmarks from "./tools/BookmarksTool.tsx";
 import * as Crop from "./tools/CropTool.tsx";
-import * as Extract from "./tools/ExtractTool.tsx";
 import * as FillForm from "./tools/FillFormTool.tsx";
 import * as Metadata from "./tools/MetadataTool.tsx";
 import * as Ocr from "./tools/OcrTool.tsx";
 import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
-import * as RemoveBlank from "./tools/RemoveBlankTool.tsx";
 import * as Scrub from "./tools/ScrubTool.tsx";
 import * as Signature from "./tools/SignatureTool.tsx";
 import {
@@ -31,7 +29,6 @@ import {
   GrayscalePanel,
   NupPanel,
   RepairPanel,
-  ReversePanel,
 } from "./tools/SimpleTools.tsx";
 
 export interface ToolImpl {
@@ -48,12 +45,10 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   signature: { Stage: Signature.Stage, Panel: Signature.Panel },
   "crop-pages": { Stage: Crop.Stage, Panel: Crop.Panel },
   // Overview tools: their Board lives in OverviewMode (center), so no focus
-  // Stage here — only the Panel.
+  // Stage here — only the Panel. Organize now also absorbs reverse / extract /
+  // remove-blank as in-panel quick actions.
   "organize-pages": { Panel: Organize.Panel },
-  "extract-pages": { Panel: Extract.Panel },
-  "remove-blank-pages": { Panel: RemoveBlank.Panel },
   // Whole-document, options-only tools (no canvas interaction).
-  "reverse-pages": { Panel: ReversePanel },
   grayscale: { Panel: GrayscalePanel },
   flatten: { Panel: FlattenPanel },
   "repair-pdf": { Panel: RepairPanel },

@@ -1,9 +1,10 @@
 // SimpleTools.tsx — The whole-document, options-only tools. Each is a thin
 // Panel that funnels an existing pdf-operations writer through applyTransform.
 // No canvas interaction, so they render identically on desktop (right panel)
-// and mobile (bottom sheet). Structure-changing ops (reverse, n-up) drop overlay
-// objects since page indices/geometry shift; content-only ops (grayscale,
-// compress, flatten, repair) preserve them (still valid in fraction space).
+// and mobile (bottom sheet). Structure-changing ops (n-up) drop overlay objects
+// since page indices/geometry shift; content-only ops (grayscale, compress,
+// flatten, repair) preserve them (still valid in fraction space).
+// (Reverse moved into the Organize page-board's quick actions.)
 
 import { useState } from "react";
 import {
@@ -12,28 +13,10 @@ import {
   grayscalePdf,
   nupPages,
   repairPdf,
-  reversePages,
 } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions } from "../EditorContext.tsx";
 import { Segmented, WholeDocPanel } from "./WholeDocPanel.tsx";
-
-export function ReversePanel() {
-  const { applyTransform } = useEditorActions();
-  return (
-    <WholeDocPanel
-      blurb="Flip the page order of the whole document."
-      applyLabel="Reverse page order"
-      onApply={() =>
-        void applyTransform(async (d) => ({
-          bytes: await reversePages(docToFile(d)),
-          label: "Reverse pages",
-          objects: [],
-        }))
-      }
-    />
-  );
-}
 
 export function GrayscalePanel() {
   const { applyTransform } = useEditorActions();

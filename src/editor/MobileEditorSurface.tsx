@@ -102,7 +102,7 @@ export function MobileEditorSurface() {
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
         {tool ? (
           <ToolControls />
         ) : (
@@ -124,9 +124,7 @@ export function MobileEditorSurface() {
                   }`}
                 >
                   <Icon className="h-6 w-6" />
-                  <span className="text-[11px] font-medium leading-tight">
-                    {t.name.split(" ")[0]}
-                  </span>
+                  <span className="text-tag font-medium leading-tight">{t.name.split(" ")[0]}</span>
                 </button>
               );
             })}

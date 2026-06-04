@@ -382,3 +382,18 @@ body {
     background-clip: padding-box;
   }
 }
+
+/*
+ * .no-scrollbar — a scroll container with no visible scrollbar at all. For
+ * chrome that scrolls but shouldn't show a track (the editor tool rail, the
+ * mobile tool picker). Content still scrolls via wheel/touch/keyboard.
+ */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}

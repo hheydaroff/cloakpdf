@@ -1,17 +1,29 @@
-// OrganizeTool.tsx — Page-board tool (overview mode). The Board renders an
-// editable grid of every page: drag to reorder, rotate, or mark for deletion.
-// The Panel summarises the pending plan and applies it via `assemblePdf` (the
-// same engine the standalone Organize Pages tool uses). All working state lives
-// in the namespaced tool slice so the Board (center) and Panel (right) share it
-// and it survives tool re-selection until applied. See REDESIGN.md (page-board).
+// OrganizeTool.tsx — The unified page-board tool (overview mode). The Board
+// renders an editable grid of every page: drag to reorder, rotate, or mark for
+// deletion. The Panel summarises the pending plan, offers quick actions, and
+// applies it via `assemblePdf` (one pass, all ops). Because every page op
+// reduces to a mutation of `order` + `deleted` + `rotations`, this tool absorbs
+// what used to be four separate tools:
+//   • Reverse      → reverse the `order` array
+//   • Remove-blank → auto-detect near-blank pages, mark them deleted
+//   • Extract      → "Delete all", then restore the few pages to keep
+//   • (rotate/reorder/delete are the board's native gestures)
+// N-up stays separate — it composites pages onto new sheets, not a reorder.
+// All working state lives in the namespaced tool slice so the Board (center)
+// and Panel (right) share it and it survives re-selection. See REDESIGN.md.
 
-import { RotateCw, Trash2, Undo2 } from "lucide-react";
-import { useCallback, useEffect, useRef } from "react";
+import { FileX, Repeat2, RotateCw, Trash2, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { assemblePdf, type AssembleOp } from "../../utils/pdf-operations.ts";
-import type { CanvasObject } from "../doc.ts";
+import { renderThumbnailsAndScores, revokeThumbnails } from "../../utils/pdf-renderer.ts";
+import { type CanvasObject, docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
 
 export const ORGANIZE_ID = "organize-pages";
+
+// Fraction of near-white pixels above which a page is treated as blank. High so
+// a faint header/footer isn't swept up. (Absorbed from the old Remove-blank.)
+const BLANK_THRESHOLD = 0.995;
 
 interface OrganizeState {
   /** Original page indices, in display (output) order. */
@@ -88,7 +100,7 @@ export function Board() {
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
+    <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
       <div className="mx-auto grid max-w-5xl grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {state.order.map((origIdx, pos) => {
           const page = doc.pages[origIdx];
@@ -166,6 +178,31 @@ export function Board() {
 
 // ── Panel (right) ────────────────────────────────────────────────────
 
+/** A compact secondary action button, on-system (slate border, primary focus). */
+function QuickAction({
+  icon: Icon,
+  label,
+  onClick,
+  disabled,
+}: {
+  icon: typeof Repeat2;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 text-xs font-medium text-slate-600 dark:text-dark-text-muted hover:border-primary-300 hover:text-primary-700 disabled:opacity-40 disabled:hover:border-slate-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
 export function Panel() {
   const { doc } = useEditorRead();
   const { patchToolState, applyTransform } = useEditorActions();
@@ -173,10 +210,45 @@ export function Panel() {
   const pageCount = doc?.pageCount ?? 0;
   const state = readState(slice, pageCount);
 
+  const [blanks, setBlanks] = useState<number[] | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  // Drop stale blank-scan results whenever the page set changes (after Apply).
+  useEffect(() => {
+    setBlanks(null);
+  }, [pageCount]);
+
   const kept = state.order.filter((i) => !state.deleted.includes(i));
   const rotatedCount = Object.values(state.rotations).filter((d) => d % 360 !== 0).length;
   const reordered = state.order.some((v, i) => v !== i);
   const dirty = state.deleted.length > 0 || rotatedCount > 0 || reordered;
+  const allDeleted = kept.length === 0;
+
+  // ── Absorbed page-ops: reverse / extract / remove-blank ──────────────
+  const reverse = () => patchToolState(ORGANIZE_ID, { order: [...state.order].reverse() });
+  const deleteAll = () => patchToolState(ORGANIZE_ID, { deleted: [...state.order] });
+  const restoreAll = () => patchToolState(ORGANIZE_ID, { deleted: [] });
+
+  const findBlanks = () => {
+    if (!doc) return;
+    setScanning(true);
+    void renderThumbnailsAndScores(docToFile(doc)).then(
+      ({ thumbnails, scores }) => {
+        revokeThumbnails(thumbnails);
+        setBlanks(scores.map((s, i) => (s >= BLANK_THRESHOLD ? i : -1)).filter((i) => i >= 0));
+        setScanning(false);
+      },
+      () => {
+        setBlanks([]);
+        setScanning(false);
+      },
+    );
+  };
+
+  const markBlanks = () => {
+    if (!blanks || blanks.length === 0) return;
+    patchToolState(ORGANIZE_ID, { deleted: [...new Set([...state.deleted, ...blanks])] });
+  };
 
   const reset = useCallback(() => {
     patchToolState(ORGANIZE_ID, {
@@ -231,6 +303,41 @@ export function Panel() {
             <span className="tabular-nums">{rotatedCount}</span>
           </div>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+          Quick actions
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          <QuickAction icon={Repeat2} label="Reverse order" onClick={reverse} />
+          {allDeleted ? (
+            <QuickAction icon={Undo2} label="Restore all" onClick={restoreAll} />
+          ) : (
+            <QuickAction icon={Trash2} label="Delete all" onClick={deleteAll} />
+          )}
+        </div>
+        {blanks === null ? (
+          <QuickAction
+            icon={FileX}
+            label={scanning ? "Scanning…" : "Find blank pages"}
+            onClick={findBlanks}
+            disabled={scanning}
+          />
+        ) : blanks.length === 0 ? (
+          <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-2.5 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
+            No blank pages found.
+          </p>
+        ) : (
+          <QuickAction
+            icon={FileX}
+            label={`Delete ${blanks.length} blank page${blanks.length === 1 ? "" : "s"}`}
+            onClick={markBlanks}
+          />
+        )}
+        <p className="text-tag text-slate-400 dark:text-dark-text-muted">
+          To keep only a few pages, “Delete all” then restore the ones you want.
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">
