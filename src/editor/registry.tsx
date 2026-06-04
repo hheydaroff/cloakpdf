@@ -9,6 +9,14 @@ import type { ComponentType } from "react";
 import * as Annotate from "./tools/AnnotateTool.tsx";
 import * as Organize from "./tools/OrganizeTool.tsx";
 import * as Redact from "./tools/RedactTool.tsx";
+import {
+  CompressPanel,
+  FlattenPanel,
+  GrayscalePanel,
+  NupPanel,
+  RepairPanel,
+  ReversePanel,
+} from "./tools/SimpleTools.tsx";
 
 export interface ToolImpl {
   /** Registers canvas interaction for focus tools; absent for overview/options tools. */
@@ -23,6 +31,13 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   // Organize is an overview tool: its Board lives in OverviewMode (center), so
   // no focus Stage here — only the Panel (Apply/Reset/summary).
   "organize-pages": { Panel: Organize.Panel },
+  // Whole-document, options-only tools (no canvas interaction).
+  "reverse-pages": { Panel: ReversePanel },
+  grayscale: { Panel: GrayscalePanel },
+  flatten: { Panel: FlattenPanel },
+  "repair-pdf": { Panel: RepairPanel },
+  compress: { Panel: CompressPanel },
+  "nup-pages": { Panel: NupPanel },
 };
 
 export function toolImpl(id: string | null): ToolImpl | null {

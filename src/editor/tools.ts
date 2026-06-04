@@ -164,7 +164,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Repeat2,
     group: "pages",
     mode: "overview",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "remove-blank-pages",
@@ -180,7 +180,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: LayoutGrid,
     group: "pages",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
 
   // Transform
@@ -191,7 +191,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Archive,
     group: "transform",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "grayscale",
@@ -199,7 +199,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Contrast,
     group: "transform",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "flatten",
@@ -207,7 +207,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Layers,
     group: "transform",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   {
     id: "repair-pdf",
@@ -215,7 +215,7 @@ export const EDITOR_TOOLS: EditorTool[] = [
     icon: Wrench,
     group: "transform",
     mode: "either",
-    status: "soon",
+    status: "ready",
   },
   { id: "ocr", name: "OCR", icon: ScanText, group: "transform", mode: "either", status: "soon" },
 

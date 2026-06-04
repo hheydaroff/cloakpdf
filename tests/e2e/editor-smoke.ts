@@ -127,9 +127,9 @@ async function main() {
     console.log("  ✓ annotate draw");
 
     // 4. A not-yet-migrated tool still shows its placeholder.
-    const compressBtn = await page.$('button[aria-label="Compress"]');
-    if (!compressBtn) fail("Compress rail tool not found.");
-    await compressBtn.click();
+    const soonBtn = await page.$('button[aria-label="Bookmarks"]');
+    if (!soonBtn) fail("Bookmarks rail tool not found.");
+    await soonBtn.click();
     await waitForText(page, /This tool moves into the editor/i, 5_000);
 
     // 5. Organize (page-board): delete a page, apply via assemblePdf (40 → 39).
@@ -149,6 +149,17 @@ async function main() {
     if (pageButtons.length < 2) fail(`Expected ≥2 pages in overview, got ${pageButtons.length}.`);
     await page.click('button[aria-label="Open page 2"]');
     await page.waitForSelector('img[alt="Page 2"]', { timeout: 10_000 });
+
+    // 7. Whole-doc options tool: flatten applies through the shared panel.
+    const flattenBtn = await page.$('button[aria-label="Flatten"]');
+    if (!flattenBtn) fail("Flatten rail tool not found.");
+    await flattenBtn.click(); // mode "either" → stays in focus
+    await waitForText(page, /Flatten document/i, 5_000);
+    if (!(await clickByText(page, "Flatten document"))) fail("Flatten Apply button not found.");
+    await waitForText(page, /Working/i, 10_000); // busy overlay / button
+    await waitForText(page, /Flatten document/i, 60_000); // restored when done
+    await page.waitForSelector('img[alt="Page 2"]', { timeout: 10_000 });
+    console.log("  ✓ whole-doc apply (flatten)");
 
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");
