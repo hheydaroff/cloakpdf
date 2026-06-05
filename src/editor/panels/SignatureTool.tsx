@@ -8,7 +8,7 @@
 // pipeline from the standalone Add Signature tool. See REDESIGN.md (canvas
 // placement class, sibling of the overlay-object class).
 
-import { Upload } from "lucide-react";
+import { Copy, Upload } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { ColorPicker } from "../../components/ColorPicker.tsx";
 import { SignaturePad } from "../../components/SignaturePad.tsx";
@@ -160,7 +160,7 @@ export function Stage() {
 
 export function Panel() {
   const { doc } = useEditorRead();
-  const { patchToolState, applyTransform } = useEditorActions();
+  const { patchToolState, applyTransform, addObjects } = useEditorActions();
   const slice = useToolSlice(TOOL_ID);
   const dataUrl = (slice.dataUrl as string) ?? "";
   const inkHex = (slice.inkHex as string) ?? DEFAULT_INK;
@@ -169,6 +169,34 @@ export function Panel() {
   const uploadRef = useRef<HTMLInputElement>(null);
 
   const count = (doc?.objects ?? []).filter((o) => o.kind === "signature").length;
+  const pageCount = doc?.pageCount ?? 0;
+
+  // Replicate the signature(s) placed on the first signed page onto every other
+  // page, at the same fractional position (so it lands consistently even on
+  // mixed page sizes). One history entry. Useful for signing every page of a
+  // multi-page contract from a single placement.
+  const applyToAllPages = useCallback(() => {
+    const d = doc;
+    if (!d) return;
+    const sigs = d.objects.filter((o) => o.kind === "signature" && o.rect && o.payload);
+    if (sigs.length === 0) return;
+    const firstSignedPage = Math.min(...sigs.map((o) => o.pageIndex));
+    const template = sigs.filter((o) => o.pageIndex === firstSignedPage);
+    const occupied = new Set(sigs.map((o) => o.pageIndex));
+    const additions = [];
+    for (let p = 0; p < d.pageCount; p++) {
+      if (occupied.has(p)) continue;
+      for (const t of template) {
+        additions.push({
+          kind: "signature" as const,
+          pageIndex: p,
+          rect: { ...t.rect! },
+          payload: { ...(t.payload as SigPayload) },
+        });
+      }
+    }
+    if (additions.length > 0) addObjects(additions, "Signature on all pages");
+  }, [doc, addObjects]);
 
   const onPadSignature = useCallback(
     (url: string) => patchToolState(TOOL_ID, { dataUrl: url }),
@@ -301,6 +329,17 @@ export function Panel() {
       <span className="text-sm text-slate-600 dark:text-dark-text-muted">
         {count} signature{count === 1 ? "" : "s"}
       </span>
+
+      {count > 0 && pageCount > 1 && (
+        <button
+          type="button"
+          onClick={applyToAllPages}
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-dark-border px-3 py-2 text-sm font-medium text-slate-700 dark:text-dark-text hover:bg-slate-50 dark:hover:bg-dark-surface-alt transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        >
+          <Copy className="h-4 w-4" />
+          Apply to all {pageCount} pages
+        </button>
+      )}
 
       <button
         type="button"
