@@ -17,7 +17,6 @@
 
 import { Loader2, ScanText } from "lucide-react";
 import { useState } from "react";
-import { PagePreviewNav } from "../../components/PagePreviewNav.tsx";
 import {
   extractLayout,
   type LayoutPage,
@@ -64,7 +63,6 @@ export function ocrHasPreview(slice: Record<string, unknown>, docId: string | un
 // ── Center surface: source page ↔ recognised text, per page ──────────
 export function OcrPreview() {
   const { doc, selectedPage } = useEditorRead();
-  const { setSelectedPage } = useEditorActions();
   const slice = useToolSlice(OCR_ID);
   const layout = (slice.layout as LayoutPage[] | null) ?? null;
   const pageTexts = (slice.pageTexts as string[] | undefined) ?? [];
@@ -83,21 +81,18 @@ export function OcrPreview() {
         <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
           Recognised text
         </span>
-        <div className="flex items-center gap-3">
-          {hasLayout && (
-            <div className="w-44">
-              <Segmented<PreviewMode>
-                value={previewMode}
-                onChange={(v) => patchToolState(OCR_ID, { previewMode: v })}
-                options={[
-                  { value: "layout", label: "Layout" },
-                  { value: "text", label: "Plain text" },
-                ]}
-              />
-            </div>
-          )}
-          <PagePreviewNav page={selectedPage} total={doc.pageCount} onChange={setSelectedPage} />
-        </div>
+        {hasLayout && (
+          <div className="w-44">
+            <Segmented<PreviewMode>
+              value={previewMode}
+              onChange={(v) => patchToolState(OCR_ID, { previewMode: v })}
+              options={[
+                { value: "layout", label: "Layout" },
+                { value: "text", label: "Plain text" },
+              ]}
+            />
+          </div>
+        )}
       </div>
 
       <div className="mx-auto grid min-h-0 w-full max-w-5xl flex-1 gap-4 md:grid-cols-2">
