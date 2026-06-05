@@ -60,7 +60,7 @@ export const EDITOR_GROUP_LABELS: Record<EditorToolGroup, string> = {
 
 // Rail order: privacy first (brand-defining, à la CloakIMG's Redact placement),
 // then annotate, pages, transform, document. Within a group, most-used first.
-export const EDITOR_TOOLS: EditorTool[] = [
+export const EDITOR_TOOLS = [
   // Privacy & Security
   {
     id: "redact-pdf",
@@ -223,7 +223,11 @@ export const EDITOR_TOOLS: EditorTool[] = [
     mode: "either",
     status: "ready",
   },
-];
+] as const satisfies readonly EditorTool[];
+
+/** Literal union of every editor tool id — derived from `EDITOR_TOOLS` so it
+ *  can't drift. Feeds the app-wide `ToolId` (see `src/config/tool-registry.ts`). */
+export type EditorToolId = (typeof EDITOR_TOOLS)[number]["id"];
 
 export function findEditorTool(id: string | null): EditorTool | null {
   if (!id) return null;

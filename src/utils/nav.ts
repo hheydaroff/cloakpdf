@@ -11,7 +11,7 @@
  * deep-links into the PDF Password tool so users can unlock the file
  * and come back.
  */
-import type { ToolId } from "../types.ts";
+import type { ToolId } from "../config/tool-registry.ts";
 
 export const NAVIGATE_TOOL_EVENT = "cloakpdf:navigate-tool";
 

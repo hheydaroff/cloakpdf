@@ -156,40 +156,6 @@ export interface BatesNumberOptions {
   margin: number;
 }
 
-/**
- * Union of all valid tool identifiers — the 8 standalone home cards plus every
- * editor tool id (see `EDITOR_TOOLS` in `src/editor/tools.ts`). The home is
- * editor-first, so most ids route to the unified editor rather than a
- * standalone view; the six former cards that the editor fully absorbed
- * (split / extract-pages / reverse / remove-blank / pdf-to-image / contact-sheet)
- * are no longer ids of their own — they live inside the Export menu and Organize.
- */
-export type ToolId =
-  | "merge"
-  | "organize-pages"
-  | "compress"
-  | "images-to-pdf"
-  | "signature"
-  | "metadata"
-  | "ocr"
-  | "pdf-password"
-  | "flatten"
-  | "add-page-numbers"
-  | "header-footer"
-  | "crop-pages"
-  | "fill-pdf-form"
-  | "redact-pdf"
-  | "pdf-scrub"
-  | "stamp-pdf"
-  | "annotate-pdf"
-  | "add-bookmarks"
-  | "pdf-inspector"
-  | "repair-pdf"
-  | "nup-pages"
-  | "bates-numbering"
-  | "grayscale"
-  | "file-attachment"
-  | "extract-images"
-  | "compare-pdf"
-  | "digital-signature"
-  | "ask-pdf";
+// NOTE: `ToolId` is no longer hand-written here — it's derived from the tool
+// data (the home cards + the editor roster) in `src/config/tool-registry.ts`,
+// so it can never drift from the actual tool list. Import it from there.

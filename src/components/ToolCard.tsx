@@ -13,8 +13,9 @@
 
 import { ArrowRight, MemoryStick } from "lucide-react";
 import { memo } from "react";
+import type { ToolId } from "../config/tool-registry.ts";
 import { useSpotlightGlow } from "../hooks/useSpotlightGlow.ts";
-import type { Tool, ToolId } from "../types.ts";
+import type { Tool } from "../types.ts";
 
 const SPOTLIGHT_GLOW = "rgba(37,99,235,0.16)";
 

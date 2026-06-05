@@ -26,7 +26,8 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { lazy } from "react";
-import type { Tool, ToolId } from "../types.ts";
+import type { EditorToolId } from "../editor/tools.ts";
+import type { Tool } from "../types.ts";
 
 // ── Lazy-loaded tool components (code-split per tool) ────────────
 
@@ -41,7 +42,7 @@ const AskPdf = lazy(() => import("../standalone/AskPdf.tsx"));
 
 // ── Tool metadata ────────────────────────────────────────────────
 
-export const tools: Tool[] = [
+export const tools = [
   // ── Organise & Edit ──────────────────────────────────────
   {
     id: "merge",
@@ -142,7 +143,16 @@ export const tools: Tool[] = [
     desktopOnly: true,
     standaloneOnly: true, // on-device AI chat, not a PDF edit-and-export flow
   },
-];
+] as const satisfies readonly Tool[];
+
+/**
+ * Every valid tool identifier — derived from the data so it can't drift: the 8
+ * standalone home cards above plus every editor tool id (`EditorToolId`). Most
+ * ids route to the unified editor; only the `standaloneOnly` ones mount a
+ * standalone view. Replaces the hand-maintained union that used to live in
+ * `src/types.ts`.
+ */
+export type ToolId = (typeof tools)[number]["id"] | EditorToolId;
 
 // ── Map tool IDs → lazy-loaded components ────────────────────────
 

@@ -37,10 +37,11 @@ import {
   findToolComponent,
   HOME_CARD_TOOLS,
   tools,
+  type ToolId,
 } from "./config/tool-registry.ts";
 // Plain id set (no editor component graph) — safe on the home critical path.
 import { EDITOR_TOOL_IDS } from "./editor/tools.ts";
-import type { Tool, ToolId } from "./types.ts";
+import type { Tool } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
 import { NAVIGATE_TOOL_EVENT, OPEN_EDITOR_EVENT } from "./utils/nav.ts";
 // The canvas editor is the primary single-PDF surface (editor-first redesign).
