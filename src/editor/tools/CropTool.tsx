@@ -14,6 +14,7 @@ import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
 import { useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
+import { Labeled } from "./controls.tsx";
 import { Segmented, WholeDocPanel } from "./WholeDocPanel.tsx";
 
 const TOOL_ID = "crop-pages";
@@ -121,10 +122,7 @@ export function Panel() {
       disabled={!keep}
       onApply={apply}
     >
-      <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
-          Apply to
-        </p>
+      <Labeled label="Apply to">
         <Segmented
           value={scope}
           onChange={(v) => patchToolState(TOOL_ID, { scope: v })}
@@ -133,7 +131,7 @@ export function Panel() {
             { value: "page", label: "This page" },
           ]}
         />
-      </div>
+      </Labeled>
 
       <div className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
         {keep ? (

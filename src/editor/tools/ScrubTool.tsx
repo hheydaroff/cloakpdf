@@ -68,8 +68,10 @@ export function Panel() {
           Scanning for hidden data…
         </p>
       ) : total === 0 ? (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50 dark:bg-emerald-950/20 p-3 text-sm text-emerald-700 dark:text-emerald-300">
-          <ShieldCheck className="h-4 w-4 shrink-0" />
+        <div className="flex items-center gap-2 rounded-xl border border-primary-200 dark:border-primary-900/40 bg-primary-50 dark:bg-primary-900/20 p-3 text-sm text-primary-700 dark:text-primary-300">
+          {/* One-accent rule: info/success surfaces collapse to primary tints —
+              green survives only on the literal check glyph (see DESIGN.md). */}
+          <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-500" />
           No hidden data found — this document is already clean.
         </div>
       ) : (

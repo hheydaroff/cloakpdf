@@ -16,6 +16,7 @@ import { addSignature } from "../../utils/pdf-operations.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
 import { useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
+import { RangeField } from "./controls.tsx";
 
 const TOOL_ID = "signature";
 const DEFAULT_WIDTH_PCT = 0.28;
@@ -228,9 +229,11 @@ export function Panel() {
               type="button"
               onClick={() => patchToolState(TOOL_ID, { mode: m.id })}
               aria-pressed={on}
+              // Selected = solid primary fill, matching the rest of the editor's
+              // pick-one controls (Segmented / PositionGrid / Annotate's modes).
               className={`rounded-lg border px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                 on
-                  ? "border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                  ? "border-primary-600 bg-primary-600 text-white"
                   : "border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
               }`}
             >
@@ -275,22 +278,14 @@ export function Panel() {
         </div>
       )}
 
-      <label className="block">
-        <div className="mb-1 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-dark-text-muted">
-          <span>Size</span>
-          <span className="tabular-nums text-slate-700 dark:text-dark-text">
-            {Math.round(widthPct * 100)}%
-          </span>
-        </div>
-        <input
-          type="range"
-          min={10}
-          max={60}
-          value={Math.round(widthPct * 100)}
-          onChange={(e) => patchToolState(TOOL_ID, { widthPct: Number(e.target.value) / 100 })}
-          className="w-full accent-primary-600"
-        />
-      </label>
+      <RangeField
+        label="Size"
+        value={Math.round(widthPct * 100)}
+        min={10}
+        max={60}
+        suffix="%"
+        onChange={(v) => patchToolState(TOOL_ID, { widthPct: v / 100 })}
+      />
 
       <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
         {dataUrl

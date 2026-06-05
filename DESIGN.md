@@ -2,13 +2,19 @@
 name: CloakPDF — Ocean Blue
 description: >-
   A privacy-first PDF toolkit that feels calm, modern, and trustworthy.
-  Glassy chrome floats over a slow-drifting aurora; every interactive
+  Glassy chrome floats over a slow-drifting Grainient field; every interactive
   surface uses a single ocean-blue accent so the home screen reads as
   one quiet system rather than a colour-coded grid. Light and dark
   themes share identical structure, swapping only surface tones and
   blend modes.
 mode: light-and-dark
 colors:
+  # NOTE: this map is the design palette of record — not a 1:1 list of Tailwind
+  # utilities. Only the primary-*, slate-*, surface/page/border/text and dark-*
+  # entries are registered as @theme tokens in src/index.css. The status,
+  # glow-*, focus-ring, canvas-* and preset-* values are raw Tailwind shades
+  # (e.g. red-50/red-700) or JS constants in src/config/theme.ts; reference them
+  # there, not via a `bg-danger-bg`-style utility that doesn't exist.
   # ── Primary — "Ocean Blue" scale derived from #2563EB ─────────
   primary-50:  "#eff4ff"   # page tints, badge backgrounds
   primary-100: "#dbeafe"   # icon flap, primary tints
@@ -49,8 +55,10 @@ colors:
   text-muted:     "#64748b"
 
   # ── Dark surfaces & text ──────────────────────────────────────
-  dark-bg:           "#060912"   # body solid (deep navy-black)
-  dark-page-bg:      "#0f172a"   # page gradient endpoint
+  # Only dark-bg is registered in @theme. The dark page backdrop is the
+  # --page-bg gradient (src/index.css), which runs #0f172a → #060912 (deepest
+  # navy-black) — those two values live in that gradient, not as standalone tokens.
+  dark-bg:           "#0f172a"   # --color-dark-bg: solid dark surface (stage / inset bg)
   dark-surface:      "#1e293b"   # cards, header, footer
   dark-surface-alt:  "#334155"   # hover, icon tile bg
   dark-border:       "#334155"
@@ -69,24 +77,18 @@ colors:
   warning-text:  "#92400e"      # amber-800
   success:       "#22c55e"
 
-  # ── Aurora — six-blob ambient palette (drifting backdrop) ─────
-  aurora-blue:    "#2563eb"
-  aurora-violet:  "#7c3aed"
-  aurora-pink:    "#db2777"
-  aurora-orange:  "#ea580c"
-  aurora-cyan:    "#0891b2"
-  aurora-emerald: "#059669"
+  # ── Backdrop — <Grainient> WebGL shader (src/config/grainient.ts) ─────
+  # The drifting backdrop is a near-monochrome blue gradient field: 3 stops,
+  # warped + film-grained in a shader, saturation knocked down ~70% so the brand
+  # blue reads as a hint. These are JS constants (grainient.ts), not @theme
+  # tokens. The earlier six-blob multi-colour aurora was retired.
+  grainient-light: ["#DBEAFE", "#97bcf7", "#EFF4FF"]   # flank · ribbon · flank
+  grainient-dark:  ["#162236", "#3B82F6", "#0A1020"]   # flank · ribbon · flank
 
-  # ── "Why CloakPDF" feature accents (one chip per feature) ─────
-  feature-emerald: "#059669"    # No sign-up
-  feature-violet:  "#7c3aed"    # No tracking
-  feature-teal:    "#0d9488"    # Local-first
-  feature-cyan:    "#0891b2"    # Works offline
-  feature-orange:  "#ea580c"    # Installable
-  feature-yellow:  "#ca8a04"    # All-screens
-  feature-pink:    "#db2777"    # 35+ tools
-  feature-indigo:  "#4f46e5"    # Light & dark
-  feature-slate:   "#475569"    # Open source
+  # ── "Why CloakPDF" feature grid ───────────────────────────────
+  # No per-feature colour: every chip is monochrome (bg-primary-50 /
+  # text-primary-600), per the one-accent rule. FeatureItem in src/App.tsx is
+  # the source of truth; the earlier per-feature hue tokens were removed.
 
   # ── Spotlight glow used by ToolCard / WorkflowHero / DropZone ─
   glow-primary:    "rgba(37,99,235,0.16)"
@@ -287,33 +289,28 @@ motion:
     focus-ring-pulse: "ring 0 → 10px rgba(37,99,235,0.35 → 0)"
     error-pulse:    "ring 0 → 8px rgba(239,68,68,0.45 → 0), 2.5s infinite"
     warning-pulse:  "ring 0 → 8px rgba(245,158,11,0.45 → 0), 2.5s infinite"
-    aurora-morph:   "border-radius blob mutation, 17–22s ease-in-out infinite"
-    aurora-flow:    "translate(±60vw, ±70vh) + rotate(±290°) + scale(0.8–1.3), 44–62s linear infinite"
-    aurora-breathe: "opacity ×0.7 → ×1.3, 10–15s ease-in-out infinite"
+    grainient-warp: "continuous WebGL warp of the gradient field (time-speed 0.3, warp-speed 3); rAF-driven, pauses while the backdrop is hidden"
   reduced-motion: >-
-    Aurora animations halt; popover/fade/slide/error/warning pulses
-    drop to instant. Layout transitions still resolve in ≤200ms.
+    The Grainient warp is skipped (a single static frame paints instead);
+    popover/fade/slide/error/warning pulses drop to instant. Layout
+    transitions still resolve in ≤200ms.
   hover-lift:    "translateY(-2px) on cards / CTAs"
   hover-shift-x: "translateX(2px) on card titles + chevrons"
 
 effects:
-  aurora:
-    blob-count: 6
-    blob-blur:
-      desktop: "60px"
-      mobile:  "36px"
-    blob-opacity-base: "0.08"
-    blob-opacity-range: "0.056 – 0.104"
-    blend-mode-light: "multiply"
-    blend-mode-dark:  "screen"
-    grain-opacity-light: "0.045"
-    grain-opacity-dark:  "0.08"
-    grain-blend-light: "multiply"
-    grain-blend-dark:  "overlay"
-    mobile-mask: >-
-      vertical alpha mask fades blobs to transparent across the
-      bottom 200px so iOS Safari samples the slate page-bg
-      (not the blob hue) for its URL-bar tint.
+  grainient:                       # WebGL shader — src/config/grainient.ts + components/Grainient.tsx
+    stops: 3                       # two pale flanks around one brand-blue ribbon
+    palette-light: ["#DBEAFE", "#97bcf7", "#EFF4FF"]
+    palette-dark:  ["#162236", "#3B82F6", "#0A1020"]
+    saturation: 0.3                # chroma pulled down ~70%
+    time-speed: 0.3
+    warp-speed: 3
+    grain: "film-grain overlay baked into the shader"
+    pauses: "rAF loop halts while the backdrop is hidden (e.g. inside the editor)"
+    reduced-motion: "loop skipped — a single static frame is painted"
+    url-bar-tint: >-
+      the page-bg underlay (not the shader) seats a faint blue radial where iOS
+      Safari samples the viewport, so its URL bar tints to a calm near-grey.
   spotlight:
     radius: "320px"     # ToolCard
     radius-hero: "420px" # WorkflowHero
@@ -505,7 +502,7 @@ grid:
 
 a11y:
   focus-ring: "2px primary-600 outline + rgba(37,99,235,0.18) glow"
-  reduced-motion: "honoured for fade/slide/scale/aurora/error+warning pulses"
+  reduced-motion: "honoured for fade/slide/scale/Grainient-warp/error+warning pulses"
   contrast: >-
     Slate-500 on white passes AA for body sizes; slate-800 on white
     and primary-600 on primary-50 both pass AA for headings.
@@ -541,26 +538,28 @@ inside the shield: that's the whole privacy thesis in one mark.
 
 ## Look & Feel
 
-The page never sits on a flat colour. A six-blob **aurora** drifts
-beneath all chrome — blue, violet, pink, orange, cyan, emerald —
-each blob blurred to 60px on desktop, 36px on mobile, breathing
-between 5.6 % and 10.4 % opacity. Light mode mixes the aurora into
-the background with `multiply`; dark mode flips to `screen` so the
-blobs glow rather than tint. A static SVG fractal-noise grain sits
-over the blobs at 4–8 % opacity — kills the "CSS gradient" tell and
-gives surfaces a faint paper texture.
+The page never sits on a flat colour. A slow-drifting **Grainient**
+field sits beneath all chrome — a near-monochrome blue gradient (three
+stops: two pale flanks around one brand-blue ribbon) warped continuously
+in a WebGL shader, with a film-grain overlay that kills the "CSS
+gradient" tell. Saturation is pulled down ~70 % so the blue reads as a
+hint, not a wall, and translucent panels over it still pick up tint
+through `backdrop-blur`. Light mode keeps the flanks near-white; dark
+mode drops them to deep navy-black so the ribbon glows. Palette + motion
+live in `src/config/grainient.ts`; the component is
+`src/components/Grainient.tsx`.
 
-The aurora is the only place the system uses the full six-colour
-palette. Everything *interactive* — buttons, focus rings, hover
-borders, spotlight glows, the workflow badge — collapses to a single
-ocean-blue accent. The contrast between the multi-coloured ambient
-backdrop and the monochromatic UI is the design's signature move:
-the colour energy lives behind the glass, not on the controls.
+The backdrop is the only chromatic energy in the system. Everything
+*interactive* — buttons, focus rings, hover borders, spotlight glows,
+the workflow badge — collapses to a single ocean-blue accent. The
+contrast between the ambient field behind the glass and the monochromatic
+UI on top is the design's signature move: the colour energy lives behind
+the glass, not on the controls.
 
-A vertical alpha mask fades the aurora to transparent across the
-bottom 200 px on mobile so iOS Safari samples the slate page-bg
-(not a blob hue) for its URL-bar tint. This is the kind of
-invisible discipline the product runs on.
+The page-bg underlay (`src/index.css`) seats a faint blue radial where
+iOS Safari samples the viewport for its URL-bar tint, so a vivid icon
+scrolling into that zone mixes to a calm near-grey instead of saturating
+the bar — the kind of invisible discipline the product runs on.
 
 ## Colour
 
@@ -583,12 +582,11 @@ deepest readable colour is slate-800.
   surface anywhere in the UI except the literal Lucide check
   glyph.
 
-The "**Why CloakPDF**" feature grid is the one place per-feature
-colour is allowed: nine 40 px icon chips each at
-`color-mix(<hue> 14%, transparent)` — emerald, violet, teal, cyan,
-orange, yellow, pink, indigo, slate. They appear *once*, low on
-the home page, after the entire monochromatic tool grid has
-already established the calm tone.
+The "**Why CloakPDF**" feature grid holds the one-accent line too: its
+icon chips are monochrome (`bg-primary-50` / `text-primary-600`), the
+same tint as every other surface. (An earlier draft gave each feature
+its own hue; that was dropped — `FeatureItem` in `src/App.tsx` renders
+them all in primary.)
 
 Dark mode keeps the same structural decisions and swaps surfaces
 for slate-900 family + dark-text. Borders shift from solid slate to
@@ -622,7 +620,7 @@ Hierarchy:
   jiggle as content updates.
 
 Antialiasing is on (`-webkit-font-smoothing: antialiased`) so the
-geometric sans stays crisp against the blurred aurora.
+geometric sans stays crisp against the blurred Grainient field.
 
 ## Spacing & Rhythm
 
@@ -668,11 +666,11 @@ it is not licence to add dividers inside ordinary content cards.
 
 The system layers in three planes:
 
-1. **Aurora + grain** — z-index 0/1, fixed, drifts under
+1. **Grainient field + grain** — z-index 0/1, fixed, drifts under
    everything else.
 2. **Page chrome** — sticky header at z-50, footer, and
    the centred main column. Header uses
-   `bg-white/80 backdrop-blur-xl` so the aurora reads through it
+   `bg-white/80 backdrop-blur-xl` so the field reads through it
    as a frosted band.
 3. **Surfaces & overlays** — cards (white, 1 px slate border, no
    shadow at rest), modals (white/85 + 14 px backdrop-blur, scaled
@@ -701,9 +699,9 @@ Two **looping pulses** carry status:
   used on the only true error surface (`AlertBox`).
 - `warning-pulse` — same shape, amber, used on warning callouts.
 
-Both honour `prefers-reduced-motion` and pause completely; aurora,
-fade-in-up, scale-in, and popover-in animations also collapse to
-instant under the same media query.
+Both honour `prefers-reduced-motion` and pause completely; the
+Grainient warp, fade-in-up, scale-in, and popover-in animations also
+collapse to instant (or a single static frame) under the same media query.
 
 A scale-in modal entry uses the slight overshoot easing
 `cubic-bezier(0.34, 1.56, 0.64, 1)` so confirmations feel
@@ -773,7 +771,7 @@ cuts pointer events.
 The single hardest decision in this system is *not* using
 per-category colour. Every design that splits 35 tools by domain
 ends up looking like a control panel; the unified ocean-blue
-accent reads as one calm app instead. The aurora absorbs the
+accent reads as one calm app instead. The Grainient field absorbs the
 chromatic energy; the chrome stays monochromatic; the user's eye
 follows hierarchy and motion, not hue.
 

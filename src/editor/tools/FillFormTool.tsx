@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { fillPdfForm, getFieldPageIndices } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
-import { Toggle } from "./controls.tsx";
+import { Labeled, Toggle } from "./controls.tsx";
 
 type FieldType = "text" | "checkbox" | "dropdown" | "radio";
 
@@ -131,10 +131,7 @@ export function Panel() {
       {fields.map((f) => {
         const v = values[f.name];
         return (
-          <div key={f.name}>
-            <span className="mb-1 block truncate text-xs font-medium text-slate-500 dark:text-dark-text-muted">
-              {f.name}
-            </span>
+          <Labeled key={f.name} label={f.name}>
             {f.type === "text" && f.multiline ? (
               <textarea
                 rows={3}
@@ -173,7 +170,7 @@ export function Panel() {
                 ))}
               </select>
             )}
-          </div>
+          </Labeled>
         );
       })}
 

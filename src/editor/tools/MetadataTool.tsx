@@ -9,6 +9,7 @@ import { getPdfMetadata, setPdfMetadata } from "../../utils/pdf-operations.ts";
 import type { PdfMetadata } from "../../types.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import { Labeled, TextField } from "./controls.tsx";
 
 function DateField({
   label,
@@ -20,12 +21,9 @@ function DateField({
   onChange: (v: string) => void;
 }) {
   return (
-    <div>
-      <span className="mb-1 block text-xs font-medium text-slate-500 dark:text-dark-text-muted">
-        {label}
-      </span>
+    <Labeled label={label}>
       <DateTimeInput value={value} onChange={onChange} />
-    </div>
+    </Labeled>
   );
 }
 
@@ -48,32 +46,6 @@ const TEXT_FIELDS: { key: keyof PdfMetadata; label: string }[] = [
   { key: "creator", label: "Creator" },
   { key: "producer", label: "Producer" },
 ];
-
-function Field({
-  label,
-  value,
-  onChange,
-  type = "text",
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-slate-500 dark:text-dark-text-muted">
-        {label}
-      </span>
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-      />
-    </label>
-  );
-}
 
 export function Panel() {
   const { doc, busyLabel } = useEditorRead();
@@ -118,7 +90,12 @@ export function Panel() {
         Edit the document properties, or clear them all to strip identifying metadata.
       </p>
       {TEXT_FIELDS.map((f) => (
-        <Field key={f.key} label={f.label} value={fields[f.key]} onChange={(v) => set(f.key, v)} />
+        <TextField
+          key={f.key}
+          label={f.label}
+          value={fields[f.key]}
+          onChange={(v) => set(f.key, v)}
+        />
       ))}
       <div className="grid grid-cols-2 gap-2">
         <DateField

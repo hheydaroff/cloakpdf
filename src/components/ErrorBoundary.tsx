@@ -84,9 +84,10 @@ export class ErrorBoundary extends Component<Props, State> {
     )}&body=${encodeURIComponent(issueBody)}`;
 
     return (
-      <div className="min-h-screen bg-linear-to-br from-slate-50 via-white to-primary-50/40 dark:from-dark-bg dark:via-dark-bg dark:to-dark-surface/60 flex flex-col">
-        {/* Header — mirrors Layout.tsx so users stay oriented even mid-crash */}
-        <header className="bg-white/85 dark:bg-dark-surface/85 backdrop-blur-md border-b border-slate-200/80 dark:border-dark-border sticky top-0 z-50 shadow-sm shadow-slate-100/50 dark:shadow-black/20">
+      <div className="min-h-screen flex flex-col" style={{ background: "var(--page-bg)" }}>
+        {/* Header — mirrors Layout.tsx so users stay oriented even mid-crash:
+            border-b hairline + backdrop-blur, no resting shadow (DESIGN.md #2). */}
+        <header className="bg-white/85 dark:bg-dark-surface/85 backdrop-blur-md border-b border-slate-200/80 dark:border-dark-border sticky top-0 z-50">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
             <button
               type="button"
@@ -232,7 +233,7 @@ export class ErrorBoundary extends Component<Props, State> {
           </div>
         </main>
 
-        <footer className="border-t border-slate-200/60 dark:border-dark-border bg-linear-to-b from-white/60 to-slate-50/80 dark:from-dark-surface/60 dark:to-dark-bg/80">
+        <footer className="border-t border-slate-200/60 dark:border-dark-border">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-center gap-2 flex-wrap text-tag text-slate-400 dark:text-dark-text-muted">
             <span>© {new Date().getFullYear()} CloakPDF by Sumit Sahoo</span>
             <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">

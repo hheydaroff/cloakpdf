@@ -14,6 +14,7 @@ import { annotatePdf } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
 import { useStageProps } from "../stage.tsx";
+import { Labeled } from "./controls.tsx";
 
 const TOOL_ID = "annotate-pdf";
 const DEFAULT_HEX = "#1e293b";
@@ -201,10 +202,7 @@ export function Panel() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
-          Tool
-        </p>
+      <Labeled label="Tool">
         <div className="grid grid-cols-3 gap-1.5">
           {modes.map((m) => {
             const Icon = m.icon;
@@ -215,9 +213,11 @@ export function Panel() {
                 type="button"
                 onClick={() => patchToolState(TOOL_ID, { mode: m.id })}
                 aria-pressed={on}
+                // Selected = solid primary fill, matching Segmented / PositionGrid
+                // / the density toggle — one selected look across every pick-one.
                 className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   on
-                    ? "border-primary-400 bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
+                    ? "border-primary-600 bg-primary-600 text-white"
                     : "border-slate-200 dark:border-dark-border text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
                 }`}
               >
@@ -227,7 +227,7 @@ export function Panel() {
             );
           })}
         </div>
-      </div>
+      </Labeled>
 
       <ColorPicker
         value={colorHex}

@@ -244,28 +244,38 @@ export function Grainient({
     ro.observe(container);
     setSize();
 
+    // Honour prefers-reduced-motion: setSize() above already painted one
+    // static frame, so we simply skip the continuous warp loop — the backdrop
+    // stays (calm, still) instead of drifting.
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     let raf = 0;
-    const t0 = performance.now();
-    // Accumulated time spent in the paused state. Subtracted from the
-    // wall-clock elapsed when computing `iTime` so the shader doesn't
-    // see a discontinuous jump when the user returns to the home view
-    // — the warp picks up exactly where it left off.
-    let pausedAccum = 0;
-    let pauseStartedAt = 0;
-    const loop = (t: number) => {
-      if (pausedRef.current) {
-        if (pauseStartedAt === 0) pauseStartedAt = t;
-      } else {
-        if (pauseStartedAt !== 0) {
-          pausedAccum += t - pauseStartedAt;
-          pauseStartedAt = 0;
+    if (!reduceMotion) {
+      const t0 = performance.now();
+      // Accumulated time spent in the paused state. Subtracted from the
+      // wall-clock elapsed when computing `iTime` so the shader doesn't
+      // see a discontinuous jump when the user returns to the home view
+      // — the warp picks up exactly where it left off.
+      let pausedAccum = 0;
+      let pauseStartedAt = 0;
+      const loop = (t: number) => {
+        if (pausedRef.current) {
+          if (pauseStartedAt === 0) pauseStartedAt = t;
+        } else {
+          if (pauseStartedAt !== 0) {
+            pausedAccum += t - pauseStartedAt;
+            pauseStartedAt = 0;
+          }
+          program.uniforms.iTime.value = (t - t0 - pausedAccum) * 0.001;
+          renderer.render({ scene: mesh });
         }
-        program.uniforms.iTime.value = (t - t0 - pausedAccum) * 0.001;
-        renderer.render({ scene: mesh });
-      }
+        raf = requestAnimationFrame(loop);
+      };
       raf = requestAnimationFrame(loop);
-    };
-    raf = requestAnimationFrame(loop);
+    }
 
     return () => {
       cancelAnimationFrame(raf);
