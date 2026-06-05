@@ -4,8 +4,12 @@
 // (compress / grayscale / flatten / repair) that used to live on the tool rail
 // — they're terminal outputs, not edit steps, so they belong with Export.
 //
-//   Save as:           PDF · Images (.zip) · Contact sheet · Split (.zip)
-//   Convert & export:  Compress (quality) · Grayscale · Flatten · Repair
+// One decision, then one button:
+//   Format (pick one):  PDF · Images (.zip) · Contact sheet · Split (.zip)
+//   Options (PDF only):  Compress (quality) · Grayscale · Flatten · Repair
+//                        — independent switches, applied in a fixed, sensible
+//                        order (flatten → grayscale → compress → repair) when
+//                        you hit Download.
 //
 // Long-running ops run under the editor's busy overlay via `runTask` (no history
 // commit — exports never mutate the working doc). The modal mirrors the app's
@@ -14,13 +18,14 @@
 
 import {
   Archive,
-  ChevronDown,
+  Check,
   Contrast,
+  Download,
   FileText,
   Image as ImageIcon,
   Layers,
-  LayoutGrid,
   type LucideIcon,
+  LayoutGrid,
   Scissors,
   Wrench,
   X,
@@ -44,6 +49,7 @@ import { Segmented } from "./panels/WholeDocPanel.tsx";
 const IMAGE_DPI = 150;
 
 type Quality = "low" | "medium" | "high";
+type Format = "pdf" | "images" | "contact" | "split";
 
 const COMPRESS_INFO: Record<Quality, string> = {
   low: "Sharpest pages, modest size drop (1× render, JPEG 85%).",
@@ -51,35 +57,135 @@ const COMPRESS_INFO: Record<Quality, string> = {
   high: "Smallest file, softest pages (2× render, JPEG 50%).",
 };
 
-/** One export option: an icon chip + label + hint, full-width clickable row. */
-function ExportRow({
+const FORMATS: { value: Format; icon: LucideIcon; label: string; hint: string }[] = [
+  { value: "pdf", icon: FileText, label: "PDF", hint: "The edited document" },
+  { value: "images", icon: ImageIcon, label: "Images (.zip)", hint: "Each page as PNG" },
+  { value: "contact", icon: LayoutGrid, label: "Contact sheet", hint: "3×3 overview PDF" },
+  { value: "split", icon: Scissors, label: "Split pages (.zip)", hint: "One PDF per page" },
+];
+
+/** Selectable output-format card (single choice — radio semantics). */
+function FormatCard({
   icon: Icon,
   label,
   hint,
-  onClick,
+  selected,
+  onSelect,
 }: {
   icon: LucideIcon;
   label: string;
   hint: string;
-  onClick: () => void;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
+      role="radio"
+      aria-checked={selected}
       aria-label={label}
-      className="flex w-full items-center gap-3 rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-3 py-2.5 text-left transition-colors hover:border-primary-300 hover:bg-slate-50 dark:hover:border-primary-700 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+      onClick={onSelect}
+      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+        selected
+          ? "border-primary-500 bg-primary-50 ring-1 ring-primary-500 dark:border-primary-500 dark:bg-primary-900/20"
+          : "border-slate-200 bg-white hover:border-primary-300 hover:bg-slate-50 dark:border-dark-border dark:bg-dark-surface dark:hover:border-primary-700 dark:hover:bg-dark-surface-alt"
+      }`}
     >
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+          selected
+            ? "bg-primary-600 text-white"
+            : "bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400"
+        }`}
+      >
         <Icon className="h-5 w-5" />
       </span>
-      <span className="min-w-0">
+      <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold text-slate-800 dark:text-dark-text">
           {label}
         </span>
-        <span className="block text-xs text-slate-500 dark:text-dark-text-muted">{hint}</span>
+        <span className="block truncate text-xs text-slate-500 dark:text-dark-text-muted">
+          {hint}
+        </span>
       </span>
+      {selected && <Check className="h-4 w-4 shrink-0 text-primary-600 dark:text-primary-400" />}
     </button>
+  );
+}
+
+/** Accessible on/off switch. */
+function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
+        checked ? "bg-primary-600" : "bg-slate-300 dark:bg-dark-border"
+      }`}
+    >
+      <span
+        className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-5" : "translate-x-0"
+        }`}
+      />
+    </button>
+  );
+}
+
+/** A toggleable convert option: icon + label + hint + switch, with optional
+ *  detail (e.g. compress quality) revealed below when the switch is on. */
+function OptionRow({
+  icon: Icon,
+  label,
+  hint,
+  checked,
+  onChange,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`rounded-xl border transition-colors ${
+        checked
+          ? "border-primary-300 bg-primary-50/40 dark:border-primary-700 dark:bg-primary-900/10"
+          : "border-slate-200 bg-white dark:border-dark-border dark:bg-dark-surface"
+      }`}
+    >
+      <div className="flex items-center gap-3 p-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400">
+          <Icon className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-slate-800 dark:text-dark-text">
+            {label}
+          </span>
+          <span className="block text-xs text-slate-500 dark:text-dark-text-muted">{hint}</span>
+        </span>
+        <Switch checked={checked} onChange={onChange} label={label} />
+      </div>
+      {checked && children && (
+        <div className="border-t border-slate-200/70 px-3 py-3 dark:border-dark-border">
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -95,7 +201,15 @@ export function ExportButton() {
   const { doc, busyLabel } = useEditorRead();
   const { runTask } = useEditorActions();
   const [open, setOpen] = useState(false);
+
+  // Output selection + modifiers. Modifiers only apply to a PDF output.
+  const [format, setFormat] = useState<Format>("pdf");
+  const [compress, setCompress] = useState(false);
   const [quality, setQuality] = useState<Quality>("medium");
+  const [grayscale, setGrayscale] = useState(false);
+  const [flatten, setFlatten] = useState(false);
+  const [repair, setRepair] = useState(false);
+
   const busy = busyLabel !== null;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -117,90 +231,93 @@ export function ExportButton() {
 
   const baseName = doc ? doc.fileName.replace(/\.pdf$/i, "") : "document";
 
-  // Run an op then close the modal. Each op reads the LIVE bytes and downloads;
-  // none mutate the working doc (exports are terminal).
-  const run = useCallback((fn: () => void | Promise<void>) => {
+  // Build the final PDF by applying the enabled modifiers in a fixed order:
+  // flatten (bake vectors) → grayscale → compress (rasterise) → repair (clean up).
+  // Each op takes a File and returns bytes, so we re-wrap between steps.
+  const buildPdf = useCallback(async (): Promise<{ bytes: Uint8Array; suffix: string }> => {
+    if (!doc) throw new Error("No document");
+    const tags: string[] = [];
+    let file = docToFile(doc);
+    let bytes = doc.bytes;
+    const next = (b: Uint8Array) => {
+      bytes = b;
+      file = new File([b as Uint8Array<ArrayBuffer>], doc.fileName, { type: "application/pdf" });
+    };
+    if (flatten) {
+      next(await flattenPdf(file));
+      tags.push("flattened");
+    }
+    if (grayscale) {
+      next(await grayscalePdf(file));
+      tags.push("grayscale");
+    }
+    if (compress) {
+      next(await compressPdf(file, quality));
+      tags.push("compressed");
+    }
+    if (repair) {
+      next(await repairPdf(file));
+      tags.push("repaired");
+    }
+    return { bytes, suffix: tags.length ? `_${tags.join("-")}` : "_edited" };
+  }, [doc, flatten, grayscale, compress, repair, quality]);
+
+  const handleDownload = useCallback(() => {
+    if (!doc) return;
     setOpen(false);
-    void fn();
-  }, []);
 
-  const exportPdf = useCallback(() => {
-    if (!doc) return;
-    downloadPdf(doc.bytes, pdfFilename(doc.fileName, "_edited"));
-  }, [doc]);
-
-  const exportImages = useCallback(() => {
-    if (!doc) return;
-    void runTask("Rendering images…", async () => {
-      const file = docToFile(doc);
-      const indices = Array.from({ length: doc.pageCount }, (_, i) => i);
-      const rendered = await renderPagesToBlobs(file, indices, IMAGE_DPI, "image/png");
-      if (rendered.length === 1) {
-        downloadBlob(rendered[0].blob, `${baseName}.png`);
-        return;
-      }
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-      for (const { pageIndex, blob } of rendered) {
-        zip.file(`${baseName}_p${String(pageIndex + 1).padStart(3, "0")}.png`, blob);
-      }
-      downloadBlob(await zip.generateAsync({ type: "blob" }), `${baseName}_images.zip`);
-    });
-  }, [doc, baseName, runTask]);
-
-  const exportContactSheet = useCallback(() => {
-    if (!doc) return;
-    void runTask("Building contact sheet…", async () => {
-      const bytes = await nupPages(docToFile(doc), "3x3");
-      downloadPdf(bytes, pdfFilename(doc.fileName, "_contact-sheet"));
-    });
-  }, [doc, runTask]);
-
-  const exportSplit = useCallback(() => {
-    if (!doc) return;
-    void runTask("Splitting pages…", async () => {
-      const parts = Array.from({ length: doc.pageCount }, (_, i) => [i]);
-      const pdfs = await splitPdfIntoParts(docToFile(doc), parts);
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-      pdfs.forEach((bytes, i) => {
-        zip.file(`${baseName}_p${String(i + 1).padStart(3, "0")}.pdf`, bytes);
+    if (format === "images") {
+      void runTask("Rendering images…", async () => {
+        const indices = Array.from({ length: doc.pageCount }, (_, i) => i);
+        const rendered = await renderPagesToBlobs(docToFile(doc), indices, IMAGE_DPI, "image/png");
+        if (rendered.length === 1) {
+          downloadBlob(rendered[0].blob, `${baseName}.png`);
+          return;
+        }
+        const JSZip = (await import("jszip")).default;
+        const zip = new JSZip();
+        for (const { pageIndex, blob } of rendered) {
+          zip.file(`${baseName}_p${String(pageIndex + 1).padStart(3, "0")}.png`, blob);
+        }
+        downloadBlob(await zip.generateAsync({ type: "blob" }), `${baseName}_images.zip`);
       });
-      downloadBlob(await zip.generateAsync({ type: "blob" }), `${baseName}_pages.zip`);
-    });
-  }, [doc, baseName, runTask]);
+      return;
+    }
 
-  const exportCompressed = useCallback(() => {
-    if (!doc) return;
-    void runTask("Compressing…", async () => {
-      const bytes = await compressPdf(docToFile(doc), quality);
-      downloadPdf(bytes, pdfFilename(doc.fileName, "_compressed"));
-    });
-  }, [doc, quality, runTask]);
+    if (format === "contact") {
+      void runTask("Building contact sheet…", async () => {
+        const bytes = await nupPages(docToFile(doc), "3x3");
+        downloadPdf(bytes, pdfFilename(doc.fileName, "_contact-sheet"));
+      });
+      return;
+    }
 
-  const exportGrayscale = useCallback(() => {
-    if (!doc) return;
-    void runTask("Converting to grayscale…", async () => {
-      const bytes = await grayscalePdf(docToFile(doc));
-      downloadPdf(bytes, pdfFilename(doc.fileName, "_grayscale"));
-    });
-  }, [doc, runTask]);
+    if (format === "split") {
+      void runTask("Splitting pages…", async () => {
+        const parts = Array.from({ length: doc.pageCount }, (_, i) => [i]);
+        const pdfs = await splitPdfIntoParts(docToFile(doc), parts);
+        const JSZip = (await import("jszip")).default;
+        const zip = new JSZip();
+        pdfs.forEach((bytes, i) => {
+          zip.file(`${baseName}_p${String(i + 1).padStart(3, "0")}.pdf`, bytes);
+        });
+        downloadBlob(await zip.generateAsync({ type: "blob" }), `${baseName}_pages.zip`);
+      });
+      return;
+    }
 
-  const exportFlattened = useCallback(() => {
-    if (!doc) return;
-    void runTask("Flattening…", async () => {
-      const bytes = await flattenPdf(docToFile(doc));
-      downloadPdf(bytes, pdfFilename(doc.fileName, "_flattened"));
+    // PDF — fast path when no modifiers are on (no overlay flash).
+    if (!(compress || grayscale || flatten || repair)) {
+      downloadPdf(doc.bytes, pdfFilename(doc.fileName, "_edited"));
+      return;
+    }
+    void runTask("Exporting…", async () => {
+      const { bytes, suffix } = await buildPdf();
+      downloadPdf(bytes, pdfFilename(doc.fileName, suffix));
     });
-  }, [doc, runTask]);
+  }, [doc, format, compress, grayscale, flatten, repair, baseName, runTask, buildPdf]);
 
-  const exportRepaired = useCallback(() => {
-    if (!doc) return;
-    void runTask("Repairing…", async () => {
-      const bytes = await repairPdf(docToFile(doc));
-      downloadPdf(bytes, pdfFilename(doc.fileName, "_repaired"));
-    });
-  }, [doc, runTask]);
+  const isPdf = format === "pdf";
 
   return (
     <>
@@ -211,8 +328,8 @@ export function ExportButton() {
         aria-haspopup="dialog"
         className="ml-1 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
       >
+        <Download className="h-4 w-4" />
         <span className="hidden sm:inline">Export</span>
-        <ChevronDown className="h-4 w-4" />
       </button>
 
       {open &&
@@ -255,56 +372,37 @@ export function ExportButton() {
               </div>
 
               {/* Body */}
-              <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 pb-[max(env(safe-area-inset-bottom),1rem)]">
+              <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
                 <div className="flex flex-col gap-2">
-                  <SectionLabel>Save as</SectionLabel>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <ExportRow
-                      icon={FileText}
-                      label="PDF"
-                      hint="The edited document"
-                      onClick={() => run(exportPdf)}
-                    />
-                    <ExportRow
-                      icon={ImageIcon}
-                      label="Images (.zip)"
-                      hint="Each page as PNG"
-                      onClick={() => run(exportImages)}
-                    />
-                    <ExportRow
-                      icon={LayoutGrid}
-                      label="Contact sheet"
-                      hint="3×3 overview PDF"
-                      onClick={() => run(exportContactSheet)}
-                    />
-                    <ExportRow
-                      icon={Scissors}
-                      label="Split pages (.zip)"
-                      hint="One PDF per page"
-                      onClick={() => run(exportSplit)}
-                    />
+                  <SectionLabel>Format</SectionLabel>
+                  <div
+                    role="radiogroup"
+                    aria-label="Export format"
+                    className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                  >
+                    {FORMATS.map((f) => (
+                      <FormatCard
+                        key={f.value}
+                        icon={f.icon}
+                        label={f.label}
+                        hint={f.hint}
+                        selected={format === f.value}
+                        onSelect={() => setFormat(f.value)}
+                      />
+                    ))}
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <SectionLabel>Convert &amp; export</SectionLabel>
-
-                  {/* Compress carries a quality choice, so it's a small block. */}
-                  <div className="rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface p-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 dark:bg-primary-900/20 dark:text-primary-400">
-                        <Archive className="h-5 w-5" />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-slate-800 dark:text-dark-text">
-                          Compress
-                        </span>
-                        <span className="block text-xs text-slate-500 dark:text-dark-text-muted">
-                          Shrink by re-rendering pages as images
-                        </span>
-                      </span>
-                    </div>
-                    <div className="mt-3">
+                {isPdf && (
+                  <div className="flex flex-col gap-2">
+                    <SectionLabel>Options</SectionLabel>
+                    <OptionRow
+                      icon={Archive}
+                      label="Compress"
+                      hint="Shrink by re-rendering pages as images"
+                      checked={compress}
+                      onChange={setCompress}
+                    >
                       <Segmented
                         value={quality}
                         onChange={setQuality}
@@ -314,40 +412,46 @@ export function ExportButton() {
                           { value: "high", label: "Max", sub: "Smallest" },
                         ]}
                       />
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500 dark:text-dark-text-muted">
-                      {COMPRESS_INFO[quality]}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => run(exportCompressed)}
-                      className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-                    >
-                      Compress &amp; download
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <ExportRow
+                      <p className="mt-2 text-xs text-slate-500 dark:text-dark-text-muted">
+                        {COMPRESS_INFO[quality]}
+                      </p>
+                    </OptionRow>
+                    <OptionRow
                       icon={Contrast}
                       label="Grayscale"
                       hint="Remove all colour"
-                      onClick={() => run(exportGrayscale)}
+                      checked={grayscale}
+                      onChange={setGrayscale}
                     />
-                    <ExportRow
+                    <OptionRow
                       icon={Layers}
                       label="Flatten"
                       hint="Bake in forms & annotations"
-                      onClick={() => run(exportFlattened)}
+                      checked={flatten}
+                      onChange={setFlatten}
                     />
-                    <ExportRow
+                    <OptionRow
                       icon={Wrench}
                       label="Repair"
                       hint="Rebuild the file structure"
-                      onClick={() => run(exportRepaired)}
+                      checked={repair}
+                      onChange={setRepair}
                     />
                   </div>
-                </div>
+                )}
+              </div>
+
+              {/* Footer — the single action. */}
+              <div className="shrink-0 border-t border-slate-200/70 px-4 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] dark:border-dark-border">
+                <button
+                  type="button"
+                  onClick={handleDownload}
+                  disabled={!doc || busy}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </button>
               </div>
             </div>
           </div>,

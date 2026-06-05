@@ -321,22 +321,22 @@ async function main() {
     await waitForText(page, /No files attached yet|Reading attachments/i, 10_000);
     console.log("  ✓ attachments panel loads");
 
-    // 13b. Export modal: open it, run a real "Contact sheet" export (runTask →
-    //      nupPages → download), and a "Grayscale" convert-export (the ops moved
-    //      off the rail), asserting PDFs land in the download dir.
+    // 13b. Export modal: pick a format / toggle a convert option, then hit the
+    //      single Download button. Contact sheet (runTask → nupPages) and a PDF
+    //      Grayscale convert (rasterise) both land PDFs in the download dir.
     if (!(await clickByText(page, "Export"))) fail("Export button not found.");
-    await waitForText(page, /Convert & export/i, 5_000); // modal open
-    const csItem = await page.$('button[aria-label="Contact sheet"]');
-    if (!csItem) fail("Contact-sheet export item not found.");
-    await csItem.click();
-    const dl = await waitForFile(downloadDir, /\.pdf$/i, 60_000);
+    await page.waitForSelector('button[aria-label="Contact sheet"]', { timeout: 5_000 }); // modal open
+    await page.click('button[aria-label="Contact sheet"]'); // select format
+    if (!(await clickByText(page, "Download"))) fail("Download button not found.");
+    const dl = await waitForFile(downloadDir, /_contact-sheet\.pdf$/i, 60_000);
     console.log(`  ✓ export modal · contact sheet → ${dl}`);
 
     if (!(await clickByText(page, "Export"))) fail("Export button not found (2nd open).");
-    await waitForText(page, /Convert & export/i, 5_000);
-    const grayItem = await page.$('button[aria-label="Grayscale"]');
-    if (!grayItem) fail("Grayscale export item not found.");
-    await grayItem.click();
+    await page.waitForSelector('button[aria-label="PDF"]', { timeout: 5_000 });
+    await page.click('button[aria-label="PDF"]'); // back to PDF so options show
+    await page.waitForSelector('button[aria-label="Grayscale"]', { timeout: 5_000 });
+    await page.click('button[aria-label="Grayscale"]'); // toggle the switch on
+    if (!(await clickByText(page, "Download"))) fail("Download button not found (2nd).");
     const dl2 = await waitForFile(downloadDir, /_grayscale\.pdf$/i, 60_000);
     console.log(`  ✓ export modal · grayscale → ${dl2}`);
 
