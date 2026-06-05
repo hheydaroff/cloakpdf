@@ -131,7 +131,7 @@ export function Panel() {
       {fields.map((f) => {
         const v = values[f.name];
         return (
-          <Labeled key={f.name} label={f.name}>
+          <Labeled key={f.name} label={f.name} normalCase>
             {f.type === "text" && f.multiline ? (
               <textarea
                 rows={3}

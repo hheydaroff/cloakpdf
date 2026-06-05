@@ -8,7 +8,15 @@
  * regress, since `getForm().flatten()` alone leaves non-widget annotations
  * (comments, highlights, links) on the page.
  */
-import { PDFDocument, PDFDict, PDFName, PDFRawStream, PDFString, degrees } from "@pdfme/pdf-lib";
+import {
+  PDFDocument,
+  PDFDict,
+  PDFName,
+  PDFRawStream,
+  PDFString,
+  degrees,
+  rgb,
+} from "@pdfme/pdf-lib";
 import { describe, expect, it } from "vitest";
 import {
   analyzePdfHiddenData,
@@ -16,6 +24,7 @@ import {
   assemblePdf,
   flattenPdf,
   listPdfAttachments,
+  nupPages,
   scrubPdf,
 } from "../../src/utils/pdf-operations.ts";
 
@@ -269,6 +278,43 @@ describe("assemblePdf", () => {
 
   it("rejects an empty plan", async () => {
     await expect(assemblePdf([], [])).rejects.toThrow();
+  });
+});
+
+/** Like makeSizedPdf but each page carries a drawn rectangle, so the page has a
+ *  content stream and can be embedded (nupPages embeds every source page). */
+async function makeContentPdf(sizes: [number, number][]): Promise<Uint8Array> {
+  const doc = await PDFDocument.create({ updateMetadata: false });
+  for (const [w, h] of sizes) {
+    doc
+      .addPage([w, h])
+      .drawRectangle({ x: 0, y: 0, width: w, height: h, color: rgb(0.9, 0.9, 0.9) });
+  }
+  return doc.save();
+}
+
+describe("nupPages", () => {
+  it("packs pages onto sheets the size of page 1, with the right sheet count", async () => {
+    // 5 pages, 2x2 (4 per sheet) → ceil(5/4) = 2 sheets, each the size of page 1.
+    const src = await makeContentPdf(
+      Array.from({ length: 5 }, () => [612, 792] as [number, number]),
+    );
+    const out = await nupPages(toFile(src), "2x2");
+    const doc = await PDFDocument.load(out);
+    expect(doc.getPageCount()).toBe(2);
+    const { width, height } = doc.getPages()[0].getSize();
+    expect([Math.round(width), Math.round(height)]).toEqual([612, 792]);
+  });
+
+  it("letterboxes when the cell aspect doesn't match the page aspect", async () => {
+    // Portrait pages in a 2x1 grid: the cell is wider-than-tall while the page
+    // is taller-than-wide, so nupPages must scale-to-fit + centre (letterbox)
+    // rather than stretch. 3 pages, 2 per sheet → 2 sheets; output stays valid.
+    const src = await makeContentPdf(
+      Array.from({ length: 3 }, () => [400, 800] as [number, number]),
+    );
+    const out = await nupPages(toFile(src), "2x1");
+    expect((await PDFDocument.load(out)).getPageCount()).toBe(2);
   });
 });
 

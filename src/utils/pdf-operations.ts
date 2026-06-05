@@ -2106,11 +2106,20 @@ export async function nupPages(
       const col = slot % cols;
       const row = Math.floor(slot / cols);
 
-      // PDF y-axis is bottom-up; row 0 visually is the top row
-      const x = col * cellW;
-      const y = outH - (row + 1) * cellH;
+      // Scale the source page to fit inside its cell while preserving aspect
+      // ratio, then centre it (letterbox). Drawing it stretched to cellW×cellH
+      // distorts any page whose aspect differs from the cell's (e.g. portrait
+      // pages in a 2x1 grid) — the live preview shows the letterboxed result.
+      const { width: pw, height: ph } = source.getPage(srcIdx).getSize();
+      const scale = Math.min(cellW / pw, cellH / ph);
+      const drawW = pw * scale;
+      const drawH = ph * scale;
 
-      outPage.drawPage(embeddedPages[srcIdx], { x, y, width: cellW, height: cellH });
+      // PDF y-axis is bottom-up; row 0 visually is the top row.
+      const x = col * cellW + (cellW - drawW) / 2;
+      const y = outH - (row + 1) * cellH + (cellH - drawH) / 2;
+
+      outPage.drawPage(embeddedPages[srcIdx], { x, y, width: drawW, height: drawH });
     }
   }
 

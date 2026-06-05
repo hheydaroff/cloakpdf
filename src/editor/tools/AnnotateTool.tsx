@@ -6,13 +6,13 @@
 // objects are dropped (now in the bytes). See REDESIGN.md (overlay-object class).
 
 import { ArrowUpRight, Circle, Highlighter, Minus, Pen, Square } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ColorPicker, hexToRgb } from "../../components/ColorPicker.tsx";
 import type { Annotation } from "../../utils/pdf-operations.ts";
 import { annotatePdf } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
-import { useStageProps } from "../stage.tsx";
+import { type StagePoint, useStageProps } from "../stage.tsx";
 import { Labeled, RangeField, Toggle } from "./controls.tsx";
 
 const TOOL_ID = "annotate-pdf";
@@ -116,10 +116,15 @@ export function Stage() {
   const { addObject } = useEditorActions();
   const slice = useToolSlice(TOOL_ID);
   const mode = (slice.mode as Mode) ?? "pen";
-  const color = hexToRgb((slice.colorHex as string) ?? DEFAULT_HEX);
+  const colorHex = (slice.colorHex as string) ?? DEFAULT_HEX;
   const fillEnabled = (slice.fillEnabled as boolean) ?? false;
-  const fillColor = hexToRgb((slice.fillHex as string) ?? DEFAULT_FILL_HEX);
+  const fillHex = (slice.fillHex as string) ?? DEFAULT_FILL_HEX;
   const fillOpacity = (slice.fillOpacity as number) ?? 0.3;
+  // Memoise parsed colours so the overlay painter + pointer handlers keep a
+  // stable identity across idle re-renders (hexToRgb returns a fresh object
+  // each call, which would otherwise re-register the stage props every render).
+  const color = useMemo(() => hexToRgb(colorHex), [colorHex]);
+  const fillColor = useMemo(() => hexToRgb(fillHex), [fillHex]);
 
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const [draftPoints, setDraftPoints] = useState<{ x: number; y: number }[] | null>(null);
@@ -138,8 +143,11 @@ export function Stage() {
 
   const strokeOpacity = mode === "highlight" ? 0.4 : 1;
   const strokeThick = mode === "highlight" ? HIGHLIGHT_THICK : PEN_THICK;
-  const fill =
-    fillEnabled && isFillable(mode) ? { color: fillColor, opacity: fillOpacity } : undefined;
+  const fill = useMemo(
+    () =>
+      fillEnabled && isFillable(mode) ? { color: fillColor, opacity: fillOpacity } : undefined,
+    [fillEnabled, mode, fillColor, fillOpacity],
+  );
 
   const paintOverlay = useCallback(
     (ctx: CanvasRenderingContext2D, w: number, h: number, pageIndex: number) => {
@@ -199,16 +207,18 @@ export function Stage() {
     [doc, draftPoints, draftBox, draftLine, mode, color, strokeThick, strokeOpacity, fill],
   );
 
-  useStageProps({
-    cursor: "crosshair",
-    paintOverlay,
-    onPointerDown: (p) => {
+  const onPointerDown = useCallback(
+    (p: StagePoint) => {
       startRef.current = { x: p.xPct, y: p.yPct };
       if (boxMode) setDraftBox({ x: p.xPct, y: p.yPct, w: 0, h: 0 });
       else if (lineMode) setDraftLine({ x1: p.xPct, y1: p.yPct, x2: p.xPct, y2: p.yPct });
       else setDraftPoints([{ x: p.xPct, y: p.yPct }]);
     },
-    onPointerMove: (p) => {
+    [boxMode, lineMode],
+  );
+
+  const onPointerMove = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       if (!s) return;
       if (boxMode) {
@@ -224,7 +234,11 @@ export function Stage() {
         setDraftPoints((prev) => [...(prev ?? []), { x: p.xPct, y: p.yPct }]);
       }
     },
-    onPointerUp: (p) => {
+    [boxMode, lineMode],
+  );
+
+  const onPointerUp = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       startRef.current = null;
       if (!s) return;
@@ -285,6 +299,34 @@ export function Stage() {
         }
       }
     },
+    [
+      boxMode,
+      lineMode,
+      mode,
+      color,
+      fill,
+      strokeThick,
+      strokeOpacity,
+      selectedPage,
+      addObject,
+      draftPoints,
+    ],
+  );
+
+  const onPointerCancel = useCallback(() => {
+    startRef.current = null;
+    setDraftBox(null);
+    setDraftLine(null);
+    setDraftPoints(null);
+  }, []);
+
+  useStageProps({
+    cursor: "crosshair",
+    paintOverlay,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
   });
 
   return null;

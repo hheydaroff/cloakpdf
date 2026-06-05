@@ -35,6 +35,10 @@ export interface PdfStageProps {
   onPointerDown?: (p: StagePoint, e: ReactPointerEvent<HTMLElement>) => void;
   onPointerMove?: (p: StagePoint, e: ReactPointerEvent<HTMLElement>) => void;
   onPointerUp?: (p: StagePoint, e: ReactPointerEvent<HTMLElement>) => void;
+  /** Discard any in-flight draft without committing it. PdfStage fires this
+   *  when a one-finger draw is interrupted by a second finger (pinch-zoom), so
+   *  a half-drawn box/line/stroke never gets stuck on the overlay. */
+  onPointerCancel?: () => void;
   cursor?: CSSProperties["cursor"];
 }
 
@@ -80,6 +84,7 @@ function shallowEqual(a: PdfStageProps, b: PdfStageProps): boolean {
     a.onPointerDown === b.onPointerDown &&
     a.onPointerMove === b.onPointerMove &&
     a.onPointerUp === b.onPointerUp &&
+    a.onPointerCancel === b.onPointerCancel &&
     a.cursor === b.cursor
   );
 }

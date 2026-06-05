@@ -133,10 +133,27 @@ export function TextField({
   );
 }
 
-export function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
+export function Labeled({
+  label,
+  children,
+  normalCase = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  /** Render the label verbatim (no uppercase / wide tracking). Use when the
+   *  label is user data — e.g. a PDF form field name like `Date_of_Birth` —
+   *  where forcing UPPERCASE would misrepresent it. */
+  normalCase?: boolean;
+}) {
   return (
     <div>
-      <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+      <p
+        className={
+          normalCase
+            ? "mb-1.5 wrap-break-word text-xs font-medium text-slate-500 dark:text-dark-text-muted"
+            : "mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted"
+        }
+      >
         {label}
       </p>
       {children}

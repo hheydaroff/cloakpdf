@@ -118,9 +118,12 @@ function NupPreview({ layout }: { layout: NupLayout }) {
   const [cols, rows] = layout.split("x").map(Number);
   const perSheet = cols * rows;
   const pages = doc?.pages ?? [];
-  // Cell aspect from the real page so the preview isn't distorted.
+  // Each cell is one grid slot on a sheet the size of page 1, so its aspect is
+  // the page aspect × (rows / cols). With object-contain on the thumbnail this
+  // mirrors nupPages' real letterboxed output (page fit + centred in the cell).
   const first = pages[0];
-  const cellAspect = first ? first.widthPt / first.heightPt : 0.7727;
+  const pageAspect = first ? first.widthPt / first.heightPt : 0.7727;
+  const cellAspect = (pageAspect * rows) / cols;
   const sheets = pages.length > 0 ? Math.ceil(pages.length / perSheet) : 0;
 
   return (

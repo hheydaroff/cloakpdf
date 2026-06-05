@@ -148,6 +148,11 @@ export function Stage() {
       dragRef.current = null;
       if (d?.moved) commit("Move signature");
     },
+    // Pinch interrupted a reposition drag — abandon it. The live `updateObject`
+    // edits aren't committed (no `commit` call), so undo still sees one step.
+    onPointerCancel: () => {
+      dragRef.current = null;
+    },
   });
 
   return null;

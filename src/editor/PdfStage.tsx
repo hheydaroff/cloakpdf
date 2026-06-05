@@ -129,6 +129,10 @@ export function PdfStage() {
       // overriding any tool draw or single-finger pan already in progress.
       if (pointersRef.current.size >= 2) {
         panStart.current = null;
+        // Tell the active tool to drop the draft the first finger started, so a
+        // half-drawn box/line/stroke doesn't get stuck on the overlay (the
+        // tool's onPointerUp won't fire — we end the pinch silently).
+        stageProps.onPointerCancel?.();
         pinchActiveRef.current = true;
         const [a, b] = [...pointersRef.current.values()];
         pinchRef.current = {

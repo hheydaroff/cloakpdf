@@ -81,6 +81,10 @@ export function Stage() {
       };
       if (rect.wPct > 0.02 && rect.hPct > 0.02) patchToolState(TOOL_ID, { keep: rect });
     },
+    onPointerCancel: () => {
+      startRef.current = null;
+      setDraft(null);
+    },
   });
 
   return null;

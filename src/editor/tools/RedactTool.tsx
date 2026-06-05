@@ -77,6 +77,10 @@ export function Stage() {
         addObject({ kind: "redaction", pageIndex: selectedPage, rect });
       }
     },
+    onPointerCancel: () => {
+      startRef.current = null;
+      setBox(null);
+    },
   });
 
   return null;
