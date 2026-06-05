@@ -1,11 +1,12 @@
 // EditorTopBar.tsx — The editor's top chrome, laid out as three grid zones so
 // the centre never drifts:
 //   • left   — back, logo, file pill (desktop).
-//   • centre — desktop: one pill holding the page stepper (focus/single view
-//              only) + the page-density toggle, pinned to the true middle
-//              (grid-cols-[1fr_auto_1fr]) so it no longer shifts when the zoom
-//              group shows/hides. mobile: the page stepper (centred).
-//   • right  — undo/redo/(reset desktop), zoom (desktop focus), Export.
+//   • centre — desktop/tablet: the canvas controls, all together because they
+//              all act on the PDF in the canvas — the page stepper (focus/single
+//              view only), the page-density toggle (with a sliding indicator),
+//              and the zoom group (focus only). Pinned to the true middle
+//              (grid-cols-[1fr_auto_1fr]). mobile: the page stepper (centred).
+//   • right  — undo/redo/(reset desktop), Export.
 // On mobile the file pill, logo, density toggle and zoom buttons collapse (no
 // room); view mode is driven by the tool you pick, and zoom is pinch-to-zoom.
 
@@ -35,6 +36,10 @@ const DENSITIES = [
   { cols: 3, icon: Grid3x3, label: "3-column grid" },
 ] as const;
 
+// Width (px) of one segment in the density toggle — must match the SEG_BTN
+// `w-8` (2rem) so the sliding indicator lands exactly under the active icon.
+const SEG_W = 32;
+
 const ICON_BTN =
   "flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-dark-text-muted dark:hover:bg-dark-surface-alt dark:hover:text-dark-text disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500";
 
@@ -44,6 +49,10 @@ const SEG_BTN =
   "flex h-7 w-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500";
 const SEG_IDLE =
   "text-slate-500 hover:text-slate-800 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-30 disabled:pointer-events-none";
+
+// Smaller icon button for the centre zoom pill — h-7 to match the density pill.
+const ZOOM_BTN =
+  "flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-dark-text-muted dark:hover:bg-dark-surface-alt dark:hover:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500";
 
 export function EditorTopBar() {
   const { doc, viewMode, view, selectedPage, canUndo, canRedo, canReset, layout } = useEditorRead();
@@ -76,11 +85,12 @@ export function EditorTopBar() {
       />
     ) : null;
 
-  // Desktop centre cluster — the page stepper and the density/grid toggle live
-  // in ONE bordered pill and share the same button styling, so the chevrons
-  // read as part of the same section as the grid icons. The stepper segment is
-  // only present in focus/single view (it's how you page through edits); the
-  // density toggle is present for any multipage doc.
+  // Desktop centre cluster — the page stepper and the density toggle live in ONE
+  // bordered pill and share the same button styling, so the chevrons read as
+  // part of the same section as the grid icons. The stepper segment is only
+  // present in focus/single view (it's how you page through edits); the density
+  // toggle is present for any multipage doc and slides its indicator between the
+  // single / 2-up / 3-up icons instead of hard-swapping the highlight.
   const showStepper = viewMode === "focus";
   const centreControl =
     doc && doc.pageCount > 1 ? (
@@ -115,26 +125,73 @@ export function EditorTopBar() {
             <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-dark-border" aria-hidden="true" />
           </>
         )}
-        {DENSITIES.map(({ cols, icon: Icon, label }) => {
-          const on = activeCols === cols;
-          return (
-            <button
-              key={cols}
-              type="button"
-              onClick={() => setDensity(cols)}
-              aria-label={label}
-              aria-pressed={on}
-              title={label}
-              className={`${SEG_BTN} ${
-                on
-                  ? "bg-primary-600 text-white"
-                  : "text-slate-500 hover:text-slate-800 dark:text-dark-text-muted dark:hover:text-dark-text"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-            </button>
-          );
-        })}
+        {/* Density toggle with a sliding indicator. The thumb sits behind the
+            icons and translates to the active segment, so changing density
+            glides rather than jumping. */}
+        <div className="relative flex">
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-0 top-0 h-7 w-8 rounded-md bg-primary-600 duration-200 ease-out motion-safe:transition-transform"
+            style={{ transform: `translateX(${(activeCols - 1) * SEG_W}px)` }}
+          />
+          {DENSITIES.map(({ cols, icon: Icon, label }) => {
+            const on = activeCols === cols;
+            return (
+              <button
+                key={cols}
+                type="button"
+                onClick={() => setDensity(cols)}
+                aria-label={label}
+                aria-pressed={on}
+                title={label}
+                className={`relative z-10 ${SEG_BTN} ${
+                  on
+                    ? "text-white"
+                    : "text-slate-500 hover:text-slate-800 dark:text-dark-text-muted dark:hover:text-dark-text"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
+
+  // Zoom controls live in the centre too — they act on the PDF in the canvas,
+  // like the stepper and density toggle. Focus/single view only (overview has no
+  // zoom); rendered only off mobile (phones use pinch-to-zoom).
+  const zoomControl =
+    doc && viewMode === "focus" ? (
+      <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-0.5">
+        <button
+          type="button"
+          onClick={() => setView((v) => ({ ...v, zoom: Math.max(0.2, v.zoom / 1.2) }))}
+          className={ZOOM_BTN}
+          aria-label="Zoom out"
+        >
+          <ZoomOut className="h-4 w-4" />
+        </button>
+        <span className="min-w-10 text-center text-xs font-medium tabular-nums text-slate-600 dark:text-dark-text-muted">
+          {zoomPct}%
+        </span>
+        <button
+          type="button"
+          onClick={() => setView((v) => ({ ...v, zoom: Math.min(8, v.zoom * 1.2) }))}
+          className={ZOOM_BTN}
+          aria-label="Zoom in"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </button>
+        <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-dark-border" aria-hidden="true" />
+        <button
+          type="button"
+          onClick={() => setView((v) => ({ ...DEFAULT_VIEW, gridCols: v.gridCols }))}
+          className={ZOOM_BTN}
+          aria-label="Fit to screen"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
       </div>
     ) : null;
 
@@ -175,10 +232,17 @@ export function EditorTopBar() {
         )}
       </div>
 
-      {/* CENTRE zone — desktop: page stepper + density toggle as one pill (true
-          middle); mobile: the touch page stepper. */}
+      {/* CENTRE zone — desktop/tablet: page stepper + density toggle + zoom, the
+          canvas controls grouped at the true middle; mobile: the touch stepper. */}
       <div className="flex items-center justify-center gap-2">
-        {isMobile ? mobileStepper : centreControl}
+        {isMobile ? (
+          mobileStepper
+        ) : (
+          <>
+            {centreControl}
+            {zoomControl}
+          </>
+        )}
       </div>
 
       {/* RIGHT zone */}
@@ -214,38 +278,6 @@ export function EditorTopBar() {
             </button>
           )}
         </div>
-
-        {viewMode === "focus" && !isMobile && (
-          <div className="ml-1 flex items-center gap-1 rounded-lg border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface px-1">
-            <button
-              type="button"
-              onClick={() => setView((v) => ({ ...v, zoom: Math.max(0.2, v.zoom / 1.2) }))}
-              className={ICON_BTN}
-              aria-label="Zoom out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </button>
-            <span className="min-w-11 text-center text-xs font-medium tabular-nums text-slate-600 dark:text-dark-text-muted">
-              {zoomPct}%
-            </span>
-            <button
-              type="button"
-              onClick={() => setView((v) => ({ ...v, zoom: Math.min(8, v.zoom * 1.2) }))}
-              className={ICON_BTN}
-              aria-label="Zoom in"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setView((v) => ({ ...DEFAULT_VIEW, gridCols: v.gridCols }))}
-              className={ICON_BTN}
-              aria-label="Fit to screen"
-            >
-              <Maximize2 className="h-4 w-4" />
-            </button>
-          </div>
-        )}
 
         <ExportButton />
       </div>
