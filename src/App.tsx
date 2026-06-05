@@ -10,8 +10,10 @@
  */
 
 import {
+  Code2,
   Cpu,
   GitFork,
+  Lock,
   MonitorSmartphone,
   Rocket,
   LayoutGrid,
@@ -21,7 +23,9 @@ import {
   WifiOff,
   EyeOff,
   X,
+  Zap,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileDropZone } from "./components/FileDropZone.tsx";
 import { Layout } from "./components/Layout.tsx";
@@ -196,74 +200,74 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
 
   return (
     <div>
-      {/* ── Hero — editor-first & dropzone-focused. A centered headline sits
-          over one large drop zone: dropping a PDF lands straight in the canvas
-          editor, which is where every single-PDF flow now starts. The card grid
-          further down covers the multi-file / special tools. During search the
-          drop zone + trust row collapse so results surface immediately. ──── */}
-      <section className="pt-8 sm:pt-14 md:pt-16 pb-10 sm:pb-12">
-        <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 dark:border-dark-border bg-white/70 dark:bg-dark-surface/70 px-3 py-1 text-xs font-medium text-slate-500 dark:text-dark-text-muted animate-fade-in-up">
-            <ShieldCheck className="h-3.5 w-3.5 text-primary-500 dark:text-primary-400" />
-            100% private · runs on your device
-          </div>
+      {/* ── Hero — editor-first, asymmetric two-column. Copy + trust features
+          anchor the left; one large drop zone on the right is the single entry
+          point (dropping a PDF lands straight in the canvas editor). On mobile
+          the columns stack copy → drop zone → features so the primary action
+          stays high. The whole hero collapses during search so results lead. ── */}
+      {!searchQuery && (
+        <section className="pt-4 sm:pt-8 lg:pt-10 pb-10 sm:pb-12">
+          <div className="grid items-center gap-y-9 lg:grid-cols-2 lg:grid-rows-[auto_auto] lg:gap-x-12 xl:gap-x-16">
+            {/* Copy */}
+            <div className="order-1 max-w-xl lg:col-start-1 lg:row-start-1">
+              <h1 className="text-[32px] sm:text-[40px] lg:text-[46px] xl:text-[52px] font-semibold text-slate-900 dark:text-dark-text tracking-[-0.03em] leading-[1.05] m-0 text-balance animate-fade-in-up">
+                PDF tools that{" "}
+                <em className="font-serif italic font-normal text-primary-600 dark:text-primary-400">
+                  stay on your device
+                </em>
+                .
+              </h1>
 
-          <h1
-            className="mt-5 text-[34px] sm:text-[46px] lg:text-[56px] font-semibold text-slate-900 dark:text-dark-text tracking-[-0.03em] leading-[1.05] m-0 text-balance animate-fade-in-up"
-            style={{ animationDelay: "60ms" }}
-          >
-            PDF tools that{" "}
-            <em className="font-serif italic font-normal text-primary-600 dark:text-primary-400">
-              stay on your device
-            </em>
-            .
-          </h1>
+              <p
+                className="mt-5 max-w-lg text-slate-500 dark:text-dark-text-muted text-card-title sm:text-[17px] leading-[1.55] text-pretty animate-fade-in-up"
+                style={{ animationDelay: "120ms" }}
+              >
+                Edit, merge, sign, secure &amp; convert PDFs entirely in your browser — no uploads,
+                no accounts, no tracking.
+              </p>
+            </div>
 
-          <p
-            className="mx-auto mt-5 max-w-xl text-slate-500 dark:text-dark-text-muted text-card-title sm:text-[17px] leading-[1.55] text-pretty animate-fade-in-up"
-            style={{ animationDelay: "120ms" }}
-          >
-            Edit, merge, sign, secure &amp; convert PDFs entirely in your browser — no uploads, no
-            accounts, no tracking.
-          </p>
-        </div>
+            {/* Drop zone — the single editor-first entry point. Vertically
+                centered beside the copy on desktop; second in the flow on mobile. */}
+            <div
+              className="order-2 animate-fade-in-up lg:col-start-2 lg:row-span-2 lg:row-start-1"
+              style={{ animationDelay: "160ms" }}
+            >
+              <FileDropZone
+                size="hero"
+                accept="application/pdf,.pdf"
+                onFiles={(files) => files[0] && onOpenEditor(files[0])}
+                glowColor={categoryGlow.organise}
+                iconColor={categoryAccent.organise}
+                label="Drop a PDF to start editing"
+                hint="or click to browse — opens in the editor"
+              />
+            </div>
 
-        {!searchQuery && (
-          <div
-            className="relative mx-auto mt-8 sm:mt-10 max-w-2xl animate-fade-in-up"
-            style={{ animationDelay: "160ms" }}
-          >
-            {/* Editor-first entry point: drop a PDF → open it in the editor. */}
-            <FileDropZone
-              size="hero"
-              accept="application/pdf,.pdf"
-              onFiles={(files) => files[0] && onOpenEditor(files[0])}
-              glowColor={categoryGlow.organise}
-              iconColor={categoryAccent.organise}
-              label="Drop a PDF to start editing"
-              hint="or click to browse — opens in the editor"
-            />
-
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-slate-400 dark:text-dark-text-muted">
-              <span className="inline-flex items-center gap-1.5">
-                <WifiOff className="h-3.5 w-3.5" /> No uploads
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <UserRoundCheck className="h-3.5 w-3.5" /> No account
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <GitFork className="h-3.5 w-3.5" /> Open source
-              </span>
+            {/* Trust features — under the copy on desktop, after the drop zone
+                on mobile. Stack on phones, three across from sm up. */}
+            <div
+              className="order-3 grid grid-cols-1 gap-x-5 gap-y-4 animate-fade-in-up sm:grid-cols-3 lg:col-start-1 lg:row-start-2"
+              style={{ animationDelay: "200ms" }}
+            >
+              <HeroFeature
+                icon={Lock}
+                title="100% Private"
+                description="Everything stays on your device."
+              />
+              <HeroFeature icon={Zap} title="Blazing Fast" description="No servers, no waiting." />
+              <HeroFeature
+                icon={Code2}
+                title="Open Source"
+                description="Transparent & community-driven."
+              />
             </div>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* ── Search Bar ──────────────────────────────────── */}
-      <div
-        className="max-w-3xl mb-12 sm:mb-14 animate-fade-in-up"
-        style={{ animationDelay: "160ms" }}
-      >
+      <div className="mb-10 sm:mb-12 animate-fade-in-up" style={{ animationDelay: "160ms" }}>
         <div className="relative group">
           {/* Soft primary glow that intensifies on focus — gives the
               field presence without leaning on a heavy border. */}
@@ -343,17 +347,20 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
           </p>
         </div>
       ) : (
-        <div className="space-y-12 sm:space-y-14">
+        <div className="space-y-10 sm:space-y-12">
           {categories.map((cat, catIdx) => {
             const catTools = filteredTools.filter((t) => t.category === cat.key);
             if (catTools.length === 0) return null;
             return (
               <section
                 key={cat.key}
-                className="animate-fade-in-up"
+                className="grid gap-x-8 gap-y-5 animate-fade-in-up lg:grid-cols-12 lg:items-start lg:gap-x-10"
                 style={{ animationDelay: `${catIdx * 80}ms` }}
               >
-                <div className="mb-5 sm:mb-6">
+                {/* Heading column — sits left of its cards on desktop, stacks
+                    above them on mobile/tablet. This asymmetric, left-aligned
+                    rhythm is the spine of the redesign. */}
+                <div className="lg:col-span-4 xl:col-span-3">
                   <div className="text-tag font-semibold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400 mb-2">
                     {cat.label}
                     <span className="ml-2 text-slate-400 dark:text-dark-text-muted font-medium tracking-normal normal-case">
@@ -364,7 +371,7 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
                     {cat.description}.
                   </h2>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-8 xl:col-span-9">
                   {catTools.map((tool) => (
                     <ToolCard key={tool.id} tool={tool} onSelect={onSelectTool} />
                   ))}
@@ -373,7 +380,7 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
             );
           })}
 
-          {/* ── Why CloakPDF — multi-colored feature grid ── */}
+          {/* ── Why CloakPDF — feature grid ── */}
           {!searchQuery && <WhyCloakPdfSection />}
         </div>
       )}
@@ -436,8 +443,8 @@ function WhyCloakPdfSection() {
         />
         <FeatureItem
           icon={<LayoutGrid className="w-5 h-5" />}
-          title={`${tools.length}+ PDF tools`}
-          description="Merge, split, sign, redact, OCR, compress, convert — one workspace for every PDF chore."
+          title={`${tools.length} tools + a unified editor`}
+          description="Seven focused utilities for multi-file and signing jobs, plus an intuitive all-in-one editor — redact, annotate, sign, OCR, organise and far more in one workspace."
         />
         <FeatureItem
           icon={<Cpu className="w-5 h-5" />}
@@ -476,6 +483,40 @@ function FeatureItem({ icon, title, description }: FeatureItemProps) {
           {title}
         </div>
         <div className="text-[13.5px] leading-[1.55] text-slate-500 dark:text-dark-text-muted">
+          {description}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compact trust feature shown in the hero's left column (icon tile + title +
+ * one-line description). Smaller and denser than {@link FeatureItem} so three
+ * sit comfortably in the narrower hero column.
+ */
+function HeroFeature({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span
+        className="shrink-0 w-9 h-9 rounded-xl grid place-items-center bg-primary-50 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400"
+        aria-hidden="true"
+      >
+        <Icon className="w-4.5 h-4.5" />
+      </span>
+      <div className="min-w-0">
+        <div className="text-card-desc font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text leading-tight">
+          {title}
+        </div>
+        <div className="mt-0.5 text-meta leading-snug text-slate-500 dark:text-dark-text-muted">
           {description}
         </div>
       </div>
