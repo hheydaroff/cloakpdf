@@ -8,7 +8,7 @@
  */
 
 import { GripVertical, X } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
@@ -123,15 +123,18 @@ export default function ImagesToPdf() {
 
   const isSortActive = sortMode !== "off";
 
-  // Revoke all object URLs when the component unmounts
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only on unmount
-  useEffect(() => {
-    return () => {
-      images.forEach((item) => {
-        URL.revokeObjectURL(item.preview);
-      });
-    };
-  }, []);
+  // Revoke all preview object URLs when the component unmounts (incl. after a
+  // successful convert, which navigates to the editor). A ref holds the latest
+  // images so this empty-dep cleanup doesn't capture the first-render (empty)
+  // array; per-item revocation still happens in removeImage.
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  useEffect(
+    () => () => {
+      for (const item of imagesRef.current) URL.revokeObjectURL(item.preview);
+    },
+    [],
+  );
 
   const handleFiles = useCallback((files: File[]) => {
     const imageFiles = files.filter((f) => f.type.startsWith("image/"));

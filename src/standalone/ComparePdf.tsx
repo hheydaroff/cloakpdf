@@ -9,7 +9,7 @@
 
 import { ArrowLeftRight, Eye, EyeOff, Layers } from "lucide-react";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
@@ -158,44 +158,55 @@ async function comparePdfs(
   const maxPages = Math.max(pdfA.numPages, pdfB.numPages);
   const results: PageComparison[] = [];
 
-  for (let p = 1; p <= maxPages; p++) {
-    let canvasA: HTMLCanvasElement | null = null;
-    let canvasB: HTMLCanvasElement | null = null;
+  try {
+    for (let p = 1; p <= maxPages; p++) {
+      let canvasA: HTMLCanvasElement | null = null;
+      let canvasB: HTMLCanvasElement | null = null;
 
-    if (p <= pdfA.numPages) canvasA = await renderPageToCanvas(pdfA, p, scale);
-    if (p <= pdfB.numPages) canvasB = await renderPageToCanvas(pdfB, p, scale);
+      if (p <= pdfA.numPages) canvasA = await renderPageToCanvas(pdfA, p, scale);
+      if (p <= pdfB.numPages) canvasB = await renderPageToCanvas(pdfB, p, scale);
 
-    let thumbA: string | null = null;
-    let thumbB: string | null = null;
-    let diffThumb: string | null = null;
-    let diffPercent = 0;
+      let thumbA: string | null = null;
+      let thumbB: string | null = null;
+      let diffThumb: string | null = null;
+      let diffPercent = 0;
 
-    if (canvasA) thumbA = await canvasToBlobUrl(canvasA);
-    if (canvasB) thumbB = await canvasToBlobUrl(canvasB);
+      if (canvasA) thumbA = await canvasToBlobUrl(canvasA);
+      if (canvasB) thumbB = await canvasToBlobUrl(canvasB);
 
-    if (canvasA && canvasB) {
-      const { diffCanvas, diffPercent: pct } = diffCanvases(canvasA, canvasB);
-      diffThumb = await canvasToBlobUrl(diffCanvas);
-      diffPercent = pct;
-      diffCanvas.width = 0;
-      diffCanvas.height = 0;
-    } else {
-      // One side is missing — 100% different
-      diffPercent = 100;
+      if (canvasA && canvasB) {
+        const { diffCanvas, diffPercent: pct } = diffCanvases(canvasA, canvasB);
+        diffThumb = await canvasToBlobUrl(diffCanvas);
+        diffPercent = pct;
+        diffCanvas.width = 0;
+        diffCanvas.height = 0;
+      } else {
+        // One side is missing — 100% different
+        diffPercent = 100;
+      }
+
+      // Release canvas memory
+      if (canvasA) {
+        canvasA.width = 0;
+        canvasA.height = 0;
+      }
+      if (canvasB) {
+        canvasB.width = 0;
+        canvasB.height = 0;
+      }
+
+      results.push({ page: p, thumbA, thumbB, diffThumb, diffPercent });
+      onProgress?.(p, maxPages);
     }
-
-    // Release canvas memory
-    if (canvasA) {
-      canvasA.width = 0;
-      canvasA.height = 0;
+  } catch (err) {
+    // A later page failed — the partial results never reach state, so revoke
+    // the blob URLs we've already created before they leak.
+    for (const c of results) {
+      if (c.thumbA) URL.revokeObjectURL(c.thumbA);
+      if (c.thumbB) URL.revokeObjectURL(c.thumbB);
+      if (c.diffThumb) URL.revokeObjectURL(c.diffThumb);
     }
-    if (canvasB) {
-      canvasB.width = 0;
-      canvasB.height = 0;
-    }
-
-    results.push({ page: p, thumbA, thumbB, diffThumb, diffPercent });
-    onProgress?.(p, maxPages);
+    throw err;
   }
 
   return results;
@@ -229,6 +240,23 @@ export default function ComparePdf() {
   const loading = task.processing;
   const error = task.error;
   const setError = task.setError;
+
+  // Revoke any live page/diff blob URLs when the tool unmounts (e.g. the user
+  // navigates home or to another tool). A ref keeps the latest comparisons so
+  // the empty-dep cleanup doesn't capture a stale array. The handleCompare/reset
+  // revocations still cover the in-tool re-run and "New comparison" paths.
+  const comparisonsRef = useRef(comparisons);
+  comparisonsRef.current = comparisons;
+  useEffect(
+    () => () => {
+      for (const c of comparisonsRef.current) {
+        if (c.thumbA) URL.revokeObjectURL(c.thumbA);
+        if (c.thumbB) URL.revokeObjectURL(c.thumbB);
+        if (c.diffThumb) URL.revokeObjectURL(c.diffThumb);
+      }
+    },
+    [],
+  );
 
   const handleFileA = useCallback(
     async (files: File[]) => {

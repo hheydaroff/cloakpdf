@@ -301,11 +301,13 @@ export async function renderThumbnailsAndScan(
 ): Promise<ThumbnailsScanResult> {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
-  const pdf = await loadingTask.promise;
-  const total = pdf.numPages;
   const thumbnails: string[] = [];
   const scannedPages: number[] = [];
+  let total = 0;
   try {
+    // Inside the try so the finally's destroy() also runs if the doc won't open.
+    const pdf = await loadingTask.promise;
+    total = pdf.numPages;
     for (let i = 1; i <= total; i++) {
       try {
         // cleanup=false: we re-read this same page's text layer just below and
