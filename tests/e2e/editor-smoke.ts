@@ -253,16 +253,16 @@ async function main() {
     await page.click('button[aria-label="Open page 2"]');
     await page.waitForSelector('img[alt="Page 2"]', { timeout: 10_000 });
 
-    // 7. Whole-doc options tool: flatten applies through the shared panel.
-    const flattenBtn = await page.$('button[aria-label="Flatten"]');
-    if (!flattenBtn) fail("Flatten rail tool not found.");
-    await flattenBtn.click(); // mode "either" → stays in focus
-    await waitForText(page, /Flatten document/i, 5_000);
-    if (!(await clickByText(page, "Flatten document"))) fail("Flatten Apply button not found.");
+    // 7. Whole-doc options tool: N-up applies through the shared panel.
+    //    (Flatten/grayscale/compress/repair moved to the Export modal — see 13b.)
+    const nupBtn = await page.$('button[aria-label="N-up"]');
+    if (!nupBtn) fail("N-up rail tool not found.");
+    await nupBtn.click(); // mode "either" → stays in focus
+    await waitForText(page, /Apply N-up layout/i, 5_000);
+    if (!(await clickByText(page, "Apply N-up layout"))) fail("N-up Apply button not found.");
     await waitForText(page, /Working/i, 10_000); // busy overlay / button
-    await waitForText(page, /Flatten document/i, 60_000); // restored when done
-    await page.waitForSelector('img[alt="Page 2"]', { timeout: 10_000 });
-    console.log("  ✓ whole-doc apply (flatten)");
+    await waitForText(page, /Apply N-up layout/i, 60_000); // restored when done
+    console.log("  ✓ whole-doc apply (n-up)");
 
     // 8. Security panels load their async report on open.
     const metaBtn = await page.$('button[aria-label="Metadata"]');
@@ -321,15 +321,24 @@ async function main() {
     await waitForText(page, /No files attached yet|Reading attachments/i, 10_000);
     console.log("  ✓ attachments panel loads");
 
-    // 13b. Export menu: open, then run a real "Contact sheet" export (runTask →
-    //      nupPages → download) and assert a PDF lands in the download dir.
-    if (!(await clickByText(page, "Export"))) fail("Export menu button not found.");
-    await waitForText(page, /Export as/i, 5_000);
+    // 13b. Export modal: open it, run a real "Contact sheet" export (runTask →
+    //      nupPages → download), and a "Grayscale" convert-export (the ops moved
+    //      off the rail), asserting PDFs land in the download dir.
+    if (!(await clickByText(page, "Export"))) fail("Export button not found.");
+    await waitForText(page, /Convert & export/i, 5_000); // modal open
     const csItem = await page.$('button[aria-label="Contact sheet"]');
     if (!csItem) fail("Contact-sheet export item not found.");
     await csItem.click();
     const dl = await waitForFile(downloadDir, /\.pdf$/i, 60_000);
-    console.log(`  ✓ export menu (contact sheet → ${dl})`);
+    console.log(`  ✓ export modal · contact sheet → ${dl}`);
+
+    if (!(await clickByText(page, "Export"))) fail("Export button not found (2nd open).");
+    await waitForText(page, /Convert & export/i, 5_000);
+    const grayItem = await page.$('button[aria-label="Grayscale"]');
+    if (!grayItem) fail("Grayscale export item not found.");
+    await grayItem.click();
+    const dl2 = await waitForFile(downloadDir, /_grayscale\.pdf$/i, 60_000);
+    console.log(`  ✓ export modal · grayscale → ${dl2}`);
 
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");

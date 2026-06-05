@@ -9,10 +9,8 @@
 
 import {
   AlignCenter,
-  Archive,
   BookMarked,
   ClipboardList,
-  Contrast,
   Crop,
   Eraser,
   EyeOff,
@@ -20,14 +18,12 @@ import {
   Grid2x2,
   Hash,
   Highlighter,
-  Layers,
   LayoutGrid,
   Paperclip,
   PenTool,
   Scale,
   ScanText,
   Stamp,
-  Wrench,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -164,44 +160,14 @@ export const EDITOR_TOOLS = [
   },
 
   // Transform
+  // (Compress / Grayscale / Flatten / Repair moved to the Export modal — they're
+  // terminal "convert then download" outputs, not in-place edit steps.)
   {
     id: "crop-pages",
     name: "Crop",
     icon: Crop,
     group: "transform",
     mode: "focus",
-    status: "ready",
-  },
-  {
-    id: "compress",
-    name: "Compress",
-    icon: Archive,
-    group: "transform",
-    mode: "either",
-    status: "ready",
-  },
-  {
-    id: "grayscale",
-    name: "Grayscale",
-    icon: Contrast,
-    group: "transform",
-    mode: "either",
-    status: "ready",
-  },
-  {
-    id: "flatten",
-    name: "Flatten",
-    icon: Layers,
-    group: "transform",
-    mode: "either",
-    status: "ready",
-  },
-  {
-    id: "repair-pdf",
-    name: "Repair",
-    icon: Wrench,
-    group: "transform",
-    mode: "either",
     status: "ready",
   },
   { id: "ocr", name: "OCR", icon: ScanText, group: "transform", mode: "either", status: "ready" },

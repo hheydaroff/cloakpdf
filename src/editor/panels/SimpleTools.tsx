@@ -1,112 +1,17 @@
-// SimpleTools.tsx — The whole-document, options-only tools. Each is a thin
-// Panel that funnels an existing pdf-operations writer through applyTransform.
-// No canvas interaction, so they render identically on desktop (right panel)
-// and mobile (bottom sheet). Structure-changing ops (n-up) drop overlay objects
-// since page indices/geometry shift; content-only ops (grayscale, compress,
-// flatten, repair) preserve them (still valid in fraction space).
-// (Reverse moved into the Organize page-board's quick actions.)
+// SimpleTools.tsx — The N-up page-layout tool: a thin options-only Panel that
+// funnels nupPages through applyTransform. No canvas interaction, so it renders
+// identically on desktop (right panel) and mobile (bottom sheet). N-up is
+// structure-changing (page indices/geometry shift) so it drops overlay objects.
+//
+// (Compress / Grayscale / Flatten / Repair used to live here too; they moved to
+// the Export modal as terminal "convert then download" outputs. Reverse moved
+// into the Organize page-board's quick actions.)
 
 import { useState } from "react";
-import {
-  compressPdf,
-  flattenPdf,
-  grayscalePdf,
-  nupPages,
-  repairPdf,
-} from "../../utils/pdf-operations.ts";
+import { nupPages } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
 import { Segmented, WholeDocPanel } from "./WholeDocPanel.tsx";
-
-// Per-quality copy for Compress, so the editor explains the trade-off the same
-// way the standalone tool does (render scale + JPEG quality + what it means).
-const COMPRESS_INFO: Record<"low" | "medium" | "high", string> = {
-  low: "Sharpest pages, modest size drop. Renders at 1× with JPEG quality 85%.",
-  medium:
-    "A balanced size-vs-quality trade-off that suits most documents. Renders at 1.5× with JPEG quality 70%.",
-  high: "Smallest file, softest pages — text-heavy PDFs may barely shrink. Renders at 2× with JPEG quality 50%.",
-};
-
-export function GrayscalePanel() {
-  const { applyTransform } = useEditorActions();
-  return (
-    <WholeDocPanel
-      blurb="Convert every page to grayscale, removing all colour information."
-      applyLabel="Convert to grayscale"
-      note="Pages are re-rendered as images, so selectable text is lost."
-      onApply={() =>
-        void applyTransform(async (d) => ({
-          bytes: await grayscalePdf(docToFile(d)),
-          label: "Grayscale",
-        }))
-      }
-    />
-  );
-}
-
-export function FlattenPanel() {
-  const { applyTransform } = useEditorActions();
-  return (
-    <WholeDocPanel
-      blurb="Remove interactive form fields and annotations, baking them into the page."
-      applyLabel="Flatten document"
-      note="The result is no longer editable as a form."
-      onApply={() =>
-        void applyTransform(async (d) => ({
-          bytes: await flattenPdf(docToFile(d)),
-          label: "Flatten",
-        }))
-      }
-    />
-  );
-}
-
-export function RepairPanel() {
-  const { applyTransform } = useEditorActions();
-  return (
-    <WholeDocPanel
-      blurb="Rebuild the document structure to fix corrupted or malformed PDFs."
-      applyLabel="Repair document"
-      onApply={() =>
-        void applyTransform(async (d) => ({
-          bytes: await repairPdf(docToFile(d)),
-          label: "Repair",
-        }))
-      }
-    />
-  );
-}
-
-export function CompressPanel() {
-  const { applyTransform } = useEditorActions();
-  const [quality, setQuality] = useState<"low" | "medium" | "high">("medium");
-  return (
-    <WholeDocPanel
-      blurb="Shrink the file by re-rendering pages as compressed images."
-      applyLabel="Compress PDF"
-      note="Pages become images — selectable text is lost. Higher compression = smaller file, lower quality."
-      onApply={() =>
-        void applyTransform(async (d) => ({
-          bytes: await compressPdf(docToFile(d), quality),
-          label: `Compress (${quality})`,
-        }))
-      }
-    >
-      <Segmented
-        value={quality}
-        onChange={setQuality}
-        options={[
-          { value: "low", label: "Light", sub: "Best quality" },
-          { value: "medium", label: "Balanced" },
-          { value: "high", label: "Max", sub: "Smallest" },
-        ]}
-      />
-      <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
-        {COMPRESS_INFO[quality]}
-      </p>
-    </WholeDocPanel>
-  );
-}
 
 type NupLayout = "2x1" | "1x2" | "2x2" | "3x3";
 

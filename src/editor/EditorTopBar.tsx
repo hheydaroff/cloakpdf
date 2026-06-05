@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
-import { ExportMenu } from "./ExportMenu.tsx";
+import { ExportButton } from "./ExportModal.tsx";
 import { DEFAULT_VIEW } from "./types.ts";
 
 // Page-density options for the view control: single page (focus, editable) vs
@@ -247,7 +247,7 @@ export function EditorTopBar() {
           </div>
         )}
 
-        <ExportMenu />
+        <ExportButton />
       </div>
     </header>
   );

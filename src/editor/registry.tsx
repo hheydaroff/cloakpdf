@@ -23,13 +23,7 @@ import {
   PageNumbersPanel,
   WatermarkPanel,
 } from "./panels/StampTools.tsx";
-import {
-  CompressPanel,
-  FlattenPanel,
-  GrayscalePanel,
-  NupPanel,
-  RepairPanel,
-} from "./panels/SimpleTools.tsx";
+import { NupPanel } from "./panels/SimpleTools.tsx";
 
 export interface ToolImpl {
   /** Registers canvas interaction for focus tools; absent for overview/options tools. */
@@ -49,10 +43,6 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   // remove-blank as in-panel quick actions.
   "organize-pages": { Panel: Organize.Panel },
   // Whole-document, options-only tools (no canvas interaction).
-  grayscale: { Panel: GrayscalePanel },
-  flatten: { Panel: FlattenPanel },
-  "repair-pdf": { Panel: RepairPanel },
-  compress: { Panel: CompressPanel },
   "nup-pages": { Panel: NupPanel },
   // Security panels: load an async report on open, then apply.
   metadata: { Panel: Metadata.Panel },
