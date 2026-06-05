@@ -19,6 +19,9 @@ import {
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { type StagePoint, useActiveStageProps } from "./stage.tsx";
 
+type Pt = { x: number; y: number };
+const distance = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
+
 export function PdfStage() {
   const { doc, selectedPage, view } = useEditorRead();
   const { setView } = useEditorActions();
@@ -28,6 +31,20 @@ export function PdfStage() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const panStart = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  // Active touch points for pinch-to-zoom — the only way to zoom on a phone,
+  // where the top-bar zoom buttons are hidden (no room) and Ctrl/Cmd+wheel can't
+  // happen. `pinchActive` suppresses single-finger tool/pan for the rest of a
+  // two-finger gesture so a lifted finger doesn't draw a stray mark.
+  const pointersRef = useRef(new Map<number, Pt>());
+  const pinchRef = useRef<{
+    dist: number;
+    zoom: number;
+    panX: number;
+    panY: number;
+    cx: number;
+    cy: number;
+  } | null>(null);
+  const pinchActiveRef = useRef(false);
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
 
   const page = doc?.pages[selectedPage] ?? null;
@@ -105,20 +122,60 @@ export function PdfStage() {
 
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.currentTarget.setPointerCapture(e.pointerId);
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      // Second finger down → enter pinch: zoom + two-finger pan the view,
+      // overriding any tool draw or single-finger pan already in progress.
+      if (pointersRef.current.size >= 2) {
+        panStart.current = null;
+        pinchActiveRef.current = true;
+        const [a, b] = [...pointersRef.current.values()];
+        pinchRef.current = {
+          dist: distance(a, b) || 1,
+          zoom: view.zoom,
+          panX: view.panX,
+          panY: view.panY,
+          cx: (a.x + b.x) / 2,
+          cy: (a.y + b.y) / 2,
+        };
+        return;
+      }
+      if (pinchActiveRef.current) return; // residual finger from a pinch — ignore
+
       if (hasToolPointer) {
-        e.currentTarget.setPointerCapture(e.pointerId);
         stageProps.onPointerDown?.(toPoint(e), e);
         return;
       }
       // No active tool → drag to pan.
-      e.currentTarget.setPointerCapture(e.pointerId);
       panStart.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY };
     },
-    [hasToolPointer, stageProps, toPoint, view.panX, view.panY],
+    [hasToolPointer, stageProps, toPoint, view.panX, view.panY, view.zoom],
   );
 
   const onPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (pointersRef.current.has(e.pointerId)) {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      }
+
+      const pinch = pinchRef.current;
+      if (pinch && pointersRef.current.size >= 2) {
+        const [a, b] = [...pointersRef.current.values()];
+        const ratio = (distance(a, b) || 1) / pinch.dist;
+        const zoom = Math.min(8, Math.max(0.2, pinch.zoom * ratio));
+        const cx = (a.x + b.x) / 2;
+        const cy = (a.y + b.y) / 2;
+        setView((prev) => ({
+          ...prev,
+          zoom,
+          panX: pinch.panX + (cx - pinch.cx),
+          panY: pinch.panY + (cy - pinch.cy),
+        }));
+        return;
+      }
+      if (pinchActiveRef.current) return;
+
       if (hasToolPointer) {
         stageProps.onPointerMove?.(toPoint(e), e);
         return;
@@ -136,6 +193,15 @@ export function PdfStage() {
 
   const onPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      pointersRef.current.delete(e.pointerId);
+      if (pointersRef.current.size < 2) pinchRef.current = null;
+      if (pointersRef.current.size > 0) return; // gesture still in progress
+
+      // Last finger up: end a pinch silently, otherwise finalise the tool/pan.
+      if (pinchActiveRef.current) {
+        pinchActiveRef.current = false;
+        return;
+      }
       if (hasToolPointer) {
         stageProps.onPointerUp?.(toPoint(e), e);
         return;

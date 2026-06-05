@@ -11,6 +11,10 @@ import { PDFDocument } from "@pdfme/pdf-lib";
 import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 import type { FractionRect } from "./types.ts";
 
+/** Re-exported so editor modules revoke thumbnail blob URLs without reaching
+ *  into the renderer directly (history eviction, full teardown). */
+export { revokeThumbnails };
+
 /** Per-page geometry + cached preview. Dimensions are in PDF points (the space
  *  pdf-lib writes in) and taken from the CropBox — the visible box PDF.js
  *  renders — so the focus canvas aspect ratio always matches the thumbnail,

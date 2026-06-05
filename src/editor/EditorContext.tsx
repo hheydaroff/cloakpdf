@@ -30,7 +30,7 @@ import {
   createDocFromBytes,
   createDocFromFile,
   nextId,
-  revokeDocThumbnails,
+  revokeThumbnails,
 } from "./doc.ts";
 import {
   deleteDraft,
@@ -178,10 +178,38 @@ export function EditorProvider({
   const [pendingApplyVersion, setPendingApplyVersion] = useState(0);
   const toolCheckpointRef = useRef(0);
 
-  // Revoke thumbnails on unmount so previews never leak across sessions.
-  useEffect(() => {
-    return () => revokeDocThumbnails(docRef.current);
+  // Revoke every thumbnail the editor still holds — across ALL history entries
+  // (redo branches included) plus the live doc, not just the currently-visible
+  // page set. The old teardown only freed the live doc's thumbs, leaking any
+  // held by non-current entries (e.g. a redo branch after an undo).
+  const revokeAllThumbs = useCallback(() => {
+    const urls = new Set(historyRef.current.thumbUrls());
+    for (const p of docRef.current?.pages ?? []) if (p.thumbUrl) urls.add(p.thumbUrl);
+    revokeThumbnails([...urls]);
   }, []);
+
+  // A history entry's thumbnails stay alive as long as that entry — or one that
+  // shares its `pages` array (overlay-only commits do) — is on the stack. When
+  // entries drop off (redo-tail discard, cap-trim, clear), revoke only the URLs
+  // no surviving entry references. This replaces the old "revoke on every
+  // transform" path, which freed blob URLs the prior undo target still pointed
+  // at, so Undo restored a state with dead previews.
+  useEffect(() => {
+    const history = historyRef.current;
+    history.setOnEvict((evicted) => {
+      const survivors = new Set(history.thumbUrls());
+      const dead: string[] = [];
+      for (const e of evicted)
+        for (const p of e.pages)
+          if (p.thumbUrl && !survivors.has(p.thumbUrl)) dead.push(p.thumbUrl);
+      if (dead.length > 0) revokeThumbnails(dead);
+    });
+  }, []);
+
+  // Revoke everything on unmount so previews never leak across sessions.
+  useEffect(() => {
+    return () => revokeAllThumbs();
+  }, [revokeAllThumbs]);
 
   const runBusy = useCallback((label: string, fn: () => void | Promise<void>): Promise<void> => {
     return new Promise<void>((resolve, reject) => {
@@ -212,7 +240,8 @@ export function EditorProvider({
 
   /** Set a brand-new doc as the base of a fresh history timeline. */
   const installDoc = useCallback((next: CanvasDoc) => {
-    revokeDocThumbnails(docRef.current);
+    // The outgoing doc + its whole timeline are torn down by history.clear()
+    // below: its evict sink frees every thumbnail URL no surviving entry holds.
     setDoc(next);
     setSelectedPageState(0);
     setViewState(DEFAULT_VIEW);
@@ -416,7 +445,9 @@ export function EditorProvider({
         // objects the transform returned (used to drop just-burned marks), or
         // preserve the current ones (still valid in fraction space).
         const rebuilt = await createDocFromBytes(bytes, cur.fileName);
-        revokeDocThumbnails(cur);
+        // Do NOT revoke cur's thumbnails here: the prior history entry (the undo
+        // target) still references them. They're freed when that entry is
+        // evicted from the stack — see history.setOnEvict above.
         commitDoc({ ...rebuilt, id: cur.id, objects: objects ?? cur.objects }, label);
       });
     },
@@ -453,9 +484,9 @@ export function EditorProvider({
   const clearError = useCallback(() => setError(null), []);
 
   const exit = useCallback(() => {
-    revokeDocThumbnails(docRef.current);
+    revokeAllThumbs();
     onExit();
-  }, [onExit]);
+  }, [onExit, revokeAllThumbs]);
 
   // ── Draft autosave: restore / discard ───────────────────────────────
   const applyDraft = useCallback(

@@ -22,26 +22,55 @@ export class EditorHistory {
   private stack: HistoryEntry[] = [];
   private cursor = -1;
   private readonly cap: number;
+  private onEvict: ((entries: HistoryEntry[]) => void) | null = null;
 
   constructor(cap = 40) {
     this.cap = cap;
   }
 
+  /** Register a sink for entries that drop off the stack (redo-tail discard,
+   *  cap-trim, clear). Entries hold page thumbnails as blob: URLs; the sink
+   *  revokes the ones no longer reachable. It MUST diff against {@link thumbUrls}
+   *  — overlay-only commits share one `pages` array by reference, so a dropped
+   *  entry's URL may still belong to a surviving one. */
+  setOnEvict(fn: (entries: HistoryEntry[]) => void): void {
+    this.onEvict = fn;
+  }
+
+  private emitEvict(entries: HistoryEntry[]): void {
+    if (entries.length > 0) this.onEvict?.(entries);
+  }
+
+  /** Distinct, non-null page thumbnail URLs referenced by entries currently on
+   *  the stack — the live set the evict sink keeps; everything else is freeable. */
+  thumbUrls(): string[] {
+    const urls = new Set<string>();
+    for (const e of this.stack) for (const p of e.pages) if (p.thumbUrl) urls.add(p.thumbUrl);
+    return [...urls];
+  }
+
   clear(): void {
+    const dropped = this.stack;
     this.stack = [];
     this.cursor = -1;
+    this.emitEvict(dropped);
   }
 
   /** Push a new entry, discarding any redo tail above the cursor and trimming
-   *  the oldest entries past the cap (cursor follows the trim). */
+   *  the oldest entries past the cap (cursor follows the trim). Dropped entries
+   *  are handed to the evict sink so their thumbnails can be revoked. */
   push(entry: HistoryEntry): void {
+    const redoTail = this.stack.slice(this.cursor + 1);
     this.stack = this.stack.slice(0, this.cursor + 1);
     this.stack.push(entry);
+    let trimmed: HistoryEntry[] = [];
     if (this.stack.length > this.cap) {
       const overflow = this.stack.length - this.cap;
+      trimmed = this.stack.slice(0, overflow);
       this.stack = this.stack.slice(overflow);
     }
     this.cursor = this.stack.length - 1;
+    this.emitEvict([...redoTail, ...trimmed]);
   }
 
   current(): HistoryEntry | null {

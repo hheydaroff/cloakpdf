@@ -1,7 +1,9 @@
 // EditorTopBar.tsx — The editor's top chrome: home/back, file pill, the
 // Focus|Overview mode toggle, undo/redo/reset, a zoom group, and the primary
 // Export CTA. Ported in spirit from CloakIMG's TopBar, restyled to CloakPDF's
-// Ocean-Blue accent + slate hairlines. On mobile the file pill + zoom collapse.
+// Ocean-Blue accent + slate hairlines. On mobile the file pill + the zoom
+// BUTTONS collapse (no room in the bar) — touch users zoom by pinching the
+// stage instead (see PdfStage's pinch handler), so zoom stays reachable.
 
 import {
   ChevronLeft,

@@ -128,6 +128,10 @@ export default function AskPdf() {
    * now different.
    */
   useEffect(() => {
+    // Stop any in-flight answer before dropping the session — the old chat
+    // pipeline is about to be unloaded, so let generation halt cleanly instead
+    // of running to the token cap against a soon-to-be-disposed handle.
+    sessionRef.current?.interrupt();
     sessionRef.current = null;
     setSessionReady(false);
     setIndexing(null);
@@ -150,6 +154,17 @@ export default function AskPdf() {
       setSessionReady(false);
     }
   }, [rag.status]);
+
+  /**
+   * Abort any in-flight on-device generation when the tool unmounts (user
+   * navigates home / to another tool mid-answer). Without this the LLM keeps
+   * running to its token cap in the background — wasted compute on the very
+   * low-RAM devices this tool warns about — and its onToken callback keeps
+   * writing into a component that's gone. interrupt() stops both at once.
+   */
+  useEffect(() => {
+    return () => sessionRef.current?.interrupt();
+  }, []);
 
   /**
    * Build the RAG session as soon as the PDF is loaded *and* both

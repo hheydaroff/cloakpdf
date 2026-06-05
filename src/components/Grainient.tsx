@@ -275,6 +275,12 @@ export function Grainient({
       } catch {
         // Ignore
       }
+      // Detaching the canvas does NOT free the WebGL2 context. Without an
+      // explicit release, every home↔editor round-trip and OS theme toggle
+      // (palette change → effect re-run) orphans one context toward Chrome's
+      // ~16-context cap, which then force-evicts the oldest and blanks the
+      // backdrop. Force the release here.
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
   }, [
     timeSpeed,
