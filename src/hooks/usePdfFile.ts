@@ -71,11 +71,10 @@ export interface UsePdfFileOptions<T> {
    * Whether to accept password-protected PDFs.
    *
    * By default the hook rejects encrypted PDFs upfront — every tool except
-   * `PdfPassword` (which strips the password) and `PdfInspector` (which
-   * inspects encryption status) needs a clear-text PDF to do useful work,
-   * so the default keeps them from hitting opaque pdf-lib / PDF.js errors
-   * mid-operation. When rejected, `encryptedFile` exposes the file so the
-   * tool can render `EncryptedPdfNotice` with a CTA to PDF Password.
+   * `PdfPassword` (which strips the password) needs a clear-text PDF to do
+   * useful work, so the default keeps them from hitting opaque pdf-lib /
+   * PDF.js errors mid-operation. When rejected, `encryptedFile` exposes the
+   * file so the tool can render `EncryptedPdfNotice` with a CTA to PDF Password.
    *
    * Set to `true` for tools whose purpose is to deal with encrypted PDFs.
    */

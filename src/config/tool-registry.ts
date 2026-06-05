@@ -18,7 +18,6 @@
 import {
   ArrowLeftRight,
   FileKey2,
-  FileSearch,
   GitMerge,
   ImageDown,
   Images,
@@ -37,7 +36,6 @@ const ExtractImages = lazy(() => import("../standalone/ExtractImages.tsx"));
 const PdfPassword = lazy(() => import("../standalone/PdfPassword.tsx"));
 const ComparePdf = lazy(() => import("../standalone/ComparePdf.tsx"));
 const DigitalSignature = lazy(() => import("../standalone/DigitalSignature.tsx"));
-const PdfInspector = lazy(() => import("../standalone/PdfInspector.tsx"));
 const AskPdf = lazy(() => import("../standalone/AskPdf.tsx"));
 
 // ── Tool metadata ────────────────────────────────────────────────
@@ -95,14 +93,6 @@ export const tools = [
     icon: FileKey2,
     category: "security",
     standaloneOnly: true, // security flow (cert signing), not a single-PDF edit step
-  },
-  {
-    id: "pdf-inspector",
-    title: "PDF Inspector",
-    description: "View version, page dimensions, metadata, and encryption status",
-    icon: FileSearch,
-    category: "security",
-    standaloneOnly: true, // read-only analysis (produces no PDF)
   },
 
   // ── AI (on-device) ───────────────────────────────────────
@@ -163,7 +153,6 @@ export const toolComponents: Record<string, React.LazyExoticComponent<React.Comp
   "pdf-password": PdfPassword,
   "compare-pdf": ComparePdf,
   "digital-signature": DigitalSignature,
-  "pdf-inspector": PdfInspector,
   "ask-pdf": AskPdf,
 };
 

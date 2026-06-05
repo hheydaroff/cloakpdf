@@ -3,6 +3,7 @@
 // in the narrow right panel AND the mobile bottom sheet: large tap targets,
 // one accent, no cramped rows.
 
+import type { LucideIcon } from "lucide-react";
 import { ColorPicker, hexToRgb, rgbToHex } from "../../components/ColorPicker.tsx";
 
 export interface Rgb {
@@ -114,14 +115,16 @@ export function TextField({
   value,
   onChange,
   placeholder,
+  icon,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  icon?: LucideIcon;
 }) {
   return (
-    <Labeled label={label}>
+    <Labeled label={label} icon={icon}>
       <input
         type="text"
         value={value}
@@ -137,6 +140,7 @@ export function Labeled({
   label,
   children,
   normalCase = false,
+  icon: Icon,
 }: {
   label: string;
   children: React.ReactNode;
@@ -144,16 +148,19 @@ export function Labeled({
    *  label is user data — e.g. a PDF form field name like `Date_of_Birth` —
    *  where forcing UPPERCASE would misrepresent it. */
   normalCase?: boolean;
+  /** Optional leading icon, shown before the label text. */
+  icon?: LucideIcon;
 }) {
   return (
     <div>
       <p
         className={
           normalCase
-            ? "mb-1.5 wrap-break-word text-xs font-medium text-slate-500 dark:text-dark-text-muted"
-            : "mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted"
+            ? "mb-1.5 flex items-center gap-1.5 wrap-break-word text-xs font-medium text-slate-500 dark:text-dark-text-muted"
+            : "mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted"
         }
       >
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0 text-primary-500 dark:text-primary-400" />}
         {label}
       </p>
       {children}
