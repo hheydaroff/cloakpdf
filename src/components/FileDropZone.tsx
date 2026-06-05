@@ -25,6 +25,12 @@ interface FileDropZoneProps {
   /** Optional secondary hint text below the label. */
   hint?: string;
   /**
+   * Visual scale. "hero" is the larger, more prominent variant used as the
+   * home-screen centerpiece (bigger padding, icon, and label); "default" is
+   * the in-tool size. Same drag/click behaviour and design language either way.
+   */
+  size?: "default" | "hero";
+  /**
    * CSS color for the cursor/touch spotlight glow (e.g. "rgba(37,99,235,0.18)").
    * Defaults to a neutral blue matching the primary palette.
    */
@@ -56,11 +62,13 @@ export function FileDropZone({
   onFiles,
   label = "Drop files here or click to browse",
   hint,
+  size = "default",
   glowColor = categoryGlow.organise,
   iconColor,
   encryptedFile = null,
   onClearEncrypted,
 }: FileDropZoneProps) {
+  const hero = size === "hero";
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const {
@@ -113,7 +121,8 @@ export function FileDropZone({
       onClick={() => inputRef.current?.click()}
       {...glowHandlers}
       style={{ touchAction: "manipulation" }}
-      className={`group relative w-full overflow-hidden border-2 border-dashed rounded-xl p-10 text-center cursor-pointer
+      className={`group relative w-full overflow-hidden border-2 border-dashed text-center cursor-pointer
+        ${hero ? "rounded-3xl p-12 sm:p-16" : "rounded-xl p-10"}
         transition-[border-color,background-color,transform] duration-200
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2
         ${
@@ -140,7 +149,8 @@ export function FileDropZone({
 
       {/* Icon container */}
       <div
-        className={`relative z-10 w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center
+        className={`relative z-10 mx-auto mb-4 rounded-2xl flex items-center justify-center
+          ${hero ? "w-20 h-20" : "w-16 h-16"}
           transition-[background-color,transform] duration-200
           motion-safe:group-hover:-translate-y-1 motion-safe:[&:has(~*)]:translate-y-0
           ${
@@ -150,7 +160,7 @@ export function FileDropZone({
           }`}
       >
         <FileUp
-          className={`w-8 h-8 transition-[color,opacity] duration-200 ${
+          className={`${hero ? "w-10 h-10" : "w-8 h-8"} transition-[color,opacity] duration-200 ${
             iconColor
               ? isDragOver
                 ? "opacity-100"
@@ -165,12 +175,14 @@ export function FileDropZone({
       </div>
 
       <p
-        className={`relative z-10 font-medium transition-colors duration-200 ${isDragOver ? "text-primary-600 dark:text-primary-400" : "text-slate-600 dark:text-dark-text"}`}
+        className={`relative z-10 font-semibold transition-colors duration-200 ${hero ? "text-lg sm:text-xl" : "font-medium"} ${isDragOver ? "text-primary-600 dark:text-primary-400" : "text-slate-700 dark:text-dark-text"}`}
       >
         {label}
       </p>
       {hint && (
-        <p className="relative z-10 text-sm text-slate-500 dark:text-dark-text-muted mt-1">
+        <p
+          className={`relative z-10 text-slate-500 dark:text-dark-text-muted mt-1 ${hero ? "text-sm sm:text-card-title" : "text-sm"}`}
+        >
           {hint}
         </p>
       )}

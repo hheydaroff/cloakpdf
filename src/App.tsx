@@ -196,50 +196,67 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
 
   return (
     <div>
-      {/* ── Hero — asymmetric two-column. Headline + subhead live in the
-          left column (left-aligned); an editor drop zone anchors the right.
-          On mobile the columns stack. When searchQuery is active the right
-          column is omitted; the left column keeps its width so the page
-          rhythm doesn't jump as the user types. ───────────── */}
-      <section className="pt-6 sm:pt-10 md:pt-14 pb-10 sm:pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
-          <div className="lg:col-span-7">
-            <h1
-              className="text-[34px] sm:text-[44px] lg:text-[52px] xl:text-[58px] font-semibold text-slate-900 dark:text-dark-text tracking-[-0.03em] leading-[1.05] m-0 text-balance animate-fade-in-up"
-              style={{ animationDelay: "0ms" }}
-            >
-              PDF tools that{" "}
-              <em className="font-serif italic font-normal text-primary-600 dark:text-primary-400">
-                stay on your device
-              </em>
-              .
-            </h1>
-
-            <p
-              className="text-slate-500 dark:text-dark-text-muted text-card-title sm:text-[16.5px] lg:text-[17px] leading-[1.55] mt-5 sm:mt-6 max-w-lg lg:max-w-xl text-pretty animate-fade-in-up"
-              style={{ animationDelay: "80ms" }}
-            >
-              Edit, merge, sign, secure, and convert PDFs entirely in your browser. No uploads, no
-              accounts, no tracking. Drop a PDF to start editing — or pick a tool below.
-            </p>
+      {/* ── Hero — editor-first & dropzone-focused. A centered headline sits
+          over one large drop zone: dropping a PDF lands straight in the canvas
+          editor, which is where every single-PDF flow now starts. The card grid
+          further down covers the multi-file / special tools. During search the
+          drop zone + trust row collapse so results surface immediately. ──── */}
+      <section className="pt-8 sm:pt-14 md:pt-16 pb-10 sm:pb-12">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 dark:border-dark-border bg-white/70 dark:bg-dark-surface/70 px-3 py-1 text-xs font-medium text-slate-500 dark:text-dark-text-muted animate-fade-in-up">
+            <ShieldCheck className="h-3.5 w-3.5 text-primary-500 dark:text-primary-400" />
+            100% private · runs on your device
           </div>
 
-          {!searchQuery && (
-            <div className="lg:col-span-5 animate-fade-in-up" style={{ animationDelay: "120ms" }}>
-              {/* Editor-first entry: drop a PDF here to open it in the editor,
-                  where every single-PDF tool lives. The card grid below is for
-                  multi-input + special tools that can't be an editor flow. */}
-              <FileDropZone
-                accept="application/pdf,.pdf"
-                onFiles={(files) => files[0] && onOpenEditor(files[0])}
-                glowColor={categoryGlow.organise}
-                iconColor={categoryAccent.organise}
-                label="Drop a PDF to start editing"
-                hint="Opens in the editor — everything stays on your device."
-              />
-            </div>
-          )}
+          <h1
+            className="mt-5 text-[34px] sm:text-[46px] lg:text-[56px] font-semibold text-slate-900 dark:text-dark-text tracking-[-0.03em] leading-[1.05] m-0 text-balance animate-fade-in-up"
+            style={{ animationDelay: "60ms" }}
+          >
+            PDF tools that{" "}
+            <em className="font-serif italic font-normal text-primary-600 dark:text-primary-400">
+              stay on your device
+            </em>
+            .
+          </h1>
+
+          <p
+            className="mx-auto mt-5 max-w-xl text-slate-500 dark:text-dark-text-muted text-card-title sm:text-[17px] leading-[1.55] text-pretty animate-fade-in-up"
+            style={{ animationDelay: "120ms" }}
+          >
+            Edit, merge, sign, secure &amp; convert PDFs entirely in your browser — no uploads, no
+            accounts, no tracking.
+          </p>
         </div>
+
+        {!searchQuery && (
+          <div
+            className="relative mx-auto mt-8 sm:mt-10 max-w-2xl animate-fade-in-up"
+            style={{ animationDelay: "160ms" }}
+          >
+            {/* Editor-first entry point: drop a PDF → open it in the editor. */}
+            <FileDropZone
+              size="hero"
+              accept="application/pdf,.pdf"
+              onFiles={(files) => files[0] && onOpenEditor(files[0])}
+              glowColor={categoryGlow.organise}
+              iconColor={categoryAccent.organise}
+              label="Drop a PDF to start editing"
+              hint="or click to browse — opens in the editor"
+            />
+
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs font-medium text-slate-400 dark:text-dark-text-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <WifiOff className="h-3.5 w-3.5" /> No uploads
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <UserRoundCheck className="h-3.5 w-3.5" /> No account
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <GitFork className="h-3.5 w-3.5" /> Open source
+              </span>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ── Search Bar ──────────────────────────────────── */}
