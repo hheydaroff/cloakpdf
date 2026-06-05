@@ -11,7 +11,6 @@ import { FileUp } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { categoryGlow } from "../config/theme.ts";
 import { useSpotlightGlow } from "../hooks/useSpotlightGlow.ts";
-import { useWorkflowSlot } from "../workflow/WorkflowContext.tsx";
 import { EncryptedPdfNotice } from "./EncryptedPdfNotice.tsx";
 
 interface FileDropZoneProps {
@@ -62,13 +61,6 @@ export function FileDropZone({
   encryptedFile = null,
   onClearEncrypted,
 }: FileDropZoneProps) {
-  // In workflow mode the file is injected by the runner, so the
-  // dropzone is unreachable. Skip rendering it entirely so the inflated
-  // tool's UI starts directly with its post-load controls. Hooks must
-  // run before this early-return — useWorkflowSlot is the only hook
-  // here; the rest of the component's hooks come after.
-  const inWorkflow = useWorkflowSlot() !== null;
-
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const {
@@ -99,11 +91,6 @@ export function FileDropZone({
     },
     [onFiles],
   );
-
-  // All hooks above run unconditionally; only the render result is
-  // gated. In workflow mode the runner has already injected a file, so
-  // there is nothing for the dropzone to do.
-  if (inWorkflow) return null;
 
   // The hook detected the user dropped an encrypted PDF — render the
   // notice (with a deep-link to PDF Password) in place of the dropzone.

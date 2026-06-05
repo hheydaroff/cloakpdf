@@ -95,6 +95,7 @@ export const tools: Tool[] = [
     description: "Combine multiple PDF files into one document",
     icon: GitMerge,
     category: "organise",
+    standaloneOnly: true, // multi-input constructor (then hands off to the editor)
   },
   {
     id: "organize-pages",
@@ -168,6 +169,7 @@ export const tools: Tool[] = [
     description: "Convert images into a PDF document",
     icon: Images,
     category: "transform",
+    standaloneOnly: true, // multi-input constructor (then hands off to the editor)
   },
   {
     id: "ocr",
@@ -182,6 +184,7 @@ export const tools: Tool[] = [
     description: "Pull all embedded images from a PDF and download as PNG or ZIP",
     icon: ImageDown,
     category: "transform",
+    standaloneOnly: true, // terminal output (embedded images → PNG/ZIP), not a PDF edit
   },
   {
     id: "crop-pages",
@@ -286,6 +289,7 @@ export const tools: Tool[] = [
     description: "Add or remove a password and control print, copy, and edit rights",
     icon: Lock,
     category: "security",
+    standaloneOnly: true, // security flow (encrypt/decrypt), not a single-PDF edit step
   },
   {
     id: "redact-pdf",
@@ -316,6 +320,7 @@ export const tools: Tool[] = [
     description: "Visual side-by-side diff of two PDFs with pixel-level change detection",
     icon: ArrowLeftRight,
     category: "security",
+    standaloneOnly: true, // dual-input (needs two PDFs)
   },
   {
     id: "digital-signature",
@@ -323,6 +328,7 @@ export const tools: Tool[] = [
     description: "Sign PDFs with a cryptographic certificate for authenticity verification",
     icon: FileKey2,
     category: "security",
+    standaloneOnly: true, // security flow (cert signing), not a single-PDF edit step
   },
   {
     id: "pdf-inspector",
@@ -330,6 +336,7 @@ export const tools: Tool[] = [
     description: "View version, page dimensions, metadata, and encryption status",
     icon: FileSearch,
     category: "security",
+    standaloneOnly: true, // read-only analysis (produces no PDF)
   },
 
   // ── AI (on-device) ───────────────────────────────────────
@@ -368,6 +375,7 @@ export const tools: Tool[] = [
     // feature that crashes the user's browser.
     requirements: "Best on devices with ≥ 16 GB RAM — pick the Compact tier on lower-RAM machines",
     desktopOnly: true,
+    standaloneOnly: true, // on-device AI chat, not a PDF edit-and-export flow
   },
 ];
 
@@ -439,6 +447,15 @@ export const categories = [
     description: "On-device AI features — downloaded once, then run entirely in your browser",
   },
 ];
+
+/**
+ * Tools shown as standalone cards on the editor-first home screen — the
+ * multi-input constructors and special single-input tools that can't be a
+ * single-PDF "edit then export" editor flow (see `Tool.standaloneOnly`).
+ * Everything else is reached by dropping a PDF on the home dropzone, which
+ * opens the unified editor.
+ */
+export const HOME_CARD_TOOLS: Tool[] = tools.filter((t) => t.standaloneOnly);
 
 /** Look up a tool's metadata by id, or `null` if unknown. */
 export function findTool(id: string): Tool | null {

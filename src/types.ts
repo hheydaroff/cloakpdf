@@ -76,6 +76,18 @@ export interface Tool {
    * mobile experience.
    */
   desktopOnly?: boolean;
+  /**
+   * Keep this tool as a standalone home-screen card. The home page is
+   * editor-first — a PDF dropped on the home dropzone opens the unified
+   * editor, which already reaches every single-PDF edit/transform tool
+   * (plus PDF→image / contact-sheet / split via its Export menu). Only
+   * tools that can't be a single-PDF "edit then export" flow stay as
+   * cards: multi-input constructors (merge, images→PDF), the dual-input
+   * compare, and special single-input tools (AI chat, read-only
+   * inspector, image extraction, security cert/password). Tools without
+   * this flag are not shown as cards — they live inside the editor.
+   */
+  standaloneOnly?: boolean;
 }
 
 /** Position of page numbers on the page. */

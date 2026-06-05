@@ -1,10 +1,10 @@
 /**
- * End-to-end smoke for the M4 editor-first home routing.
+ * End-to-end smoke for the editor-first home routing.
  *
  * Two behaviours the home now owns:
- *   1. Editor-eligible tool cards open the canvas editor with that tool
- *      preselected (click "Redact" → editor → drop a PDF → Redact already live).
- *   2. The multi-file constructors hand their output to the editor (M3c):
+ *   1. The home drop zone opens the canvas editor with the dropped PDF
+ *      (drop a PDF on "Drop a PDF to start editing" → editor → page renders).
+ *   2. The multi-file constructors hand their output to the editor:
  *      Merge → drop 2 PDFs → "Merge 2 files & edit" → editor opens on the result.
  *
  * Requirements: Chrome at CHROME_PATH and the dev server at http://localhost:5173.
@@ -44,16 +44,6 @@ async function clickByText(page: Page, label: string): Promise<boolean> {
   }, label);
 }
 
-/** Wait until the page's visible text matches `re` (flags preserved). */
-async function waitForText(page: Page, re: RegExp, timeout = 20_000): Promise<void> {
-  await page.waitForFunction(
-    (src: string, flags: string) => new RegExp(src, flags).test(document.body.innerText),
-    { timeout },
-    re.source,
-    re.flags,
-  );
-}
-
 async function uploadInto(page: Page, ...fixtures: string[]): Promise<void> {
   await page.waitForSelector("input[type=file]", { timeout: 15_000 });
   const input = await page.$("input[type=file]");
@@ -81,14 +71,12 @@ async function main() {
     console.log(`→ Loading ${DEV_URL}`);
     await page.goto(DEV_URL, { waitUntil: "networkidle2" });
 
-    // 1. Editor-eligible card → editor with the tool preselected. Clicking the
-    //    "Redact" card opens the empty editor; after a PDF loads, the Redact
-    //    panel is already active WITHOUT touching the rail.
-    if (!(await clickByText(page, "Redact PDF"))) fail("'Redact PDF' tool card not found.");
+    // 1. Editor-first entry: dropping a PDF on the home drop zone opens the
+    //    canvas editor on that file (the focus page renders). The home page's
+    //    only file input is the hero drop zone.
     await uploadInto(page, FIXTURE_A);
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 30_000 });
-    await waitForText(page, /Detect & add boxes/i, 10_000);
-    console.log("  ✓ editor card routing (Redact preselected)");
+    console.log("  ✓ home drop zone → editor (focus page rendered)");
 
     // 2. Constructor hand-off: back home, merge two PDFs, land in the editor.
     await page.goto(DEV_URL, { waitUntil: "networkidle2" });

@@ -16,7 +16,6 @@ import { LoadingSpinner } from "../components/LoadingSpinner.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { useToolOutput } from "../hooks/useToolOutput.ts";
-import { useWorkflowSlot } from "../workflow/WorkflowContext.tsx";
 import { downloadBlob, errorMessage } from "../utils/file-helpers.ts";
 import { formatFileSize } from "../utils/file-helpers.ts";
 import type { PdfAttachment } from "../utils/pdf-operations.ts";
@@ -47,29 +46,15 @@ export default function FileAttachment() {
   const processing = task.processing;
   const error = task.error;
   const output = useToolOutput();
-  const slot = useWorkflowSlot();
   // Pull the stable setter out of `task` — including the whole `task`
   // object in deps would re-fire the effect on every render (the object
   // is a fresh literal each time) and spin the tool in an infinite
   // load → setState → re-render loop.
   const { setError: setTaskError } = task;
 
-  // In workflow mode, seed `pdfFile` from the runner's injected bytes.
-  // Tracked by ref so re-renders don't re-trigger; only a fresh injection
-  // (new step) replaces the file.
-  const lastInjectedRef = useRef<File | null>(null);
   // Drives the visually-hidden file input from a real <button>, so the
   // "Add files" affordance is reachable and operable from the keyboard.
   const addInputRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    const injected = slot?.injectedFile ?? null;
-    if (!injected || lastInjectedRef.current === injected) return;
-    lastInjectedRef.current = injected;
-    setPdfFile(injected);
-    setAttachments([]);
-    setSuccess(null);
-    setDirty(false);
-  }, [slot?.injectedFile]);
 
   // Load existing attachments when a PDF is selected
   useEffect(() => {

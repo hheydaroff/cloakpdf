@@ -1,5 +1,4 @@
-import { ArrowRight, Download, Loader2 } from "lucide-react";
-import { useWorkflowSlot } from "../workflow/WorkflowContext.tsx";
+import { Download, Loader2 } from "lucide-react";
 
 interface ActionButtonProps {
   onClick: () => void;
@@ -18,23 +17,10 @@ export function ActionButton({
   disabled,
   color = "bg-primary-600 hover:bg-primary-700",
 }: ActionButtonProps) {
-  // In an intermediate workflow step the button delivers to the next
-  // step — visually reinforce that with a trailing arrow. On the final
-  // step (last in a workflow) the button triggers a download, so swap
-  // the arrow for a download glyph. Standalone tools whose label
-  // explicitly says "Download" (e.g. "Apply Signature & Download")
-  // also get the download glyph; tools that show a result panel first
-  // (e.g. CompressPdf) use a different label and stay icon-less.
-  const slot = useWorkflowSlot();
-  const trailingIcon = processing
-    ? null
-    : slot === null
-      ? /download/i.test(label)
-        ? "download"
-        : null
-      : slot.isLastStep
-        ? "download"
-        : "continue";
+  // Tools whose label explicitly says "Download" (e.g. "Apply Signature &
+  // Download") get a trailing download glyph; tools that show a result panel
+  // first (e.g. CompressPdf) use a different label and stay icon-less.
+  const showDownload = !processing && /download/i.test(label);
 
   return (
     <div className="pt-6 sm:flex sm:justify-center sm:pt-8">
@@ -47,8 +33,7 @@ export function ActionButton({
       >
         <span>{processing ? processingLabel : label}</span>
         {processing && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
-        {trailingIcon === "continue" && <ArrowRight className="w-4 h-4" aria-hidden="true" />}
-        {trailingIcon === "download" && <Download className="w-4 h-4" aria-hidden="true" />}
+        {showDownload && <Download className="w-4 h-4" aria-hidden="true" />}
       </button>
     </div>
   );

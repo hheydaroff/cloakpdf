@@ -1,13 +1,12 @@
 /**
  * Root application module.
  *
- * Manages which view is active (home / tool / privacy / workflows-home /
- * workflow-builder / workflow-runner) and delegates rendering to the
- * matching child component.
+ * Manages which view is active (home / tool / editor / privacy) and delegates
+ * rendering to the matching child component. The home page is editor-first:
+ * dropping a PDF opens the unified editor; only multi-input + special tools
+ * remain as standalone cards.
  *
- * Tool metadata and lazy components live in `config/tool-registry.ts`
- * so that workflow code can render any tool by id without pulling
- * App.tsx into its dependency graph.
+ * Tool metadata and lazy components live in `config/tool-registry.ts`.
  */
 
 import {
@@ -22,36 +21,29 @@ import {
   UserRoundCheck,
   WifiOff,
   EyeOff,
-  Workflow as WorkflowIcon,
   X,
 } from "lucide-react";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FileDropZone } from "./components/FileDropZone.tsx";
 import { Layout } from "./components/Layout.tsx";
 import { useRevealOnScroll } from "./hooks/useRevealOnScroll.ts";
-import { useSpotlightGlow } from "./hooks/useSpotlightGlow.ts";
 import { OrientationLock } from "./components/OrientationLock.tsx";
 import { PrivacyPolicy } from "./components/PrivacyPolicy.tsx";
 import { ReloadPrompt } from "./components/ReloadPrompt.tsx";
 import { ToolCard } from "./components/ToolCard.tsx";
-import { categories, findTool, findToolComponent, tools } from "./config/tool-registry.ts";
+import { categoryAccent, categoryGlow } from "./config/theme.ts";
+import {
+  categories,
+  findTool,
+  findToolComponent,
+  HOME_CARD_TOOLS,
+  tools,
+} from "./config/tool-registry.ts";
 // Plain id set (no editor component graph) — safe on the home critical path.
 import { EDITOR_TOOL_IDS } from "./editor/tools.ts";
 import type { Tool, ToolId } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
 import { NAVIGATE_TOOL_EVENT, OPEN_EDITOR_EVENT } from "./utils/nav.ts";
-// Workflow views are lazy-loaded: WorkflowRunner is the only static App.tsx
-// import that reaches pdf-lib (through step execution), so code-splitting the
-// three workflow views keeps the ~233 kB-gzip pdf-lib/pako graph off the
-// home-screen critical path. They render under a Suspense boundary below.
-const WorkflowBuilder = lazy(() =>
-  import("./workflow/WorkflowBuilder.tsx").then((m) => ({ default: m.WorkflowBuilder })),
-);
-const WorkflowRunner = lazy(() =>
-  import("./workflow/WorkflowRunner.tsx").then((m) => ({ default: m.WorkflowRunner })),
-);
-const WorkflowsHome = lazy(() =>
-  import("./workflow/WorkflowsHome.tsx").then((m) => ({ default: m.WorkflowsHome })),
-);
 // The canvas editor is the primary single-PDF surface (editor-first redesign).
 // Lazy-loaded so its pdf-lib / PDF.js graph stays off the home critical path,
 // and rendered full-screen outside <Layout> (it owns its own chrome).
@@ -152,21 +144,20 @@ interface HomeScreenProps {
   onSelectTool: (id: ToolId) => void;
   /** Open the canvas editor (optionally with a file). The primary entry. */
   onOpenEditor: (file?: File | null) => void;
-  /** Open the workflows landing page. */
-  onOpenWorkflows: () => void;
 }
 
 /**
- * Landing page showing the hero headline, the workflow hero card, a
- * live-search bar with ⌘K / Ctrl+K shortcut, and a categorised grid
- * of tool cards.
+ * Landing page showing the hero headline, an editor drop zone, a live-search
+ * bar with ⌘K / Ctrl+K shortcut, and a categorised grid of the standalone
+ * tool cards (multi-input + special tools; everything else opens via the
+ * editor).
  *
  * Search state is local to this component so that typing never
  * re-renders the parent `App` or the `Layout` shell. When the user
  * navigates to a tool this component unmounts, naturally discarding
  * the query; returning to the home screen starts with a fresh search.
  */
-function HomeScreen({ onSelectTool, onOpenEditor, onOpenWorkflows }: HomeScreenProps) {
+function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -187,14 +178,15 @@ function HomeScreen({ onSelectTool, onOpenEditor, onOpenWorkflows }: HomeScreenP
   }, [searchQuery]);
 
   /**
-   * Tools whose title or description matches the query (case-insensitive).
-   * `desktopOnly` tools (currently just Ask PDF) are also dropped on
-   * mobile so phones don't see cards for features that crash their
-   * tabs — see the `desktopOnly` rationale in `tool-registry.ts`.
+   * Standalone cards whose title or description matches the query
+   * (case-insensitive). Starts from {@link HOME_CARD_TOOLS} (the editor-first
+   * card set), not every tool. `desktopOnly` tools (currently just Ask PDF)
+   * are also dropped on mobile so phones don't see cards for features that
+   * crash their tabs — see the `desktopOnly` rationale in `tool-registry.ts`.
    */
   const filteredTools = useMemo(() => {
     const mobile = isMobileDevice();
-    const visible = mobile ? tools.filter((t) => !t.desktopOnly) : tools;
+    const visible = mobile ? HOME_CARD_TOOLS.filter((t) => !t.desktopOnly) : HOME_CARD_TOOLS;
     const q = searchQuery.trim().toLowerCase();
     if (!q) return visible;
     return visible.filter(
@@ -205,10 +197,10 @@ function HomeScreen({ onSelectTool, onOpenEditor, onOpenWorkflows }: HomeScreenP
   return (
     <div>
       {/* ── Hero — asymmetric two-column. Headline + subhead live in the
-          left column (left-aligned); the Workflows promo card anchors the
-          right. On mobile the columns stack. When searchQuery is active
-          the right column is omitted; the left column keeps its width so
-          the page rhythm doesn't jump as the user types. ───────────── */}
+          left column (left-aligned); an editor drop zone anchors the right.
+          On mobile the columns stack. When searchQuery is active the right
+          column is omitted; the left column keeps its width so the page
+          rhythm doesn't jump as the user types. ───────────── */}
       <section className="pt-6 sm:pt-10 md:pt-14 pb-10 sm:pb-12">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
           <div className="lg:col-span-7">
@@ -247,7 +239,17 @@ function HomeScreen({ onSelectTool, onOpenEditor, onOpenWorkflows }: HomeScreenP
 
           {!searchQuery && (
             <div className="lg:col-span-5 animate-fade-in-up" style={{ animationDelay: "120ms" }}>
-              <WorkflowHeroCard onOpen={onOpenWorkflows} />
+              {/* Editor-first entry: drop a PDF here to open it in the editor,
+                  where every single-PDF tool lives. The card grid below is for
+                  multi-input + special tools that can't be an editor flow. */}
+              <FileDropZone
+                accept="application/pdf,.pdf"
+                onFiles={(files) => files[0] && onOpenEditor(files[0])}
+                glowColor={categoryGlow.organise}
+                iconColor={categoryAccent.organise}
+                label="Drop a PDF to start editing"
+                hint="Opens in the editor — everything stays on your device."
+              />
             </div>
           )}
         </div>
@@ -477,83 +479,13 @@ function FeatureItem({ icon, title, description }: FeatureItemProps) {
   );
 }
 
-// ── WorkflowHeroCard ─────────────────────────────────────────────
-
-interface WorkflowHeroCardProps {
-  onOpen: () => void;
-}
-
-/**
- * Same primary-tinted spotlight glow used by `ToolCard`. Kept inline
- * here (not extracted) since the two cards share little else.
- */
-const WORKFLOW_HERO_GLOW = "rgba(37,99,235,0.16)";
-
-/**
- * A single prominent card on the home screen that introduces the
- * Workflows feature. Matches `ToolCard`'s design — white surface,
- * slate border, cursor-tracking spotlight glow on hover — but stays
- * full-width with a horizontal layout so the "New · Workflows" label
- * and supporting copy can breathe.
- */
-function WorkflowHeroCard({ onOpen }: WorkflowHeroCardProps) {
-  const { ref, glowStyle, handlers } = useSpotlightGlow({
-    color: WORKFLOW_HERO_GLOW,
-    radius: 420,
-  });
-
-  return (
-    <button
-      type="button"
-      ref={ref}
-      onClick={onOpen}
-      {...handlers}
-      className="group relative w-full overflow-hidden bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border px-5 py-5 sm:px-6 sm:py-6 text-left cursor-pointer transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-primary-300 dark:hover:border-primary-600 hover:shadow-md active:-translate-y-0.5 active:border-primary-300 dark:active:border-primary-600 active:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
-    >
-      {/* Cursor / touch spotlight glow */}
-      <div
-        className="pointer-events-none absolute inset-0 rounded-[inherit] transition-opacity duration-300"
-        aria-hidden="true"
-        style={glowStyle}
-      />
-
-      <div className="relative z-10 flex items-start gap-4">
-        <span className="shrink-0 w-11 h-11 rounded-xl grid place-items-center bg-slate-100 dark:bg-dark-surface-alt text-slate-700 dark:text-dark-text transition-[transform,background-color,color] duration-200 group-hover:-translate-y-px group-hover:scale-105 group-hover:bg-primary-50 dark:group-hover:bg-primary-900/30 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-active:bg-primary-50 dark:group-active:bg-primary-900/30 group-active:text-primary-600 dark:group-active:text-primary-400">
-          <WorkflowIcon className="w-5 h-5" />
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-tag font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-dark-text-muted">
-              Workflows
-            </span>
-            <span className="inline-flex items-center rounded-full border border-primary-200 dark:border-primary-700/60 bg-primary-50 dark:bg-primary-900/30 px-2 py-0.5 text-xxs font-semibold uppercase tracking-[0.14em] text-primary-600 dark:text-primary-400">
-              New
-            </span>
-          </div>
-          <h3 className="text-card-title sm:text-[16px] font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text">
-            Chain tools together and run them in one go.
-          </h3>
-          <p className="text-meta sm:text-card-desc leading-normal text-slate-500 dark:text-dark-text-muted mt-0.5">
-            Build reusable sequences from supported tools and turn a multi-step PDF task into a
-            single click. A few tools — multi-file or non-PDF — stay standalone.
-          </p>
-        </div>
-        <ArrowRight
-          className="hidden sm:block shrink-0 self-end w-5 h-5 text-slate-400 dark:text-dark-text-muted transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-active:text-primary-600 dark:group-active:text-primary-400"
-          aria-hidden="true"
-        />
-      </div>
-    </button>
-  );
-}
-
 // ═══════════════════════════════════════════════════════════════════
 //  Root component
 // ═══════════════════════════════════════════════════════════════════
 
 /**
  * View state for the app — discriminated union so the active payload
- * (active tool id, edited workflow id) lives next to the view tag.
+ * (active tool id, edited file) lives next to the view tag.
  *
  * Kept here at module scope rather than as a `type View = ...` inside
  * `App` so the union is easier to read in isolation.
@@ -562,10 +494,7 @@ type View =
   | { kind: "home" }
   | { kind: "tool"; toolId: ToolId }
   | { kind: "editor"; file: File | null; tool?: string | null }
-  | { kind: "privacy" }
-  | { kind: "workflows-home" }
-  | { kind: "workflow-builder"; workflowId: string | null }
-  | { kind: "workflow-runner"; workflowId: string };
+  | { kind: "privacy" };
 
 /**
  * Root application component.
@@ -592,18 +521,6 @@ export function App() {
 
   const handlePrivacy = useCallback(() => {
     setView({ kind: "privacy" });
-  }, []);
-
-  const openWorkflowsHome = useCallback(() => {
-    setView({ kind: "workflows-home" });
-  }, []);
-
-  const openWorkflowBuilder = useCallback((workflowId: string | null) => {
-    setView({ kind: "workflow-builder", workflowId });
-  }, []);
-
-  const openWorkflowRunner = useCallback((workflowId: string) => {
-    setView({ kind: "workflow-runner", workflowId });
   }, []);
 
   /** Scroll to top whenever the view changes. */
@@ -658,9 +575,6 @@ export function App() {
           view={view}
           onSelectTool={handleSelectTool}
           onOpenEditor={openEditor}
-          onOpenWorkflowsHome={openWorkflowsHome}
-          onOpenWorkflowBuilder={openWorkflowBuilder}
-          onOpenWorkflowRunner={openWorkflowRunner}
           onGoHome={goHome}
         />
       </Layout>
@@ -674,41 +588,18 @@ interface ViewContentProps {
   view: View;
   onSelectTool: (id: ToolId) => void;
   onOpenEditor: (file?: File | null) => void;
-  onOpenWorkflowsHome: () => void;
-  onOpenWorkflowBuilder: (workflowId: string | null) => void;
-  onOpenWorkflowRunner: (workflowId: string) => void;
   onGoHome: () => void;
 }
 
-function ViewContent({
-  view,
-  onSelectTool,
-  onOpenEditor,
-  onOpenWorkflowsHome,
-  onOpenWorkflowBuilder,
-  onOpenWorkflowRunner,
-  onGoHome,
-}: ViewContentProps) {
+function ViewContent({ view, onSelectTool, onOpenEditor, onGoHome }: ViewContentProps) {
   switch (view.kind) {
     case "home":
-      return (
-        <HomeScreen
-          onSelectTool={onSelectTool}
-          onOpenEditor={onOpenEditor}
-          onOpenWorkflows={onOpenWorkflowsHome}
-        />
-      );
+      return <HomeScreen onSelectTool={onSelectTool} onOpenEditor={onOpenEditor} />;
     case "tool": {
       const meta = findTool(view.toolId);
       const Component = findToolComponent(view.toolId);
       if (!meta || !Component)
-        return (
-          <HomeScreen
-            onSelectTool={onSelectTool}
-            onOpenEditor={onOpenEditor}
-            onOpenWorkflows={onOpenWorkflowsHome}
-          />
-        );
+        return <HomeScreen onSelectTool={onSelectTool} onOpenEditor={onOpenEditor} />;
       return <ToolView tool={meta} Component={Component} />;
     }
     case "editor":
@@ -717,32 +608,6 @@ function ViewContent({
       return null;
     case "privacy":
       return <PrivacyPolicy />;
-    case "workflows-home":
-      return (
-        <Suspense fallback={<LoadingSpinner />}>
-          <WorkflowsHome
-            onCreate={() => onOpenWorkflowBuilder(null)}
-            onEdit={(id) => onOpenWorkflowBuilder(id)}
-            onRun={(id) => onOpenWorkflowRunner(id)}
-          />
-        </Suspense>
-      );
-    case "workflow-builder":
-      return (
-        <Suspense fallback={<LoadingSpinner />}>
-          <WorkflowBuilder
-            workflowId={view.workflowId}
-            onCancel={onOpenWorkflowsHome}
-            onSaved={onOpenWorkflowsHome}
-          />
-        </Suspense>
-      );
-    case "workflow-runner":
-      return (
-        <Suspense fallback={<LoadingSpinner />}>
-          <WorkflowRunner workflowId={view.workflowId} onExit={onOpenWorkflowsHome} />
-        </Suspense>
-      );
     default: {
       // Exhaustiveness check — TypeScript will flag missing cases.
       const _exhaustive: never = view;
