@@ -33,6 +33,7 @@
  * without a browser.
  */
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
+import { getPdfJs } from "./pdf/raster.ts";
 import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 import { detectPii, type PiiType } from "./pii.ts";
 
@@ -475,16 +476,6 @@ async function getLiteParse(): Promise<typeof import("@llamaindex/liteparse-wasm
     })();
   }
   return _initPromise;
-}
-
-let _pdfjsLib: typeof import("pdfjs-dist") | null = null;
-async function getPdfJs(): Promise<typeof import("pdfjs-dist")> {
-  if (!_pdfjsLib) {
-    const { default: workerSrc } = await import("pdfjs-dist/build/pdf.worker.min.mjs?worker&url");
-    _pdfjsLib = await import("pdfjs-dist");
-    _pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-  }
-  return _pdfjsLib;
 }
 
 /** Reject if `promise` hasn't settled within `ms` — guards against a wasm hang. */
