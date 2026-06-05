@@ -348,10 +348,17 @@ export function EditorProvider({
     [restoreEntry],
   );
 
+  // Hard reset: discard ALL edits and wipe the timeline, so undo/redo have
+  // nothing left to restore. (jumpTo(0) used to keep the redo tail, letting the
+  // user step right back into the edits they just cleared.)
   const reset = useCallback(() => {
-    historyRef.current.jumpTo(0);
-    restoreEntry();
-  }, [restoreEntry]);
+    const base = historyRef.current.resetToBase();
+    const cur = docRef.current;
+    if (!base || !cur) return;
+    setDoc({ ...cur, bytes: base.bytes, pages: base.pages, objects: base.objects });
+    toolCheckpointRef.current = historyRef.current.index();
+    setHistoryVersion((v) => v + 1);
+  }, []);
 
   const setActiveTool = useCallback((id: string | null) => {
     setActiveToolState(id);

@@ -109,6 +109,20 @@ export class EditorHistory {
     return this.current();
   }
 
+  /** Hard reset: discard every entry except the base (index 0) and park the
+   *  cursor there, so there's no undo/redo back to the discarded edits. Only the
+   *  dropped entries are evicted, so the base's thumbnails survive (they'd be
+   *  wrongly revoked if we `clear()`-then-re-pushed the base). */
+  resetToBase(): HistoryEntry | null {
+    if (this.stack.length === 0) return null;
+    const base = this.stack[0];
+    const dropped = this.stack.slice(1);
+    this.stack = [base];
+    this.cursor = 0;
+    this.emitEvict(dropped);
+    return base;
+  }
+
   /** Move the cursor to an absolute index (clamped) and return that entry. */
   jumpTo(index: number): HistoryEntry | null {
     if (this.stack.length === 0) return null;
