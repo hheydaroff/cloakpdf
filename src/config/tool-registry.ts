@@ -1,49 +1,29 @@
 /**
- * Single source of truth for tool metadata and lazy-loaded components.
+ * Single source of truth for the standalone tool cards on the home screen and
+ * their lazy-loaded components.
  *
- * Previously these two arrays/maps lived inside App.tsx. They were
- * extracted so that workflow code can render any tool by id without
- * pulling App.tsx into its dependency graph.
+ * The home is editor-first: dropping a PDF opens the unified canvas editor,
+ * which reaches every single-PDF edit/transform tool (plus PDF→image /
+ * contact-sheet / split via its Export menu and reverse / extract / remove-blank
+ * via Organize). Only tools that can't be a single-PDF "edit then export" flow
+ * stay as cards here — the multi-input constructors (merge, images→PDF), the
+ * dual-input compare, terminal-output extract-images, the security flows
+ * (password, digital signature), the read-only inspector, and on-device AI
+ * chat. See `Tool.standaloneOnly`.
  *
- * Tool order within each category encodes importance / frequency of use
- * — the home grid displays them in this order.
+ * Tool order within each category encodes importance / frequency of use — the
+ * home grid displays them in this order.
  */
 
 import {
-  AlignCenter,
-  Archive,
   ArrowLeftRight,
-  BookMarked,
-  ClipboardList,
-  Contrast,
-  Crop,
-  Eraser,
-  EyeOff,
-  FileImage,
   FileKey2,
-  FileOutput,
   FileSearch,
-  FileText,
-  FileX,
   GitMerge,
-  Grid2x2,
-  Hash,
-  Highlighter,
   ImageDown,
   Images,
-  Layers,
-  LayoutDashboard,
-  LayoutGrid,
   Lock,
   MessageSquare,
-  Paperclip,
-  PenTool,
-  Repeat2,
-  Scale,
-  ScanText,
-  Scissors,
-  Stamp,
-  Wrench,
 } from "lucide-react";
 import { lazy } from "react";
 import type { Tool, ToolId } from "../types.ts";
@@ -51,38 +31,12 @@ import type { Tool, ToolId } from "../types.ts";
 // ── Lazy-loaded tool components (code-split per tool) ────────────
 
 const MergePdf = lazy(() => import("../tools/MergePdf.tsx"));
-const CompressPdf = lazy(() => import("../tools/CompressPdf.tsx"));
 const ImagesToPdf = lazy(() => import("../tools/ImagesToPdf.tsx"));
-const AddSignature = lazy(() => import("../tools/AddSignature.tsx"));
-const EditMetadata = lazy(() => import("../tools/EditMetadata.tsx"));
-const OcrPdf = lazy(() => import("../tools/OcrPdf.tsx"));
-const PdfPassword = lazy(() => import("../tools/PdfPassword.tsx"));
-const FlattenPdf = lazy(() => import("../tools/FlattenPdf.tsx"));
-const AddPageNumbers = lazy(() => import("../tools/AddPageNumbers.tsx"));
-const HeaderFooter = lazy(() => import("../tools/HeaderFooter.tsx"));
-const CropPages = lazy(() => import("../tools/CropPages.tsx"));
-const PdfToImage = lazy(() => import("../tools/PdfToImage.tsx"));
-const FillPdfForm = lazy(() => import("../tools/FillPdfForm.tsx"));
-const ExtractPages = lazy(() => import("../tools/ExtractPages.tsx"));
-const ReversePages = lazy(() => import("../tools/ReversePages.tsx"));
-const RedactPdf = lazy(() => import("../tools/RedactPdf.tsx"));
-const StampPdf = lazy(() => import("../tools/StampPdf.tsx"));
-const AddBookmarks = lazy(() => import("../tools/AddBookmarks.tsx"));
-const PdfInspector = lazy(() => import("../tools/PdfInspector.tsx"));
-const RepairPdf = lazy(() => import("../tools/RepairPdf.tsx"));
-const NupPages = lazy(() => import("../tools/NupPages.tsx"));
-const RemoveBlankPages = lazy(() => import("../tools/RemoveBlankPages.tsx"));
-const BatesNumbering = lazy(() => import("../tools/BatesNumbering.tsx"));
-const ContactSheet = lazy(() => import("../tools/ContactSheet.tsx"));
-const GrayscalePdf = lazy(() => import("../tools/GrayscalePdf.tsx"));
-const FileAttachment = lazy(() => import("../tools/FileAttachment.tsx"));
-const SplitPdf = lazy(() => import("../tools/SplitPdf.tsx"));
 const ExtractImages = lazy(() => import("../tools/ExtractImages.tsx"));
+const PdfPassword = lazy(() => import("../tools/PdfPassword.tsx"));
 const ComparePdf = lazy(() => import("../tools/ComparePdf.tsx"));
 const DigitalSignature = lazy(() => import("../tools/DigitalSignature.tsx"));
-const PdfScrub = lazy(() => import("../tools/PdfScrub.tsx"));
-const OrganizePages = lazy(() => import("../tools/OrganizePages.tsx"));
-const AnnotatePdf = lazy(() => import("../tools/AnnotatePdf.tsx"));
+const PdfInspector = lazy(() => import("../tools/PdfInspector.tsx"));
 const AskPdf = lazy(() => import("../tools/AskPdf.tsx"));
 
 // ── Tool metadata ────────────────────────────────────────────────
@@ -97,72 +51,8 @@ export const tools: Tool[] = [
     category: "organise",
     standaloneOnly: true, // multi-input constructor (then hands off to the editor)
   },
-  {
-    id: "organize-pages",
-    title: "Organize Pages",
-    description:
-      "Reorder, rotate, duplicate, delete, add blanks & splice in other PDFs — all in one view",
-    icon: Grid2x2,
-    category: "organise",
-  },
-  {
-    id: "split-pdf",
-    title: "Split PDF",
-    description: "Divide a PDF into multiple separate files at chosen pages",
-    icon: Scissors,
-    category: "organise",
-  },
-  {
-    id: "extract-pages",
-    title: "Extract Pages",
-    description: "Select specific pages and save them as a new PDF",
-    icon: FileOutput,
-    category: "organise",
-  },
-  {
-    id: "reverse-pages",
-    title: "Reverse Pages",
-    description: "Flip the page order of a PDF in one click",
-    icon: Repeat2,
-    category: "organise",
-  },
-  {
-    id: "remove-blank-pages",
-    title: "Remove Blank Pages",
-    description: "Auto-detect and remove empty pages from a PDF",
-    icon: FileX,
-    category: "organise",
-  },
-  {
-    id: "add-bookmarks",
-    title: "Add Bookmarks",
-    description: "Add a clickable outline for quick in-document navigation",
-    icon: BookMarked,
-    category: "organise",
-  },
-  {
-    id: "file-attachment",
-    title: "File Attachments",
-    description: "View, add, extract, or remove files embedded in a PDF",
-    icon: Paperclip,
-    category: "organise",
-  },
 
   // ── Transform & Convert ──────────────────────────────────
-  {
-    id: "compress",
-    title: "Compress PDF",
-    description: "Reduce PDF file size for easier sharing",
-    icon: Archive,
-    category: "transform",
-  },
-  {
-    id: "pdf-to-image",
-    title: "PDF to Image",
-    description: "Export pages as PNG or JPEG images",
-    icon: FileImage,
-    category: "transform",
-  },
   {
     id: "images-to-pdf",
     title: "Images to PDF",
@@ -172,114 +62,12 @@ export const tools: Tool[] = [
     standaloneOnly: true, // multi-input constructor (then hands off to the editor)
   },
   {
-    id: "ocr",
-    title: "OCR PDF",
-    description: "Extract text from scanned PDFs using OCR",
-    icon: ScanText,
-    category: "transform",
-  },
-  {
     id: "extract-images",
     title: "Extract Images",
     description: "Pull all embedded images from a PDF and download as PNG or ZIP",
     icon: ImageDown,
     category: "transform",
     standaloneOnly: true, // terminal output (embedded images → PNG/ZIP), not a PDF edit
-  },
-  {
-    id: "crop-pages",
-    title: "Crop Pages",
-    description: "Trim page margins by adjusting the visible area",
-    icon: Crop,
-    category: "transform",
-  },
-  {
-    id: "flatten",
-    title: "Flatten PDF",
-    description: "Remove form fields and annotations, making the PDF non-editable",
-    icon: Layers,
-    category: "transform",
-  },
-  {
-    id: "grayscale",
-    title: "Grayscale PDF",
-    description: "Convert all pages to grayscale, removing all colour information",
-    icon: Contrast,
-    category: "transform",
-  },
-  {
-    id: "nup-pages",
-    title: "N-up Pages",
-    description: "Arrange multiple pages onto a single sheet for compact printing",
-    icon: LayoutGrid,
-    category: "transform",
-  },
-  {
-    id: "contact-sheet",
-    title: "Contact Sheet",
-    description: "Render all pages as a thumbnail grid for quick visual review",
-    icon: LayoutDashboard,
-    category: "transform",
-  },
-  {
-    id: "repair-pdf",
-    title: "Repair PDF",
-    description: "Fix structural issues in corrupted or malformed PDFs",
-    icon: Wrench,
-    category: "transform",
-  },
-
-  // ── Annotate & Sign ──────────────────────────────────────
-  {
-    id: "annotate-pdf",
-    title: "Annotate PDF",
-    description:
-      "Draw, highlight, add shapes & arrows, and place text — kept as crisp vector marks",
-    icon: Highlighter,
-    category: "annotate",
-  },
-  {
-    id: "signature",
-    title: "Add Signature",
-    description: "Draw or upload a custom signature image and place it on a page",
-    icon: PenTool,
-    category: "annotate",
-  },
-  {
-    id: "fill-pdf-form",
-    title: "Fill PDF Form",
-    description: "Fill interactive form fields in existing PDFs",
-    icon: ClipboardList,
-    category: "annotate",
-  },
-  {
-    id: "stamp-pdf",
-    title: "Stamp & Watermark",
-    description:
-      "Apply pre-built stamps or custom text watermarks — set colour, opacity, angle, and position",
-    icon: Stamp,
-    category: "annotate",
-  },
-  {
-    id: "add-page-numbers",
-    title: "Add Page Numbers",
-    description: "Insert page numbers with custom position and format",
-    icon: Hash,
-    category: "annotate",
-  },
-  {
-    id: "header-footer",
-    title: "Header & Footer",
-    description: "Add repeating text at the top and/or bottom of every page",
-    icon: AlignCenter,
-    category: "annotate",
-  },
-  {
-    id: "bates-numbering",
-    title: "Bates Numbering",
-    description: "Stamp sequential identifiers for legal and compliance workflows",
-    icon: Scale,
-    category: "annotate",
   },
 
   // ── Security & Properties ────────────────────────────────
@@ -290,29 +78,6 @@ export const tools: Tool[] = [
     icon: Lock,
     category: "security",
     standaloneOnly: true, // security flow (encrypt/decrypt), not a single-PDF edit step
-  },
-  {
-    id: "redact-pdf",
-    title: "Redact PDF",
-    description:
-      "Auto-detect emails, links, phones & IDs — or box regions — and permanently remove them",
-    icon: EyeOff,
-    category: "security",
-  },
-  {
-    id: "pdf-scrub",
-    title: "PDF Scrub",
-    description:
-      "Find and permanently remove hidden metadata, scripts, embedded files & tracking data",
-    icon: Eraser,
-    category: "security",
-  },
-  {
-    id: "metadata",
-    title: "Edit Metadata",
-    description: "View, edit, or redact PDF document properties for privacy",
-    icon: FileText,
-    category: "security",
   },
   {
     id: "compare-pdf",
@@ -383,38 +148,12 @@ export const tools: Tool[] = [
 
 export const toolComponents: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
   merge: MergePdf,
-  compress: CompressPdf,
   "images-to-pdf": ImagesToPdf,
-  signature: AddSignature,
-  metadata: EditMetadata,
-  ocr: OcrPdf,
-  "pdf-password": PdfPassword,
-  flatten: FlattenPdf,
-  "add-page-numbers": AddPageNumbers,
-  "header-footer": HeaderFooter,
-  "crop-pages": CropPages,
-  "pdf-to-image": PdfToImage,
-  "fill-pdf-form": FillPdfForm,
-  "extract-pages": ExtractPages,
-  "reverse-pages": ReversePages,
-  "redact-pdf": RedactPdf,
-  "stamp-pdf": StampPdf,
-  "add-bookmarks": AddBookmarks,
-  "pdf-inspector": PdfInspector,
-  "repair-pdf": RepairPdf,
-  "nup-pages": NupPages,
-  "remove-blank-pages": RemoveBlankPages,
-  "bates-numbering": BatesNumbering,
-  "contact-sheet": ContactSheet,
-  grayscale: GrayscalePdf,
-  "file-attachment": FileAttachment,
-  "split-pdf": SplitPdf,
   "extract-images": ExtractImages,
+  "pdf-password": PdfPassword,
   "compare-pdf": ComparePdf,
   "digital-signature": DigitalSignature,
-  "pdf-scrub": PdfScrub,
-  "organize-pages": OrganizePages,
-  "annotate-pdf": AnnotatePdf,
+  "pdf-inspector": PdfInspector,
   "ask-pdf": AskPdf,
 };
 
@@ -430,11 +169,6 @@ export const categories = [
     key: "transform",
     label: "Transform & Convert",
     description: "Compress, convert, and extract content",
-  },
-  {
-    key: "annotate",
-    label: "Annotate & Sign",
-    description: "Add watermarks, signatures, and overlays",
   },
   {
     key: "security",

@@ -156,13 +156,19 @@ export interface BatesNumberOptions {
   margin: number;
 }
 
-/** Union of all valid tool identifiers. */
+/**
+ * Union of all valid tool identifiers — the 8 standalone home cards plus every
+ * editor tool id (see `EDITOR_TOOLS` in `src/editor/tools.ts`). The home is
+ * editor-first, so most ids route to the unified editor rather than a
+ * standalone view; the six former cards that the editor fully absorbed
+ * (split / extract-pages / reverse / remove-blank / pdf-to-image / contact-sheet)
+ * are no longer ids of their own — they live inside the Export menu and Organize.
+ */
 export type ToolId =
   | "merge"
   | "organize-pages"
   | "compress"
   | "images-to-pdf"
-  | "watermark"
   | "signature"
   | "metadata"
   | "ocr"
@@ -171,10 +177,7 @@ export type ToolId =
   | "add-page-numbers"
   | "header-footer"
   | "crop-pages"
-  | "pdf-to-image"
   | "fill-pdf-form"
-  | "extract-pages"
-  | "reverse-pages"
   | "redact-pdf"
   | "pdf-scrub"
   | "stamp-pdf"
@@ -183,12 +186,9 @@ export type ToolId =
   | "pdf-inspector"
   | "repair-pdf"
   | "nup-pages"
-  | "remove-blank-pages"
   | "bates-numbering"
-  | "contact-sheet"
   | "grayscale"
   | "file-attachment"
-  | "split-pdf"
   | "extract-images"
   | "compare-pdf"
   | "digital-signature"

@@ -136,13 +136,6 @@ export async function createDocFromBytes(
   return createDocFromFile(file, onProgress);
 }
 
-/** Revoke every page thumbnail blob URL the doc holds. Call on doc replace /
- *  editor unmount so previews don't leak across sessions. */
-export function revokeDocThumbnails(doc: CanvasDoc | null): void {
-  if (!doc) return;
-  revokeThumbnails(doc.pages.map((p) => p.thumbUrl ?? "").filter(Boolean));
-}
-
 /** Wrap the doc's current bytes as a File so the existing `pdf-operations`
  *  writers (which take a File) can run against the live document. */
 export function docToFile(doc: CanvasDoc): File {
