@@ -2,8 +2,8 @@
 
   <img src="public/icons/og-image.png" alt="CloakPDF — private, in-browser PDF toolkit" width="800" />
 
-  <p><strong>A fast, private PDF toolkit that runs entirely in your browser.</strong><br>
-  No uploads, no servers, no tracking — your files never leave your device.</p>
+  <p><strong>A fast, private PDF toolkit that runs entirely in your browser.</strong></p>
+  <p>No uploads, no servers, no tracking — your files never leave your device.</p>
 
   <p><a href="https://pdf.cloakyard.com/">pdf.cloakyard.com</a></p>
 
@@ -21,47 +21,43 @@
 
 ---
 
-## What it does
+## ✨ What it does
 
-Drop a PDF and it opens in a single, canvas-based **editor** — annotate, sign, fill
-forms, redact, crop, OCR, reorganise pages, add stamps and page numbers, and more.
-A few **standalone tools** cover jobs that need more than one file (merge, images →
-PDF, compare) or special inputs (password, certificate signing). And **Ask your
-PDF** answers questions about a document using a small AI model that runs on your
-device.
+Drop a PDF and it opens in a single, canvas-based **editor** — annotate, sign, fill forms, redact, crop, OCR, reorganise pages, add stamps and page numbers, and more. A few **standalone tools** cover jobs that need more than one file (merge, images → PDF, compare) or special inputs (password, certificate signing). And **Ask your PDF** answers questions about a document using a small AI model that runs on your device.
 
-- **Edit & annotate** — draw, highlight, shapes, text, signatures, fill forms
-- **Pages** — reorder, rotate, delete, crop, N-up, split, contact sheet
-- **Privacy** — redact (burned into the page), scrub hidden data, strip metadata
-- **Convert** — compress, grayscale, flatten, OCR, PDF ⇄ images
-- **Secure** — password & permissions, certificate signing, compare two PDFs
-- **AI (on-device)** — chat with your PDF; no API key, no server
+- **✏️ Edit & annotate** — draw, highlight, shapes, text, signatures, fill forms
+- **📄 Pages** — reorder, rotate, delete, crop, N-up, split, contact sheet
+- **🔒 Privacy** — redact (burned into the page), scrub hidden data, strip metadata
+- **🔄 Convert** — compress, grayscale, flatten, OCR, PDF ⇄ images
+- **🔑 Secure** — password & permissions, certificate signing, compare two PDFs
+- **🤖 AI (on-device)** — chat with your PDF; no API key, no server
 
-Export to PDF, images (ZIP), a contact sheet, or split pages — with optional
-compress / grayscale / flatten / repair / strip-metadata.
+Export to PDF, images (ZIP), a contact sheet, or split pages — with optional compress / grayscale / flatten / repair / strip-metadata.
 
 ---
 
-## Privacy first
+## 🛡️ Privacy first
 
-Everything runs client-side — there is no server to upload to. No accounts, no
-analytics, no tracking. It's an installable PWA that keeps working offline once
-loaded, and the on-device AI needs no API key or inference server.
+Everything runs client-side — there is no server to upload to. No accounts, no analytics, no tracking. It's an installable PWA that keeps working offline once loaded, and the on-device AI needs no API key or inference server.
 
 ---
 
-## Tech stack
+## 🧰 Tech stack
 
-React 19 · TypeScript 6 · Tailwind CSS 4 · [Vite+](https://viteplus.dev/) ·
-[@pdfme/pdf-lib](https://github.com/pdfme/pdf-lib) (manipulation) ·
-[PDF.js](https://mozilla.github.io/pdf.js/) (rendering) ·
-[Transformers.js](https://github.com/huggingface/transformers.js) + LangGraph
-(on-device AI) · [Tesseract.js](https://tesseract.projectnaptha.com/) (OCR).
-Deployed on **Cloudflare Workers**.
+| Area             | Technology                                                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Framework        | [React 19](https://react.dev/) + [TypeScript 6](https://www.typescriptlang.org/)                                             |
+| Styling          | [Tailwind CSS 4](https://tailwindcss.com/)                                                                                   |
+| Build & tooling  | [Vite+ (`vp`)](https://viteplus.dev/)                                                                                        |
+| PDF manipulation | [@pdfme/pdf-lib](https://github.com/pdfme/pdf-lib)                                                                           |
+| PDF rendering    | [PDF.js](https://mozilla.github.io/pdf.js/)                                                                                  |
+| Layout-aware OCR | [LlamaIndex LiteParse](https://www.llamaindex.ai/liteparse) + [Tesseract.js](https://tesseract.projectnaptha.com/)           |
+| On-device AI     | [Transformers.js](https://github.com/huggingface/transformers.js) + [LangGraph](https://langchain-ai.github.io/langgraphjs/) |
+| Deployment       | [Cloudflare Workers](https://workers.cloudflare.com/)                                                                        |
 
 ---
 
-## Getting started
+## 🚀 Getting started
 
 ```bash
 git clone https://github.com/cloakyard/cloakpdf.git
@@ -79,18 +75,14 @@ vp dev       # http://localhost:5173
 
 ---
 
-## On-device AI
+## 🤖 On-device AI
 
-**Ask your PDF** runs a full retrieval-augmented Q&A pipeline in the browser — the
-model weights download once from Hugging Face, cache, and work offline after. For
-the architecture (LangGraph state machine, hybrid retrieval, model choices), see
-**[docs/local-ai.md](docs/local-ai.md)**.
+**Ask your PDF** runs a full retrieval-augmented Q&A pipeline in the browser — the model weights download once from Hugging Face, cache, and work offline after. For the architecture (LangGraph state machine, hybrid retrieval, model choices), see **[docs/local-ai.md](docs/local-ai.md)**.
 
 ---
 
-## Contributing & license
+## 🤝 Contributing & license
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under
-the [MIT License](LICENSE).
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Licensed under the [MIT License](LICENSE).
 
 <p align="center">Built with ❤️ by <a href="https://github.com/sumitsahoo">Sumit Sahoo</a></p>
