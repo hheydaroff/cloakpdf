@@ -18,6 +18,7 @@ import {
 } from "react";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { type StagePoint, useActiveStageProps } from "./stage.tsx";
+import type { ViewState } from "./types.ts";
 
 type Pt = { x: number; y: number };
 const distance = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -46,6 +47,34 @@ export function PdfStage() {
   } | null>(null);
   const pinchActiveRef = useRef(false);
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
+
+  // Coalesce pan / pinch / wheel view updates into one setView per animation
+  // frame. High-Hz pointermove/wheel events otherwise call setView many times a
+  // frame, and since `view` lives in the shared read-context every call re-renders
+  // the whole editor (top bar + properties/tool panel). Folding the queued
+  // updaters keeps both absolute (pan/pinch) and multiplicative (wheel) updates
+  // correct — the last absolute update wins, multiplicative ones accumulate.
+  const frameRef = useRef<number | null>(null);
+  const pendingRef = useRef<Array<(v: ViewState) => ViewState>>([]);
+  const scheduleView = useCallback(
+    (updater: (v: ViewState) => ViewState) => {
+      pendingRef.current.push(updater);
+      if (frameRef.current != null) return;
+      frameRef.current = requestAnimationFrame(() => {
+        frameRef.current = null;
+        const updaters = pendingRef.current;
+        pendingRef.current = [];
+        setView((prev) => updaters.reduce((acc, u) => u(acc), prev));
+      });
+    },
+    [setView],
+  );
+  useEffect(
+    () => () => {
+      if (frameRef.current != null) cancelAnimationFrame(frameRef.current);
+    },
+    [],
+  );
 
   const page = doc?.pages[selectedPage] ?? null;
 
@@ -170,7 +199,7 @@ export function PdfStage() {
         const zoom = Math.min(8, Math.max(0.2, pinch.zoom * ratio));
         const cx = (a.x + b.x) / 2;
         const cy = (a.y + b.y) / 2;
-        setView((prev) => ({
+        scheduleView((prev) => ({
           ...prev,
           zoom,
           panX: pinch.panX + (cx - pinch.cx),
@@ -186,13 +215,13 @@ export function PdfStage() {
       }
       const p = panStart.current;
       if (!p) return;
-      setView((prev) => ({
+      scheduleView((prev) => ({
         ...prev,
         panX: p.panX + (e.clientX - p.x),
         panY: p.panY + (e.clientY - p.y),
       }));
     },
-    [hasToolPointer, stageProps, toPoint, setView],
+    [hasToolPointer, stageProps, toPoint, scheduleView],
   );
 
   const onPointerUp = useCallback(
@@ -221,9 +250,9 @@ export function PdfStage() {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-      setView((prev) => ({ ...prev, zoom: Math.min(8, Math.max(0.2, prev.zoom * factor)) }));
+      scheduleView((prev) => ({ ...prev, zoom: Math.min(8, Math.max(0.2, prev.zoom * factor)) }));
     },
-    [setView],
+    [scheduleView],
   );
 
   if (!page) return <div className="flex min-h-0 flex-1" />;

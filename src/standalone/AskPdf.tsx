@@ -25,7 +25,7 @@ import {
   User,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ActiveModelBar } from "../components/ActiveModelBar.tsx";
 import { AiConsentModal } from "../components/AiConsentModal.tsx";
@@ -737,68 +737,68 @@ function EmptyChatHint() {
  * as literal text in the DOM. We do not add `rehype-raw`. The model
  * output is the only untrusted input on this path.
  */
+// Hoisted to module scope: this map captures no props and never changes, so
+// rebuilding it per render — once per streamed token while an answer comes in —
+// is pure waste.
+const ASSISTANT_MD_COMPONENTS: Components = {
+  p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+  ul: ({ children }) => (
+    <ul className="list-disc list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ul>
+  ),
+  ol: ({ children }) => (
+    <ol className="list-decimal list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ol>
+  ),
+  li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  h1: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
+  h2: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
+  h3: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
+  code: ({ children }) => (
+    <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-dark-bg text-xs font-mono">
+      {children}
+    </code>
+  ),
+  pre: ({ children }) => (
+    <pre className="my-2 p-3 rounded-lg bg-slate-100 dark:bg-dark-bg text-xs font-mono overflow-x-auto thin-scrollbar">
+      {children}
+    </pre>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote className="border-l-2 border-slate-300 dark:border-dark-border pl-3 italic text-slate-600 dark:text-dark-text-muted my-2">
+      {children}
+    </blockquote>
+  ),
+  a: ({ children, href }) => (
+    <a
+      href={href}
+      className="text-primary-600 dark:text-primary-400 underline underline-offset-2"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  hr: () => <hr className="my-3 border-slate-200 dark:border-dark-border" />,
+  table: ({ children }) => (
+    <div className="my-2 overflow-x-auto thin-scrollbar">
+      <table className="text-xs border-collapse">{children}</table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-slate-200 dark:border-dark-border px-2 py-1 font-semibold text-left">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-slate-200 dark:border-dark-border px-2 py-1">{children}</td>
+  ),
+};
+
 function AssistantMarkdown({ content }: { content: string }) {
   return (
     <div className="text-sm leading-relaxed text-slate-800 dark:text-dark-text wrap-anywhere">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-          ul: ({ children }) => (
-            <ul className="list-disc list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ul>
-          ),
-          ol: ({ children }) => (
-            <ol className="list-decimal list-outside pl-5 mb-2 last:mb-0 space-y-1">{children}</ol>
-          ),
-          li: ({ children }) => <li className="leading-relaxed">{children}</li>,
-          strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-          em: ({ children }) => <em className="italic">{children}</em>,
-          h1: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
-          h2: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
-          h3: ({ children }) => <h3 className="font-semibold text-base mb-1.5">{children}</h3>,
-          code: ({ children }) => (
-            <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-dark-bg text-xs font-mono">
-              {children}
-            </code>
-          ),
-          pre: ({ children }) => (
-            <pre className="my-2 p-3 rounded-lg bg-slate-100 dark:bg-dark-bg text-xs font-mono overflow-x-auto thin-scrollbar">
-              {children}
-            </pre>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-slate-300 dark:border-dark-border pl-3 italic text-slate-600 dark:text-dark-text-muted my-2">
-              {children}
-            </blockquote>
-          ),
-          a: ({ children, href }) => (
-            <a
-              href={href}
-              className="text-primary-600 dark:text-primary-400 underline underline-offset-2"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {children}
-            </a>
-          ),
-          hr: () => <hr className="my-3 border-slate-200 dark:border-dark-border" />,
-          table: ({ children }) => (
-            <div className="my-2 overflow-x-auto thin-scrollbar">
-              <table className="text-xs border-collapse">{children}</table>
-            </div>
-          ),
-          th: ({ children }) => (
-            <th className="border border-slate-200 dark:border-dark-border px-2 py-1 font-semibold text-left">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="border border-slate-200 dark:border-dark-border px-2 py-1">
-              {children}
-            </td>
-          ),
-        }}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={ASSISTANT_MD_COMPONENTS}>
         {content}
       </ReactMarkdown>
     </div>
