@@ -95,6 +95,43 @@ export async function setPdfMetadata(file: File, metadata: PdfMetadata): Promise
 }
 
 /**
+ * Remove all document metadata and return the stripped bytes.
+ *
+ * Deletes every entry in the Info dictionary (title, author, subject,
+ * keywords, creator, producer, creation/modification dates, trapped) and drops
+ * the XMP metadata stream referenced from the catalog. Loaded with
+ * `updateMetadata: false` so pdf-lib doesn't re-stamp Producer / ModDate on
+ * save. Page content is untouched — only the metadata is gone.
+ *
+ * @param file - The PDF file to strip.
+ * @returns PDF bytes with all metadata removed.
+ */
+export async function stripMetadata(file: File): Promise<Uint8Array> {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await PDFDocument.load(arrayBuffer, { updateMetadata: false });
+
+  const infoDict = (pdf as unknown as { getInfoDict(): PDFDict }).getInfoDict();
+  for (const key of [
+    "Title",
+    "Author",
+    "Subject",
+    "Keywords",
+    "Creator",
+    "Producer",
+    "CreationDate",
+    "ModDate",
+    "Trapped",
+  ]) {
+    infoDict.delete(PDFName.of(key));
+  }
+
+  // Drop the XMP metadata stream (catalog → /Metadata).
+  pdf.catalog.delete(PDFName.of("Metadata"));
+
+  return pdf.save();
+}
+
+/**
  * Read technical information about a PDF file.
  *
  * Reads the PDF version from the file header bytes, page dimensions, and all

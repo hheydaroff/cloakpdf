@@ -22,6 +22,7 @@ import {
   Contrast,
   Download,
   FileText,
+  FileX2,
   Image as ImageIcon,
   Layers,
   type LucideIcon,
@@ -40,6 +41,7 @@ import {
   nupPages,
   repairPdf,
   splitPdfIntoParts,
+  stripMetadata,
 } from "../utils/pdf-operations.ts";
 import { renderPagesToBlobs } from "../utils/pdf-renderer.ts";
 import { docToFile } from "./doc.ts";
@@ -209,6 +211,7 @@ export function ExportButton() {
   const [grayscale, setGrayscale] = useState(false);
   const [flatten, setFlatten] = useState(false);
   const [repair, setRepair] = useState(false);
+  const [stripMeta, setStripMeta] = useState(false);
 
   const busy = busyLabel !== null;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -259,8 +262,14 @@ export function ExportButton() {
       next(await repairPdf(file));
       tags.push("repaired");
     }
+    // Strip last so it also clears any metadata the rasterising / rebuild steps
+    // (compress, grayscale, repair) may have stamped on the way out.
+    if (stripMeta) {
+      next(await stripMetadata(file));
+      tags.push("no-metadata");
+    }
     return { bytes, suffix: tags.length ? `_${tags.join("-")}` : "_edited" };
-  }, [doc, flatten, grayscale, compress, repair, quality]);
+  }, [doc, flatten, grayscale, compress, repair, stripMeta, quality]);
 
   const handleDownload = useCallback(() => {
     if (!doc) return;
@@ -307,7 +316,7 @@ export function ExportButton() {
     }
 
     // PDF — fast path when no modifiers are on (no overlay flash).
-    if (!(compress || grayscale || flatten || repair)) {
+    if (!(compress || grayscale || flatten || repair || stripMeta)) {
       downloadPdf(doc.bytes, pdfFilename(doc.fileName, "_edited"));
       return;
     }
@@ -315,7 +324,7 @@ export function ExportButton() {
       const { bytes, suffix } = await buildPdf();
       downloadPdf(bytes, pdfFilename(doc.fileName, suffix));
     });
-  }, [doc, format, compress, grayscale, flatten, repair, baseName, runTask, buildPdf]);
+  }, [doc, format, compress, grayscale, flatten, repair, stripMeta, baseName, runTask, buildPdf]);
 
   const isPdf = format === "pdf";
 
@@ -436,6 +445,13 @@ export function ExportButton() {
                       hint="Rebuild the file structure"
                       checked={repair}
                       onChange={setRepair}
+                    />
+                    <OptionRow
+                      icon={FileX2}
+                      label="Strip metadata"
+                      hint="Remove title, author, dates & XMP"
+                      checked={stripMeta}
+                      onChange={setStripMeta}
                     />
                   </div>
                 )}

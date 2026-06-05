@@ -54,7 +54,13 @@ export {
 } from "./pdf/stamps.ts";
 
 export type { PdfInfo } from "./pdf/metadata.ts";
-export { getPdfMetadata, setPdfMetadata, getPdfInfo, repairPdf } from "./pdf/metadata.ts";
+export {
+  getPdfMetadata,
+  setPdfMetadata,
+  getPdfInfo,
+  repairPdf,
+  stripMetadata,
+} from "./pdf/metadata.ts";
 
 export { extractTextOcr, createSearchablePdf, createSearchablePdfFromLayout } from "./pdf/ocr.ts";
 

@@ -26,6 +26,7 @@ import {
   listPdfAttachments,
   nupPages,
   scrubPdf,
+  stripMetadata,
 } from "../../src/utils/pdf-operations.ts";
 
 /** A one-page PDF whose page carries a single non-widget annotation. */
@@ -469,5 +470,46 @@ describe("annotatePdf", () => {
     const doc = await PDFDocument.load(out);
     expect(doc.getPageCount()).toBe(1);
     expect(out.length).toBeGreaterThan(src.length);
+  });
+});
+
+describe("stripMetadata", () => {
+  it("clears Info-dict fields + the XMP stream and keeps page content", async () => {
+    const src = await PDFDocument.create();
+    src.addPage([612, 792]);
+    src.setTitle("Secret Title");
+    src.setAuthor("Jane Doe");
+    src.setSubject("Confidential");
+    src.setKeywords(["alpha", "beta"]);
+    src.setCreator("CloakPDF Test");
+    src.setProducer("CloakPDF Test");
+    src.setCreationDate(new Date("2020-01-01T00:00:00Z"));
+    src.setModificationDate(new Date("2021-01-01T00:00:00Z"));
+    // Attach an XMP metadata object to the catalog so the strip has one to drop.
+    const metaRef = src.context.register(src.context.obj({ Type: "Metadata", Subtype: "XML" }));
+    src.catalog.set(PDFName.of("Metadata"), metaRef);
+    const bytes = await src.save();
+
+    // Sanity-check the fixture carries metadata before stripping.
+    const before = await PDFDocument.load(bytes, { updateMetadata: false });
+    expect(before.getTitle()).toBe("Secret Title");
+    expect(before.getAuthor()).toBe("Jane Doe");
+    expect(before.catalog.get(PDFName.of("Metadata"))).toBeDefined();
+
+    const file = new File([bytes as BlobPart], "meta.pdf", { type: "application/pdf" });
+    const stripped = await stripMetadata(file);
+
+    const after = await PDFDocument.load(stripped, { updateMetadata: false });
+    expect(after.getTitle()).toBeUndefined();
+    expect(after.getAuthor()).toBeUndefined();
+    expect(after.getSubject()).toBeUndefined();
+    expect(after.getKeywords()).toBeUndefined();
+    expect(after.getCreator()).toBeUndefined();
+    expect(after.getProducer()).toBeUndefined();
+    expect(after.getCreationDate()).toBeUndefined();
+    expect(after.getModificationDate()).toBeUndefined();
+    expect(after.catalog.get(PDFName.of("Metadata"))).toBeUndefined();
+    // Page content is untouched.
+    expect(after.getPageCount()).toBe(1);
   });
 });
