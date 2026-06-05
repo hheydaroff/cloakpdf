@@ -7,7 +7,7 @@
 import { X } from "lucide-react";
 import { useActiveTool, useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { ToolControls } from "./ToolControls.tsx";
-import { EDITOR_GROUP_LABELS, findEditorTool } from "./tools.ts";
+import { findEditorTool } from "./tools.ts";
 
 export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) {
   const activeTool = useActiveTool();
@@ -26,9 +26,15 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
           <p className="truncate text-sm font-semibold text-slate-800 dark:text-dark-text">
             {tool ? tool.name : "Document"}
           </p>
-          <p className="text-tag font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
-            {tool ? EDITOR_GROUP_LABELS[tool.group] : doc ? `${doc.pageCount} pages` : ""}
-          </p>
+          {tool ? (
+            <p className="mt-0.5 text-xs leading-snug text-slate-500 dark:text-dark-text-muted">
+              {tool.description}
+            </p>
+          ) : (
+            <p className="text-tag font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+              {doc ? `${doc.pageCount} pages` : ""}
+            </p>
+          )}
         </div>
         {tool && canCancelCurrentTool && (
           <button

@@ -98,8 +98,8 @@ export function AiModelDetailsModal({
   const [deleteArmed, setDeleteArmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  // Lock body scroll + wire Escape while open. Matches the workflow
-  // ToolPickerModal pattern so the two dialogs feel like one system.
+  // Lock body scroll + wire Escape while open. Matches the app's other modals
+  // (ChatModelPickerModal, ExportModal) so the dialogs feel like one system.
   useEffect(() => {
     if (!open) return;
     setDeleteArmed(false);
@@ -184,8 +184,8 @@ export function AiModelDetailsModal({
 
       <div className="relative flex flex-col w-full sm:w-[min(560px,100%)] max-h-[82svh] sm:max-h-[min(640px,calc(100svh-64px))] overflow-hidden rounded-t-2xl sm:rounded-2xl border border-slate-200/80 dark:border-dark-border bg-white/85 dark:bg-dark-surface/85 backdrop-blur-xl shadow-2xl animate-slide-up-in overscroll-contain">
         {/* Mobile drag handle — purely decorative here (no drag-to-dismiss).
-            Matches the visual cue used in ToolPickerModal so users coming
-            from the workflow flow recognise the sheet pattern. */}
+            Matches the visual cue used across the app's bottom-sheet modals so
+            the pattern is familiar. */}
         <div aria-hidden="true" className="grid place-items-center pt-2.5 pb-1 sm:hidden">
           <span className="w-11 h-1 rounded-full bg-slate-300 dark:bg-dark-border" />
         </div>

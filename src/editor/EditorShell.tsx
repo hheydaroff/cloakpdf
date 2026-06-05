@@ -1,12 +1,13 @@
 // EditorShell.tsx — Arranges the editor chrome around the center stage and
 // switches between the desktop/tablet three-pane layout and the mobile
 // canvas-dominant layout, mirroring CloakIMG's UnifiedEditor shell. Also owns
-// the empty (no-doc) dropzone, the loading state, the busy overlay, and the
-// error banner. `min-h-0` / `min-w-0` on the growth axes is load-bearing.
+// the loading state, the no-doc fallback (encrypted-PDF notice / open-failure
+// message — never a dropzone, since the editor is always entered with a file
+// from home), the busy overlay, and the error banner. `min-h-0` / `min-w-0` on
+// the growth axes is load-bearing.
 
 import { AlertTriangle, History, X } from "lucide-react";
-import { FileDropZone } from "../components/FileDropZone.tsx";
-import { categoryAccent, categoryGlow } from "../config/theme.ts";
+import { EncryptedPdfNotice } from "../components/EncryptedPdfNotice.tsx";
 import { useActiveTool, useEditorActions, useEditorRead, useToolSlice } from "./EditorContext.tsx";
 import { EditorToolStage } from "./EditorToolStage.tsx";
 import { EditorTopBar } from "./EditorTopBar.tsx";
@@ -27,10 +28,9 @@ function Spinner({ label }: { label: string }) {
 }
 
 export function EditorShell() {
-  const { doc, loading, busyLabel, error, layout, viewMode, pendingDraft, latestDraft } =
+  const { doc, loading, busyLabel, error, encryptedFile, layout, viewMode, pendingDraft } =
     useEditorRead();
-  const { loadFile, restoreDraft, dismissDraft, restoreLatestDraft, clearError } =
-    useEditorActions();
+  const { restoreDraft, dismissDraft, clearError, exit } = useEditorActions();
   const activeTool = useActiveTool();
   const ocrSlice = useToolSlice(OCR_ID);
   const isMobile = layout === "mobile";
@@ -55,7 +55,7 @@ export function EditorShell() {
     <main className="fixed inset-0 z-100 flex flex-col overflow-hidden bg-slate-50 dark:bg-dark-bg font-sans text-slate-800 dark:text-dark-text">
       <EditorTopBar />
 
-      {error && (
+      {doc && error && (
         <div
           role="alert"
           className="flex items-center gap-2 border-b border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-2 text-sm text-red-700 dark:text-red-300"
@@ -98,36 +98,35 @@ export function EditorShell() {
 
       {loading ? (
         <Spinner label="Opening PDF…" />
-      ) : !doc ? (
+      ) : encryptedFile ? (
+        // Password-protected drop — point the user at the one tool that can
+        // strip the password, then come back. No dropzone fallback: the editor
+        // is only ever entered with a file from the home page.
         <div className="flex min-h-0 flex-1 items-center justify-center p-6">
           <div className="w-full max-w-xl">
-            <FileDropZone
-              accept=".pdf,application/pdf"
-              onFiles={(files) => files[0] && void loadFile(files[0])}
-              glowColor={categoryGlow.organise}
-              iconColor={categoryAccent.organise}
-              label="Drop a PDF to start editing"
-              hint="Everything runs in your browser — nothing is uploaded."
-            />
-            {latestDraft && (
-              <button
-                type="button"
-                onClick={() => void restoreLatestDraft()}
-                aria-label="Restore last session"
-                className="mt-4 flex w-full items-center gap-3 rounded-xl border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-4 py-3 text-left transition-colors hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-              >
-                <History className="h-5 w-5 shrink-0 text-primary-600 dark:text-primary-400" />
-                <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-semibold text-slate-800 dark:text-dark-text">
-                    Restore last session
-                  </span>
-                  <span className="block truncate text-card-desc text-slate-500 dark:text-dark-text-muted">
-                    {latestDraft.fileName}
-                  </span>
-                </span>
-              </button>
+            <EncryptedPdfNotice file={encryptedFile} onChangeFile={exit} />
+          </div>
+        </div>
+      ) : !doc ? (
+        // Open failed (corrupt file, etc.). The editor is always entered with a
+        // file from home, so there is no dropzone here — just a way back.
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+          <AlertTriangle className="h-8 w-8 text-slate-300 dark:text-dark-text-muted" />
+          <div className="space-y-1">
+            <p className="text-sm font-medium text-slate-700 dark:text-dark-text">
+              {error ? "Couldn't open this PDF" : "No PDF is open"}
+            </p>
+            {error && (
+              <p className="max-w-md text-xs text-slate-500 dark:text-dark-text-muted">{error}</p>
             )}
           </div>
+          <button
+            type="button"
+            onClick={exit}
+            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+          >
+            Back to home
+          </button>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1">

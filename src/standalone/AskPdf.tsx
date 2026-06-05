@@ -660,7 +660,7 @@ function ChatPanel({
   return (
     <div className="flex flex-col h-[min(58svh,520px)] min-h-80 sm:h-[min(72svh,720px)] sm:min-h-115 rounded-2xl border border-slate-200 dark:border-dark-border bg-slate-50/70 dark:bg-dark-bg/60 overflow-hidden">
       {/* `thin-scrollbar` matches the scrollbar idiom used in modals
-          (AiConsentModal, AiModelDetailsModal, ToolPickerModal) so
+          (AiConsentModal, AiModelDetailsModal) so
           the chat panel doesn't read as a different surface from the
           rest of the app's overflow containers.
 

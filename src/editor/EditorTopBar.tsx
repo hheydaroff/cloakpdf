@@ -1,8 +1,8 @@
 // EditorTopBar.tsx — The editor's top chrome, laid out as three grid zones so
 // the centre never drifts:
 //   • left   — back, logo, file pill (desktop).
-//   • centre — desktop/tablet: the canvas controls, all together because they
-//              all act on the PDF in the canvas — the page stepper (focus/single
+//   • centre — desktop/tablet: the canvas controls, each in its own bordered
+//              pill so they read as peer groups — the page stepper (focus/single
 //              view only), the page-density toggle (with a sliding indicator),
 //              and the zoom group (focus only). Pinned to the true middle
 //              (grid-cols-[1fr_auto_1fr]). mobile: the page stepper (centred).
@@ -85,49 +85,47 @@ export function EditorTopBar() {
       />
     ) : null;
 
-  // Desktop centre cluster — the page stepper and the density toggle live in ONE
-  // bordered pill and share the same button styling, so the chevrons read as
-  // part of the same section as the grid icons. The stepper segment is only
-  // present in focus/single view (it's how you page through edits); the density
-  // toggle is present for any multipage doc and slides its indicator between the
-  // single / 2-up / 3-up icons instead of hard-swapping the highlight.
-  const showStepper = viewMode === "focus";
-  const centreControl =
-    doc && doc.pageCount > 1 ? (
+  // Page stepper — its own bordered pill so it reads as a peer of the zoom pill
+  // rather than sharing a container with the density toggle. Present in
+  // focus/single view only (it's how you page through edits); in overview you
+  // page by tapping a thumbnail.
+  const stepperControl =
+    doc && doc.pageCount > 1 && viewMode === "focus" ? (
       <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-0.5">
-        {showStepper && (
-          <>
-            <button
-              type="button"
-              onClick={() => setSelectedPage(Math.max(0, selectedPage - 1))}
-              disabled={selectedPage <= 0}
-              aria-label="Previous page"
-              className={`${SEG_BTN} ${SEG_IDLE}`}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span
-              role="status"
-              aria-live="polite"
-              className="px-1.5 text-center text-xs font-medium tabular-nums text-slate-600 dark:text-dark-text-muted"
-            >
-              {selectedPage + 1} / {doc.pageCount}
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedPage(Math.min(doc.pageCount - 1, selectedPage + 1))}
-              disabled={selectedPage >= doc.pageCount - 1}
-              aria-label="Next page"
-              className={`${SEG_BTN} ${SEG_IDLE}`}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-            <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-dark-border" aria-hidden="true" />
-          </>
-        )}
-        {/* Density toggle with a sliding indicator. The thumb sits behind the
-            icons and translates to the active segment, so changing density
-            glides rather than jumping. */}
+        <button
+          type="button"
+          onClick={() => setSelectedPage(Math.max(0, selectedPage - 1))}
+          disabled={selectedPage <= 0}
+          aria-label="Previous page"
+          className={`${SEG_BTN} ${SEG_IDLE}`}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span
+          role="status"
+          aria-live="polite"
+          className="px-1.5 text-center text-xs font-medium tabular-nums text-slate-600 dark:text-dark-text-muted"
+        >
+          {selectedPage + 1} / {doc.pageCount}
+        </span>
+        <button
+          type="button"
+          onClick={() => setSelectedPage(Math.min(doc.pageCount - 1, selectedPage + 1))}
+          disabled={selectedPage >= doc.pageCount - 1}
+          aria-label="Next page"
+          className={`${SEG_BTN} ${SEG_IDLE}`}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    ) : null;
+
+  // Density toggle — its own bordered pill, present for any multipage doc. The
+  // thumb sits behind the icons and translates to the active segment, so changing
+  // density glides rather than hard-swapping the highlight.
+  const densityControl =
+    doc && doc.pageCount > 1 ? (
+      <div className="flex items-center rounded-lg border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-0.5">
         <div className="relative flex">
           <span
             aria-hidden="true"
@@ -239,7 +237,8 @@ export function EditorTopBar() {
           mobileStepper
         ) : (
           <>
-            {centreControl}
+            {stepperControl}
+            {densityControl}
             {zoomControl}
           </>
         )}

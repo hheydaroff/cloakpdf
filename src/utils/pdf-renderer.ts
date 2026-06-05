@@ -116,36 +116,10 @@ export async function getPageCount(file: File): Promise<number> {
 }
 
 /**
- * Render a single PDF page to a PNG Blob object URL thumbnail.
- *
- * @param data - Raw PDF bytes as an ArrayBuffer.
- * @param pageNum - 1-based page number to render.
- * @param scale - Render scale factor (default 0.5). Higher = better quality but slower.
- * @returns A `blob:…` URL of the rendered page. Caller must revoke when done.
- */
-export async function renderPageThumbnail(
-  data: ArrayBuffer,
-  pageNum: number,
-  scale = 0.5,
-): Promise<string> {
-  const loadingTask = pdfjsLib.getDocument({ data, wasmUrl: PDFJS_WASM_URL });
-  try {
-    const pdf = await loadingTask.promise;
-    const { canvas } = await renderPage(pdf, pageNum, scale);
-    const url = await canvasToBlobUrl(canvas);
-    canvas.width = 0;
-    canvas.height = 0;
-    return url;
-  } finally {
-    void loadingTask.destroy();
-  }
-}
-
-/**
  * Render specific pages of a PDF (1-based page numbers) from a single document
- * load. Use this instead of calling `renderPageThumbnail` multiple times, which
- * would fail because PDF.js transfers (detaches) the ArrayBuffer to its Web
- * Worker on the first call.
+ * load. Rendering from one load (rather than once per page) is required because
+ * PDF.js transfers (detaches) the ArrayBuffer to its Web Worker on the first
+ * call, so a second load of the same buffer would fail.
  *
  * @param file - The PDF file to render from.
  * @param pageNums - 1-based page numbers to render, in any order.

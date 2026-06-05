@@ -35,7 +35,6 @@ import {
 import {
   deleteDraft,
   type EditorDraft,
-  getLatestDraft,
   hashDocBytes,
   loadDraft,
   saveDraft,
@@ -43,9 +42,10 @@ import {
 import { EditorHistory } from "./history.ts";
 import { findEditorTool } from "./tools.ts";
 import { DEFAULT_VIEW, type Layout, type ViewMode, type ViewState } from "./types.ts";
+import { isPdfEncrypted } from "../utils/pdf-security.ts";
 
 /** A serializable byte transform — the single funnel every byte mutation runs
- *  through (canvas Apply buttons, right-panel Apply, headless workflow runner).
+ *  through (canvas Apply buttons, right-panel Apply).
  *  Receives the live doc, returns new bytes + a history label, and optionally
  *  the overlay object list to keep. Destructive/overlay-burn tools (redact,
  *  annotate) return `objects` to DROP the marks they just baked into pixels;
@@ -83,8 +83,6 @@ interface ActionsValue {
   restoreDraft: () => Promise<void>;
   /** Discard the offered draft and keep the freshly-loaded original. */
   dismissDraft: () => void;
-  /** Restore the most-recent draft (the empty editor's "last session" card). */
-  restoreLatestDraft: () => Promise<void>;
   /** Dismiss the error banner. */
   clearError: () => void;
   exit: () => void;
@@ -95,6 +93,8 @@ interface ReadValue {
   loading: boolean;
   busyLabel: string | null;
   error: string | null;
+  /** The dropped PDF is password-protected; the shell shows the unlock notice. */
+  encryptedFile: File | null;
   view: ViewState;
   viewMode: ViewMode;
   selectedPage: number;
@@ -108,8 +108,6 @@ interface ReadValue {
   /** Unsaved edits recovered for the just-loaded file, pending the user's
    *  Restore / Discard choice (null when none). */
   pendingDraft: EditorDraft | null;
-  /** Most-recent draft, surfaced on the empty editor as "restore last session". */
-  latestDraft: EditorDraft | null;
 }
 
 interface ToolStateValue {
@@ -135,9 +133,14 @@ export function EditorProvider({
   children,
 }: ProviderProps) {
   const [doc, setDoc] = useState<CanvasDoc | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Start in the loading state when the editor opens with a file (the only way
+  // in, post-redesign) so the no-doc fallback never flashes before loadFile runs.
+  const [loading, setLoading] = useState(initialFile != null);
   const [busyLabel, setBusyLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The dropped PDF turned out to be password-protected — pdf-lib/PDF.js can't
+  // parse it, so we surface the PDF Password tool instead of a raw load error.
+  const [encryptedFile, setEncryptedFile] = useState<File | null>(null);
 
   const [activeTool, setActiveToolState] = useState<string | null>(null);
   const [toolState, setToolState] = useState<Record<string, Record<string, unknown>>>({});
@@ -147,16 +150,13 @@ export function EditorProvider({
   const [historyVersion, setHistoryVersion] = useState(0);
 
   // Draft autosave: pendingDraft is offered after loading a file that has saved
-  // edits; latestDraft powers the empty editor's "restore last session" card.
+  // edits from a previous session.
   const [pendingDraft, setPendingDraft] = useState<EditorDraft | null>(null);
-  const [latestDraft, setLatestDraft] = useState<EditorDraft | null>(null);
   // SHA-256 of the ORIGINAL loaded bytes — the draft key, stable across byte
   // transforms; null suspends autosave (no file, or hashing in flight).
   const draftKeyRef = useRef<string | null>(null);
   const pendingDraftRef = useRef<EditorDraft | null>(null);
   pendingDraftRef.current = pendingDraft;
-  const latestDraftRef = useRef<EditorDraft | null>(null);
-  latestDraftRef.current = latestDraft;
 
   const [layout, setLayout] = useState<Layout>(() =>
     typeof window === "undefined" ? "desktop" : detectLayout(window.innerWidth, window.innerHeight),
@@ -255,8 +255,6 @@ export function EditorProvider({
     });
     toolCheckpointRef.current = historyRef.current.index();
     setHistoryVersion((v) => v + 1);
-    // A document is live now — the "restore last session" affordance is moot.
-    setLatestDraft(null);
   }, []);
 
   // After installing a freshly-loaded file, key the autosave to its original
@@ -276,6 +274,7 @@ export function EditorProvider({
     async (file: File) => {
       setLoading(true);
       setError(null);
+      setEncryptedFile(null);
       setPendingDraft(null);
       draftKeyRef.current = null; // suspend autosave until re-keyed for this file
       try {
@@ -283,7 +282,15 @@ export function EditorProvider({
         installDoc(next);
         void detectDraft(next);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Could not open this PDF.");
+        // pdf-lib throws an "is encrypted" error for password-protected PDFs.
+        // Re-check and route the user to the PDF Password tool instead of
+        // surfacing the raw error (mirrors usePdfFile's gate for standalone
+        // tools). `.catch` guards a genuinely corrupt file failing the recheck.
+        if (await isPdfEncrypted(file).catch(() => false)) {
+          setEncryptedFile(file);
+        } else {
+          setError(e instanceof Error ? e.message : "Could not open this PDF.");
+        }
       } finally {
         setLoading(false);
       }
@@ -514,11 +521,6 @@ export function EditorProvider({
     if (draft) await applyDraft(draft);
   }, [applyDraft]);
 
-  const restoreLatestDraft = useCallback(async () => {
-    const draft = latestDraftRef.current;
-    if (draft) await applyDraft(draft);
-  }, [applyDraft]);
-
   const dismissDraft = useCallback(() => {
     const draft = pendingDraftRef.current;
     setPendingDraft(null);
@@ -542,12 +544,6 @@ export function EditorProvider({
     }, 800);
     return () => clearTimeout(id);
   }, [doc, historyVersion]);
-
-  // On opening the empty editor (no initial file), surface the most-recent draft.
-  useEffect(() => {
-    if (initialFile) return;
-    void getLatestDraft().then(setLatestDraft);
-  }, [initialFile]);
 
   const actions = useMemo<ActionsValue>(
     () => ({
@@ -573,7 +569,6 @@ export function EditorProvider({
       runTask: runBusy,
       restoreDraft,
       dismissDraft,
-      restoreLatestDraft,
       clearError,
       exit,
     }),
@@ -600,7 +595,6 @@ export function EditorProvider({
       runBusy,
       restoreDraft,
       dismissDraft,
-      restoreLatestDraft,
       clearError,
       exit,
     ],
@@ -612,6 +606,7 @@ export function EditorProvider({
       loading,
       busyLabel,
       error,
+      encryptedFile,
       view,
       viewMode,
       selectedPage,
@@ -626,13 +621,13 @@ export function EditorProvider({
           historyRef.current.index() > toolCheckpointRef.current),
       historyVersion,
       pendingDraft,
-      latestDraft,
     }),
     [
       doc,
       loading,
       busyLabel,
       error,
+      encryptedFile,
       view,
       viewMode,
       selectedPage,
@@ -641,7 +636,6 @@ export function EditorProvider({
       activeTool,
       pendingApplyVersion,
       pendingDraft,
-      latestDraft,
     ],
   );
 

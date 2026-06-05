@@ -136,6 +136,38 @@ export function TextField({
   );
 }
 
+/** Native select styled to match the panel's inputs. Generic over the option
+ *  value so callers keep their string-literal unions. */
+export function SelectField<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  icon,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (v: T) => void;
+  icon?: LucideIcon;
+}) {
+  return (
+    <Labeled label={label} icon={icon}>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="w-full rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </Labeled>
+  );
+}
+
 export function Labeled({
   label,
   children,

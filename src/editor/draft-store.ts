@@ -96,27 +96,6 @@ export async function loadDraft(key: string): Promise<EditorDraft | null> {
   });
 }
 
-/** The most recently saved draft across all files, or null. Powers the empty
- *  editor's "restore last session" affordance. */
-export async function getLatestDraft(): Promise<EditorDraft | null> {
-  const db = await openDb();
-  if (!db) return null;
-  return new Promise((resolve) => {
-    try {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      // Walk the savedAt index newest-first; the first cursor hit is the latest.
-      const cursorReq = tx.objectStore(STORE_NAME).index("savedAt").openCursor(null, "prev");
-      cursorReq.onsuccess = () => {
-        const cursor = cursorReq.result;
-        resolve(cursor ? (cursor.value as EditorDraft) : null);
-      };
-      cursorReq.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
-}
-
 /** Drop the draft for `key` (after it's been restored or explicitly discarded). */
 export async function deleteDraft(key: string): Promise<void> {
   const db = await openDb();

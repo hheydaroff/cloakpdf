@@ -3,8 +3,8 @@
 // This is metadata only (id / label / icon / group / which view mode it drives
 // / build status). The actual Tool behaviour (canvas interaction) and Panel
 // (right-side options) are bound per id in the dispatchers, mirroring CloakIMG.
-// The roster is the 20 workflow-eligible single-PDF tools plus redact + ocr —
-// see REDESIGN.md for the disposition of every CloakPDF tool. Multi-file /
+// The roster is the single-PDF tools that live in the editor (incl. redact +
+// ocr) — see REDESIGN.md for the disposition of every CloakPDF tool. Multi-file /
 // terminal / security-cert / AI tools are NOT here; they live outside the editor.
 //
 // Order is by real user priority / frequency of use — top of the rail is the
@@ -54,6 +54,10 @@ export type EditorToolStatus = "ready" | "soon";
 export interface EditorTool {
   id: string;
   name: string;
+  /** One-line, action-first summary of what the tool does. Shown in the
+   *  Properties panel header and the mobile tool sheet — per-tool, never the
+   *  group label, so sibling tools in a family read distinctly. */
+  description: string;
   icon: ComponentType<{ className?: string }>;
   group: EditorToolGroup;
   mode: EditorToolMode;
@@ -77,6 +81,7 @@ export const EDITOR_TOOLS = [
   {
     id: "annotate-pdf",
     name: "Annotate",
+    description: "Draw, highlight, add shapes, and place text on the page.",
     icon: Highlighter,
     group: "annotate",
     mode: "focus",
@@ -85,6 +90,7 @@ export const EDITOR_TOOLS = [
   {
     id: "signature",
     name: "Signature",
+    description: "Draw or upload a signature and place it on the page.",
     icon: PenTool,
     group: "annotate",
     mode: "focus",
@@ -93,6 +99,7 @@ export const EDITOR_TOOLS = [
   {
     id: "fill-pdf-form",
     name: "Fill form",
+    description: "Fill in interactive form fields, then optionally flatten them.",
     icon: ClipboardList,
     group: "annotate",
     mode: "focus",
@@ -104,6 +111,7 @@ export const EDITOR_TOOLS = [
   {
     id: "organize-pages",
     name: "Organize",
+    description: "Reorder, rotate, and remove pages in a visual grid.",
     icon: Grid2x2,
     group: "pages",
     mode: "overview",
@@ -114,6 +122,7 @@ export const EDITOR_TOOLS = [
   {
     id: "redact-pdf",
     name: "Redact",
+    description: "Black out text or detected PII — burned into the pixels.",
     icon: EyeOff,
     group: "security",
     mode: "focus",
@@ -122,6 +131,7 @@ export const EDITOR_TOOLS = [
   {
     id: "pdf-scrub",
     name: "Scrub",
+    description: "Strip hidden data: metadata, scripts, attachments, and annotations.",
     icon: Eraser,
     group: "security",
     mode: "either",
@@ -130,6 +140,7 @@ export const EDITOR_TOOLS = [
   {
     id: "metadata",
     name: "Metadata",
+    description: "View and edit the title, author, subject, and keywords.",
     icon: FileText,
     group: "security",
     mode: "either",
@@ -140,15 +151,25 @@ export const EDITOR_TOOLS = [
   {
     id: "crop-pages",
     name: "Crop",
+    description: "Trim page margins to a custom area.",
     icon: Crop,
     group: "transform",
     mode: "focus",
     status: "ready",
   },
-  { id: "ocr", name: "OCR", icon: ScanText, group: "transform", mode: "either", status: "ready" },
+  {
+    id: "ocr",
+    name: "OCR",
+    description: "Recognize text in scanned pages and add a searchable layer.",
+    icon: ScanText,
+    group: "transform",
+    mode: "either",
+    status: "ready",
+  },
   {
     id: "nup-pages",
     name: "N-up",
+    description: "Arrange multiple pages per sheet (2-up, 4-up, …).",
     icon: LayoutGrid,
     group: "transform",
     mode: "either",
@@ -159,6 +180,7 @@ export const EDITOR_TOOLS = [
   {
     id: "stamp-pdf",
     name: "Stamp",
+    description: "Add a diagonal text watermark across every page.",
     icon: Stamp,
     group: "stamps",
     mode: "either",
@@ -167,6 +189,7 @@ export const EDITOR_TOOLS = [
   {
     id: "add-page-numbers",
     name: "Page numbers",
+    description: "Add page numbers with a choice of format, position, and size.",
     icon: Hash,
     group: "stamps",
     mode: "either",
@@ -175,6 +198,7 @@ export const EDITOR_TOOLS = [
   {
     id: "header-footer",
     name: "Header & footer",
+    description: "Add repeating header and footer text to every page.",
     icon: AlignCenter,
     group: "stamps",
     mode: "either",
@@ -183,6 +207,7 @@ export const EDITOR_TOOLS = [
   {
     id: "bates-numbering",
     name: "Bates",
+    description: "Apply sequential Bates numbers for legal documents.",
     icon: Scale,
     group: "stamps",
     mode: "either",
@@ -193,6 +218,7 @@ export const EDITOR_TOOLS = [
   {
     id: "add-bookmarks",
     name: "Bookmarks",
+    description: "Build a bookmark outline for quick navigation.",
     icon: BookMarked,
     group: "document",
     mode: "either",
@@ -201,6 +227,7 @@ export const EDITOR_TOOLS = [
   {
     id: "file-attachment",
     name: "Attachments",
+    description: "Embed or remove file attachments inside the PDF.",
     icon: Paperclip,
     group: "document",
     mode: "either",

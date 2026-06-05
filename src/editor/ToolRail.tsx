@@ -14,7 +14,7 @@ export const ToolRail = memo(function ToolRail() {
   const groups = editorToolGroups();
 
   return (
-    <div className="no-scrollbar flex w-18 shrink-0 flex-col overflow-y-auto border-r border-slate-200/70 dark:border-dark-border py-2">
+    <div className="no-scrollbar flex w-18 shrink-0 flex-col overflow-y-auto border-r border-slate-200/70 dark:border-dark-border px-1 py-2">
       {groups.map((group, gi) => (
         <div key={group.group} className="flex flex-col">
           {gi > 0 && <div className="mx-3 my-1.5 h-px bg-slate-200/70 dark:bg-dark-border" />}
@@ -37,20 +37,20 @@ export const ToolRail = memo(function ToolRail() {
                 title={tool.name}
                 aria-label={tool.name}
                 aria-pressed={active}
-                className={`relative mx-auto my-0.5 flex h-11 w-11 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                className={`relative my-0.5 flex h-11 w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   active
                     ? "text-primary-600 dark:text-primary-400"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-dark-text-muted dark:hover:bg-dark-surface-alt dark:hover:text-dark-text"
                 }`}
               >
                 <Icon className="h-[18px] w-[18px]" />
-                <span className="text-[9px] font-medium leading-none">
+                <span className="max-w-full truncate px-0.5 text-[9px] font-medium leading-none">
                   {tool.name.split(" ")[0]}
                 </span>
                 {active && (
                   <span
                     aria-hidden="true"
-                    className="absolute top-[18%] -left-2 bottom-[18%] w-[2.5px] rounded-r-sm bg-primary-500"
+                    className="absolute top-[18%] left-0.5 bottom-[18%] w-[2.5px] rounded-r-sm bg-primary-500"
                   />
                 )}
               </button>

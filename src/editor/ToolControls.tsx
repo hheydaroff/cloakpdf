@@ -21,13 +21,20 @@ export function ToolPlaceholder({ toolId }: { toolId: string }) {
   );
 }
 
-export function ToolControls() {
+/**
+ * Renders the active tool's options body. `toolId` overrides the active tool —
+ * the mobile sheet passes the just-deactivated tool's id so the panel keeps
+ * rendering through its slide-down animation (the active tool clears the moment
+ * the user taps Done/Cancel). Defaults to the live active tool.
+ */
+export function ToolControls({ toolId }: { toolId?: string } = {}) {
   const activeTool = useActiveTool();
-  if (!activeTool) return null;
-  const impl = toolImpl(activeTool);
+  const id = toolId ?? activeTool;
+  if (!id) return null;
+  const impl = toolImpl(id);
   if (impl) {
     const Panel = impl.Panel;
     return <Panel />;
   }
-  return <ToolPlaceholder toolId={activeTool} />;
+  return <ToolPlaceholder toolId={id} />;
 }

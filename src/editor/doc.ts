@@ -1,7 +1,7 @@
 // doc.ts — The canvas editor's document model.
 //
-// `CanvasDoc` is the single source of truth every tool, the canvas, and (later)
-// the headless workflow runner mutate through `applyTransform`. It is
+// `CanvasDoc` is the single source of truth every tool and the canvas mutate
+// through `applyTransform`. It is
 // deliberately NON-DESTRUCTIVE: `bytes` is the canonical pdf-lib-writable
 // source, and overlay edits live as `objects` (fraction-rect tagged shapes)
 // that are burned into bytes only at export. See REDESIGN.md for the rationale
@@ -66,8 +66,8 @@ export interface CanvasDoc {
 }
 
 let docSeq = 0;
-/** Cheap monotonic id — app-side only (workflow scripts forbid Math.random,
- *  app code does not). Sequence keeps ids stable within a session. */
+/** Cheap monotonic id — a sequence counter keeps ids stable and deterministic
+ *  within a session (no Math.random / crypto needed). */
 export function nextId(prefix = "obj"): string {
   docSeq += 1;
   return `${prefix}-${docSeq.toString(36)}`;

@@ -47,10 +47,6 @@ Tool metadata flags worth knowing:
 
 The primary surface is the canvas editor ([src/editor/](src/editor/)) — a Photoshop-like single-PDF workspace. [EditorShell.tsx](src/editor/EditorShell.tsx) hosts a persistent [PdfStage.tsx](src/editor/PdfStage.tsx) that never tears down on tool switch; the active tool registers its overlay paint + pointer handlers (incl. `onPointerCancel`) through the `useStageProps` seam in [src/editor/stage.tsx](src/editor/stage.tsx). [EditorContext.tsx](src/editor/EditorContext.tsx) owns the `CanvasDoc`, history (byte + object snapshots, not rasters), and view state. The Export menu ([src/editor/ExportMenu.tsx](src/editor/ExportMenu.tsx)) covers PDF / images / contact-sheet / split and the Organize panel covers reverse / extract / remove-blank — which is why those have no standalone cards.
 
-### Tool output (`useToolOutput`)
-
-Standalone tools call `output.deliver(bytes, "_suffix", sourceFile)` instead of `downloadPdf(...)`. [src/hooks/useToolOutput.ts](src/hooks/useToolOutput.ts) is a thin browser-download wrapper. (An earlier chained-"Workflows" runner used to also route output between tools; it was removed — the unified editor replaced it.)
-
 ### Two PDF libraries, two jobs
 
 - **`@pdfme/pdf-lib`** — every structural manipulation (merge, split, rotate, redact, sign, metadata, watermark, form-fill). Lives in [src/utils/pdf/](src/utils/pdf/): cohesive modules (`pages`, `forms`, `transform`, `stamps`, `metadata`, `ocr`, `redact`, `scrub`, `annotate`, `bookmarks`, `attachments`) plus a shared `raster` PDF.js/canvas layer, all re-exported through the [src/utils/pdf-operations.ts](src/utils/pdf-operations.ts) barrel (the stable import path every tool uses).

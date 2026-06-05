@@ -1,6 +1,6 @@
 /**
- * useSpotlightGlow — cursor/touch-tracking radial glow used by ToolCard,
- * WorkflowHeroCard, and FileDropZone. Spread `handlers` onto the target
+ * useSpotlightGlow — cursor/touch-tracking radial glow used by ToolCard and
+ * FileDropZone. Spread `handlers` onto the target
  * element and render an absolutely-positioned div with `glowStyle` inside
  * it for the painted gradient.
  */
