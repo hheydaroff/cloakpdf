@@ -1,8 +1,8 @@
 // EditorTopBar.tsx — The editor's top chrome, laid out as three grid zones so
 // the centre never drifts:
-//   • left   — back, logo, file pill (desktop), and (desktop) the page stepper
-//              hugging the right edge so it sits just left of centre.
-//   • centre — desktop: the page-density toggle, pinned to the true middle
+//   • left   — back, logo, file pill (desktop).
+//   • centre — desktop: one pill holding the page stepper (focus/single view
+//              only) + the page-density toggle, pinned to the true middle
 //              (grid-cols-[1fr_auto_1fr]) so it no longer shifts when the zoom
 //              group shows/hides. mobile: the page stepper (centred).
 //   • right  — undo/redo/(reset desktop), zoom (desktop focus), Export.
@@ -11,6 +11,7 @@
 
 import {
   ChevronLeft,
+  ChevronRight,
   Grid2x2,
   Grid3x3,
   Maximize2,
@@ -37,6 +38,13 @@ const DENSITIES = [
 const ICON_BTN =
   "flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-dark-text-muted dark:hover:bg-dark-surface-alt dark:hover:text-dark-text disabled:opacity-30 disabled:pointer-events-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500";
 
+// Segmented button shared by the centre cluster — the page stepper chevrons and
+// the density/grid icons use the exact same shape so they read as one section.
+const SEG_BTN =
+  "flex h-7 w-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500";
+const SEG_IDLE =
+  "text-slate-500 hover:text-slate-800 dark:text-dark-text-muted dark:hover:text-dark-text disabled:opacity-30 disabled:pointer-events-none";
+
 export function EditorTopBar() {
   const { doc, viewMode, view, selectedPage, canUndo, canRedo, canReset, layout } = useEditorRead();
   const { exit, setViewMode, setView, setSelectedPage, undo, redo, reset } = useEditorActions();
@@ -55,22 +63,57 @@ export function EditorTopBar() {
     }
   };
 
-  // Page prev/next — focus mode only (in overview you page by tapping a thumb).
-  // Returns null for single-page docs. One stepper, shown left-of-centre on
-  // desktop and dead-centre on mobile (see zones below).
-  const pageStepper =
+  // Mobile keeps a touch-sized stepper on its own (density is dropped on phones
+  // for space). Focus/single view only — in overview you page by tapping a thumb.
+  const mobileStepper =
     doc && viewMode === "focus" ? (
       <PagePreviewNav
         page={selectedPage}
         total={doc.pageCount}
         onChange={setSelectedPage}
-        size={isMobile ? "touch" : "sm"}
+        size="touch"
       />
     ) : null;
 
-  const densityToggle =
+  // Desktop centre cluster — the page stepper and the density/grid toggle live
+  // in ONE bordered pill and share the same button styling, so the chevrons
+  // read as part of the same section as the grid icons. The stepper segment is
+  // only present in focus/single view (it's how you page through edits); the
+  // density toggle is present for any multipage doc.
+  const showStepper = viewMode === "focus";
+  const centreControl =
     doc && doc.pageCount > 1 ? (
       <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-0.5">
+        {showStepper && (
+          <>
+            <button
+              type="button"
+              onClick={() => setSelectedPage(Math.max(0, selectedPage - 1))}
+              disabled={selectedPage <= 0}
+              aria-label="Previous page"
+              className={`${SEG_BTN} ${SEG_IDLE}`}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span
+              role="status"
+              aria-live="polite"
+              className="px-1.5 text-center text-xs font-medium tabular-nums text-slate-600 dark:text-dark-text-muted"
+            >
+              {selectedPage + 1} / {doc.pageCount}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedPage(Math.min(doc.pageCount - 1, selectedPage + 1))}
+              disabled={selectedPage >= doc.pageCount - 1}
+              aria-label="Next page"
+              className={`${SEG_BTN} ${SEG_IDLE}`}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <span className="mx-0.5 h-5 w-px bg-slate-200 dark:bg-dark-border" aria-hidden="true" />
+          </>
+        )}
         {DENSITIES.map(({ cols, icon: Icon, label }) => {
           const on = activeCols === cols;
           return (
@@ -81,7 +124,7 @@ export function EditorTopBar() {
               aria-label={label}
               aria-pressed={on}
               title={label}
-              className={`flex h-7 w-8 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+              className={`${SEG_BTN} ${
                 on
                   ? "bg-primary-600 text-white"
                   : "text-slate-500 hover:text-slate-800 dark:text-dark-text-muted dark:hover:text-dark-text"
@@ -126,16 +169,12 @@ export function EditorTopBar() {
             </span>
           </div>
         )}
-
-        {/* Desktop: the page stepper hugs the right edge of the left zone, so it
-            sits just left of the dead-centre density toggle and its show/hide
-            (focus↔overview) never nudges the toggle. */}
-        {!isMobile && pageStepper && <div className="ml-auto pl-2">{pageStepper}</div>}
       </div>
 
-      {/* CENTRE zone — desktop: density toggle (true middle); mobile: page stepper. */}
+      {/* CENTRE zone — desktop: page stepper + density toggle as one pill (true
+          middle); mobile: the touch page stepper. */}
       <div className="flex items-center justify-center gap-2">
-        {isMobile ? pageStepper : densityToggle}
+        {isMobile ? mobileStepper : centreControl}
       </div>
 
       {/* RIGHT zone */}
