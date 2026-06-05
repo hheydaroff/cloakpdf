@@ -49,6 +49,7 @@ export function EditorTopBar() {
   const { doc, viewMode, view, selectedPage, canUndo, canRedo, canReset, layout } = useEditorRead();
   const { exit, setViewMode, setView, setSelectedPage, undo, redo, reset } = useEditorActions();
   const isMobile = layout === "mobile";
+  const isDesktop = layout === "desktop";
 
   const zoomPct = Math.round(view.zoom * 100);
 
@@ -159,7 +160,10 @@ export function EditorTopBar() {
           />
         )}
 
-        {doc && !isMobile && (
+        {/* File pill is desktop-only: at tablet width the centre pill + right
+            controls leave the left grid zone too narrow, which truncated the
+            filename to an orphan "· N pages". */}
+        {doc && isDesktop && (
           <div className="ml-1 flex min-w-0 items-center gap-2 rounded-lg border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface px-3 py-1.5">
             <span className="max-w-50 truncate text-sm font-medium text-slate-700 dark:text-dark-text">
               {doc.fileName}
