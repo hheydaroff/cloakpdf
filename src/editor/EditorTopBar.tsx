@@ -153,9 +153,9 @@ export function EditorTopBar() {
           <img
             src="/icons/favicon.svg"
             alt=""
-            width="28"
-            height="28"
-            className="h-7 w-7 drop-shadow-sm"
+            width="40"
+            height="40"
+            className="h-10 w-10 drop-shadow-sm"
           />
         )}
 

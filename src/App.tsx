@@ -10,7 +10,6 @@
  */
 
 import {
-  ArrowRight,
   Cpu,
   GitFork,
   MonitorSmartphone,
@@ -220,21 +219,8 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
               style={{ animationDelay: "80ms" }}
             >
               Edit, merge, sign, secure, and convert PDFs entirely in your browser. No uploads, no
-              accounts, no tracking.
+              accounts, no tracking. Drop a PDF to start editing — or pick a tool below.
             </p>
-
-            {/* Editor-first primary CTA — opens the canvas editor where a
-                single PDF is the focus and tools live around it. The tool
-                grid below remains for multi-file + terminal tools. */}
-            <button
-              type="button"
-              onClick={() => onOpenEditor(null)}
-              className="group mt-6 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-5 py-3 text-card-title font-semibold text-white shadow-sm hover:bg-primary-700 active:translate-y-px transition-[background-color,transform] animate-fade-in-up focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
-              style={{ animationDelay: "120ms" }}
-            >
-              Open the editor
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </button>
           </div>
 
           {!searchQuery && (
