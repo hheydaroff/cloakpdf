@@ -4,7 +4,7 @@
 
 import { useActiveTool } from "./EditorContext.tsx";
 import { OverviewGrid } from "./OverviewGrid.tsx";
-import { Board as OrganizeBoard, ORGANIZE_ID } from "./tools/OrganizeTool.tsx";
+import { Board as OrganizeBoard, ORGANIZE_ID } from "./panels/OrganizeTool.tsx";
 
 export function OverviewMode() {
   const activeTool = useActiveTool();

@@ -30,14 +30,14 @@ import type { Tool, ToolId } from "../types.ts";
 
 // ── Lazy-loaded tool components (code-split per tool) ────────────
 
-const MergePdf = lazy(() => import("../tools/MergePdf.tsx"));
-const ImagesToPdf = lazy(() => import("../tools/ImagesToPdf.tsx"));
-const ExtractImages = lazy(() => import("../tools/ExtractImages.tsx"));
-const PdfPassword = lazy(() => import("../tools/PdfPassword.tsx"));
-const ComparePdf = lazy(() => import("../tools/ComparePdf.tsx"));
-const DigitalSignature = lazy(() => import("../tools/DigitalSignature.tsx"));
-const PdfInspector = lazy(() => import("../tools/PdfInspector.tsx"));
-const AskPdf = lazy(() => import("../tools/AskPdf.tsx"));
+const MergePdf = lazy(() => import("../standalone/MergePdf.tsx"));
+const ImagesToPdf = lazy(() => import("../standalone/ImagesToPdf.tsx"));
+const ExtractImages = lazy(() => import("../standalone/ExtractImages.tsx"));
+const PdfPassword = lazy(() => import("../standalone/PdfPassword.tsx"));
+const ComparePdf = lazy(() => import("../standalone/ComparePdf.tsx"));
+const DigitalSignature = lazy(() => import("../standalone/DigitalSignature.tsx"));
+const PdfInspector = lazy(() => import("../standalone/PdfInspector.tsx"));
+const AskPdf = lazy(() => import("../standalone/AskPdf.tsx"));
 
 // ── Tool metadata ────────────────────────────────────────────────
 

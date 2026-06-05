@@ -15,7 +15,7 @@ import { OverviewMode } from "./OverviewMode.tsx";
 import { PdfStage } from "./PdfStage.tsx";
 import { PropertiesPanel } from "./PropertiesPanel.tsx";
 import { ToolRail } from "./ToolRail.tsx";
-import { OCR_ID, OcrPreview, ocrHasPreview } from "./tools/OcrTool.tsx";
+import { OCR_ID, OcrPreview, ocrHasPreview } from "./panels/OcrTool.tsx";
 
 function Spinner({ label }: { label: string }) {
   return (

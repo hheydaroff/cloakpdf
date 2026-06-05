@@ -6,30 +6,30 @@
 // map render a placeholder panel and no canvas behaviour.
 
 import type { ComponentType } from "react";
-import * as Annotate from "./tools/AnnotateTool.tsx";
-import * as Attachments from "./tools/AttachmentsTool.tsx";
-import * as Bookmarks from "./tools/BookmarksTool.tsx";
-import * as Crop from "./tools/CropTool.tsx";
-import * as FillForm from "./tools/FillFormTool.tsx";
-import * as Metadata from "./tools/MetadataTool.tsx";
-import * as Ocr from "./tools/OcrTool.tsx";
-import * as Organize from "./tools/OrganizeTool.tsx";
-import * as Redact from "./tools/RedactTool.tsx";
-import * as Scrub from "./tools/ScrubTool.tsx";
-import * as Signature from "./tools/SignatureTool.tsx";
+import * as Annotate from "./panels/AnnotateTool.tsx";
+import * as Attachments from "./panels/AttachmentsTool.tsx";
+import * as Bookmarks from "./panels/BookmarksTool.tsx";
+import * as Crop from "./panels/CropTool.tsx";
+import * as FillForm from "./panels/FillFormTool.tsx";
+import * as Metadata from "./panels/MetadataTool.tsx";
+import * as Ocr from "./panels/OcrTool.tsx";
+import * as Organize from "./panels/OrganizeTool.tsx";
+import * as Redact from "./panels/RedactTool.tsx";
+import * as Scrub from "./panels/ScrubTool.tsx";
+import * as Signature from "./panels/SignatureTool.tsx";
 import {
   BatesPanel,
   HeaderFooterPanel,
   PageNumbersPanel,
   WatermarkPanel,
-} from "./tools/StampTools.tsx";
+} from "./panels/StampTools.tsx";
 import {
   CompressPanel,
   FlattenPanel,
   GrayscalePanel,
   NupPanel,
   RepairPanel,
-} from "./tools/SimpleTools.tsx";
+} from "./panels/SimpleTools.tsx";
 
 export interface ToolImpl {
   /** Registers canvas interaction for focus tools; absent for overview/options tools. */
