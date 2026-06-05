@@ -6,6 +6,14 @@
 // The roster is the 20 workflow-eligible single-PDF tools plus redact + ocr —
 // see REDESIGN.md for the disposition of every CloakPDF tool. Multi-file /
 // terminal / security-cert / AI tools are NOT here; they live outside the editor.
+//
+// Order is by real user priority / frequency of use — top of the rail is the
+// tool a typical user reaches for most. Tools stay grouped into thematic
+// families (the group label shows in the Properties panel and the rail draws a
+// hairline between families); families and the tools inside them are then sorted
+// by frequency. The everyday core leads — Annotate, Signature, Fill form,
+// Organize, Redact — then privacy clean-up, transforms, repeating page
+// "furniture" (stamps / numbering), and finally the rarely-touched extras.
 
 import {
   AlignCenter,
@@ -27,7 +35,13 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
-export type EditorToolGroup = "security" | "annotate" | "pages" | "transform" | "document";
+export type EditorToolGroup =
+  | "annotate"
+  | "pages"
+  | "security"
+  | "transform"
+  | "stamps"
+  | "document";
 
 /** Which stage the tool operates in. `overview` tools act on the page grid;
  *  `focus` tools draw on / configure a single page; `either` work in both. */
@@ -47,17 +61,56 @@ export interface EditorTool {
 }
 
 export const EDITOR_GROUP_LABELS: Record<EditorToolGroup, string> = {
-  security: "Privacy & Security",
   annotate: "Annotate & Sign",
   pages: "Pages",
+  security: "Privacy & Security",
   transform: "Transform",
+  stamps: "Stamps & Numbering",
   document: "Document",
 };
 
-// Rail order: privacy first (brand-defining, à la CloakIMG's Redact placement),
-// then annotate, pages, transform, document. Within a group, most-used first.
+// Rail order = frequency of use, highest first. Within a family, most-used first.
+// Families are ordered by their lead (most-used) tool, so the rail reads top-to-
+// bottom roughly as a single priority list while keeping related tools adjacent.
 export const EDITOR_TOOLS = [
-  // Privacy & Security
+  // Annotate & Sign — the everyday core: mark up, sign, fill in.
+  {
+    id: "annotate-pdf",
+    name: "Annotate",
+    icon: Highlighter,
+    group: "annotate",
+    mode: "focus",
+    status: "ready",
+  },
+  {
+    id: "signature",
+    name: "Signature",
+    icon: PenTool,
+    group: "annotate",
+    mode: "focus",
+    status: "ready",
+  },
+  {
+    id: "fill-pdf-form",
+    name: "Fill form",
+    icon: ClipboardList,
+    group: "annotate",
+    mode: "focus",
+    status: "ready",
+  },
+
+  // Pages — page management (reorder / delete / rotate / extract). One of the
+  // most common reasons to open a PDF editor at all.
+  {
+    id: "organize-pages",
+    name: "Organize",
+    icon: Grid2x2,
+    group: "pages",
+    mode: "overview",
+    status: "ready",
+  },
+
+  // Privacy & Security — brand-defining; redact leads, then the clean-up tools.
   {
     id: "redact-pdf",
     name: "Redact",
@@ -83,85 +136,7 @@ export const EDITOR_TOOLS = [
     status: "ready",
   },
 
-  // Annotate & Sign
-  {
-    id: "annotate-pdf",
-    name: "Annotate",
-    icon: Highlighter,
-    group: "annotate",
-    mode: "focus",
-    status: "ready",
-  },
-  {
-    id: "signature",
-    name: "Signature",
-    icon: PenTool,
-    group: "annotate",
-    mode: "focus",
-    status: "ready",
-  },
-  {
-    id: "stamp-pdf",
-    name: "Stamp",
-    icon: Stamp,
-    group: "annotate",
-    mode: "either",
-    status: "ready",
-  },
-  {
-    id: "add-page-numbers",
-    name: "Page numbers",
-    icon: Hash,
-    group: "annotate",
-    mode: "either",
-    status: "ready",
-  },
-  {
-    id: "header-footer",
-    name: "Header & footer",
-    icon: AlignCenter,
-    group: "annotate",
-    mode: "either",
-    status: "ready",
-  },
-  {
-    id: "bates-numbering",
-    name: "Bates",
-    icon: Scale,
-    group: "annotate",
-    mode: "either",
-    status: "ready",
-  },
-  {
-    id: "fill-pdf-form",
-    name: "Fill form",
-    icon: ClipboardList,
-    group: "annotate",
-    mode: "focus",
-    status: "ready",
-  },
-
-  // Pages
-  {
-    id: "organize-pages",
-    name: "Organize",
-    icon: Grid2x2,
-    group: "pages",
-    mode: "overview",
-    status: "ready",
-  },
-  {
-    id: "nup-pages",
-    name: "N-up",
-    icon: LayoutGrid,
-    group: "pages",
-    mode: "either",
-    status: "ready",
-  },
-
-  // Transform
-  // (Compress / Grayscale / Flatten / Repair moved to the Export modal — they're
-  // terminal "convert then download" outputs, not in-place edit steps.)
+  // Transform — reshape the pages themselves.
   {
     id: "crop-pages",
     name: "Crop",
@@ -171,8 +146,50 @@ export const EDITOR_TOOLS = [
     status: "ready",
   },
   { id: "ocr", name: "OCR", icon: ScanText, group: "transform", mode: "either", status: "ready" },
+  {
+    id: "nup-pages",
+    name: "N-up",
+    icon: LayoutGrid,
+    group: "transform",
+    mode: "either",
+    status: "ready",
+  },
 
-  // Document
+  // Stamps & Numbering — repeating content laid over every page.
+  {
+    id: "stamp-pdf",
+    name: "Stamp",
+    icon: Stamp,
+    group: "stamps",
+    mode: "either",
+    status: "ready",
+  },
+  {
+    id: "add-page-numbers",
+    name: "Page numbers",
+    icon: Hash,
+    group: "stamps",
+    mode: "either",
+    status: "ready",
+  },
+  {
+    id: "header-footer",
+    name: "Header & footer",
+    icon: AlignCenter,
+    group: "stamps",
+    mode: "either",
+    status: "ready",
+  },
+  {
+    id: "bates-numbering",
+    name: "Bates",
+    icon: Scale,
+    group: "stamps",
+    mode: "either",
+    status: "ready",
+  },
+
+  // Document — structural extras, reached for least often.
   {
     id: "add-bookmarks",
     name: "Bookmarks",
@@ -206,13 +223,20 @@ export function findEditorTool(id: string | null): EditorTool | null {
  *  the editor's component graph (that lives in registry.tsx). */
 export const EDITOR_TOOL_IDS: ReadonlySet<string> = new Set(EDITOR_TOOLS.map((t) => t.id));
 
-/** Rail groups in display order, each with its tools. */
+/** Rail groups in display order (most-used family first), each with its tools. */
 export function editorToolGroups(): {
   group: EditorToolGroup;
   label: string;
   tools: EditorTool[];
 }[] {
-  const order: EditorToolGroup[] = ["security", "annotate", "pages", "transform", "document"];
+  const order: EditorToolGroup[] = [
+    "annotate",
+    "pages",
+    "security",
+    "transform",
+    "stamps",
+    "document",
+  ];
   return order.map((group) => ({
     group,
     label: EDITOR_GROUP_LABELS[group],
