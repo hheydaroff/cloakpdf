@@ -8,6 +8,19 @@
 > This is a big-bang effort: all work lands on `feature/redesign` (branched from `dev`)
 > and merges only when the whole experience is ready. No production feature flag.
 
+> **Status (post-implementation cleanup).** The editor is built and is the primary
+> surface; the home is editor-first (drop a PDF → editor). Since this spec was written,
+> three things changed and any reference below is historical:
+>
+> - **Workflows was removed entirely** — the unified editor replaced the chained-tool
+>   runner. There is no `src/workflow/`; `useToolOutput` is now just a download helper.
+> - **The standalone tool layer was trimmed** — only 8 tools that can't be a single-PDF
+>   "edit then export" flow remain as home cards (in `src/standalone/`, was `src/tools/`).
+>   The other ~26 standalone components were deleted; their capability lives in the editor.
+> - **Paths moved:** editor panels are `src/editor/panels/` (was `src/editor/tools/`),
+>   and `src/utils/pdf-operations.ts` is now a barrel over cohesive `src/utils/pdf/*`
+>   modules. See [CLAUDE.md](CLAUDE.md) for the current architecture.
+
 ## Locked decisions
 
 1. **Editor-first immediately.** The home screen becomes a thin launcher. Dropping a
