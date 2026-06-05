@@ -2625,6 +2625,8 @@ export type Annotation =
       h: number;
       color: AnnotationColor;
       thicknessFrac: number;
+      /** Optional interior fill. Omit for an outline-only shape. */
+      fill?: { color: AnnotationColor; opacity?: number };
     }
   | {
       kind: "line" | "arrow";
@@ -2689,6 +2691,9 @@ export async function annotatePdf(file: File, annotations: Annotation[]): Promis
         });
       }
     } else if (a.kind === "rect") {
+      const fill = a.fill
+        ? rgb(a.fill.color.r / 255, a.fill.color.g / 255, a.fill.color.b / 255)
+        : undefined;
       page.drawRectangle({
         x: a.x * W,
         y: (1 - a.y - a.h) * H,
@@ -2696,10 +2701,14 @@ export async function annotatePdf(file: File, annotations: Annotation[]): Promis
         height: a.h * H,
         borderColor: color,
         borderWidth: Math.max(0.5, a.thicknessFrac * W),
-        opacity: 0,
+        color: fill,
+        opacity: a.fill ? (a.fill.opacity ?? 1) : 0,
         borderOpacity: 1,
       });
     } else if (a.kind === "ellipse") {
+      const fill = a.fill
+        ? rgb(a.fill.color.r / 255, a.fill.color.g / 255, a.fill.color.b / 255)
+        : undefined;
       page.drawEllipse({
         x: (a.x + a.w / 2) * W,
         y: (1 - (a.y + a.h / 2)) * H,
@@ -2707,7 +2716,8 @@ export async function annotatePdf(file: File, annotations: Annotation[]): Promis
         yScale: (a.h / 2) * H,
         borderColor: color,
         borderWidth: Math.max(0.5, a.thicknessFrac * W),
-        opacity: 0,
+        color: fill,
+        opacity: a.fill ? (a.fill.opacity ?? 1) : 0,
         borderOpacity: 1,
       });
     } else if (a.kind === "line" || a.kind === "arrow") {

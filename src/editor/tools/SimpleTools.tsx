@@ -15,8 +15,17 @@ import {
   repairPdf,
 } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
-import { useEditorActions } from "../EditorContext.tsx";
+import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
 import { Segmented, WholeDocPanel } from "./WholeDocPanel.tsx";
+
+// Per-quality copy for Compress, so the editor explains the trade-off the same
+// way the standalone tool does (render scale + JPEG quality + what it means).
+const COMPRESS_INFO: Record<"low" | "medium" | "high", string> = {
+  low: "Sharpest pages, modest size drop. Renders at 1× with JPEG quality 85%.",
+  medium:
+    "A balanced size-vs-quality trade-off that suits most documents. Renders at 1.5× with JPEG quality 70%.",
+  high: "Smallest file, softest pages — text-heavy PDFs may barely shrink. Renders at 2× with JPEG quality 50%.",
+};
 
 export function GrayscalePanel() {
   const { applyTransform } = useEditorActions();
@@ -92,13 +101,72 @@ export function CompressPanel() {
           { value: "high", label: "Max", sub: "Smallest" },
         ]}
       />
+      <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
+        {COMPRESS_INFO[quality]}
+      </p>
     </WholeDocPanel>
+  );
+}
+
+type NupLayout = "2x1" | "1x2" | "2x2" | "3x3";
+
+/** Live preview of how sheet 1 will look: the first cols×rows page thumbnails
+ *  arranged in the chosen grid, using the already-rendered previews (no extra
+ *  render pass). */
+function NupPreview({ layout }: { layout: NupLayout }) {
+  const { doc } = useEditorRead();
+  const [cols, rows] = layout.split("x").map(Number);
+  const perSheet = cols * rows;
+  const pages = doc?.pages ?? [];
+  // Cell aspect from the real page so the preview isn't distorted.
+  const first = pages[0];
+  const cellAspect = first ? first.widthPt / first.heightPt : 0.7727;
+  const sheets = pages.length > 0 ? Math.ceil(pages.length / perSheet) : 0;
+
+  return (
+    <div>
+      <p className="mb-1.5 text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+        Preview — sheet 1
+      </p>
+      <div className="rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg p-2">
+        <div
+          className="mx-auto grid w-full max-w-45 gap-1"
+          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+        >
+          {Array.from({ length: perSheet }, (_, i) => {
+            const url = pages[i]?.thumbUrl ?? null;
+            return (
+              <div
+                key={i}
+                className="overflow-hidden rounded-sm border border-slate-200 dark:border-dark-border bg-white"
+                style={{ aspectRatio: String(cellAspect) }}
+              >
+                {url ? (
+                  <img
+                    src={url}
+                    alt=""
+                    className="h-full w-full object-contain"
+                    draggable={false}
+                  />
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {sheets > 0 && (
+        <p className="mt-1.5 text-xs text-slate-400 dark:text-dark-text-muted tabular-nums">
+          {pages.length} {pages.length === 1 ? "page" : "pages"} → {sheets}{" "}
+          {sheets === 1 ? "sheet" : "sheets"} ({perSheet} per sheet)
+        </p>
+      )}
+    </div>
   );
 }
 
 export function NupPanel() {
   const { applyTransform } = useEditorActions();
-  const [layout, setLayout] = useState<"2x1" | "1x2" | "2x2" | "3x3">("2x2");
+  const [layout, setLayout] = useState<NupLayout>("2x2");
   return (
     <WholeDocPanel
       blurb="Arrange several pages onto each sheet for compact printing."
@@ -121,6 +189,7 @@ export function NupPanel() {
           { value: "3x3", label: "9" },
         ]}
       />
+      <NupPreview layout={layout} />
     </WholeDocPanel>
   );
 }

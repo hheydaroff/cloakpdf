@@ -393,4 +393,35 @@ describe("annotatePdf", () => {
     expect(out.length).toBeGreaterThan(src.length);
     expect(hasHelvetica(doc)).toBe(false); // shapes embed no font
   });
+
+  it("draws filled rect + ellipse shapes (fill is optional)", async () => {
+    const src = await blankPdf();
+    const out = await annotatePdf(toFile(src), [
+      {
+        kind: "rect",
+        pageIndex: 0,
+        x: 0.1,
+        y: 0.1,
+        w: 0.3,
+        h: 0.2,
+        color: { r: 0, g: 0, b: 0 },
+        thicknessFrac: 0.01,
+        fill: { color: { r: 255, g: 230, b: 0 }, opacity: 0.4 },
+      },
+      {
+        kind: "ellipse",
+        pageIndex: 0,
+        x: 0.5,
+        y: 0.5,
+        w: 0.3,
+        h: 0.3,
+        color: { r: 0, g: 0, b: 255 },
+        thicknessFrac: 0.01,
+        fill: { color: { r: 0, g: 0, b: 255 } }, // opacity defaults to 1
+      },
+    ]);
+    const doc = await PDFDocument.load(out);
+    expect(doc.getPageCount()).toBe(1);
+    expect(out.length).toBeGreaterThan(src.length);
+  });
 });
