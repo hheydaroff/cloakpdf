@@ -44,21 +44,75 @@ export interface PdfStageProps {
 
 const EMPTY: PdfStageProps = {};
 
+/** An in-place text-editing box anchored on the focused page. Lives on its own
+ *  context channel (NOT a PdfStageProps field) so its fresh `onCommit` closure
+ *  — rebuilt every keystroke/render of the owning tool — doesn't break the
+ *  shallowEqual bail that keeps the stage-props registration cheap. PdfStage is
+ *  kept decoupled from the annotation font model: it receives resolved CSS, not
+ *  font ids. */
+export interface InlineEditorDescriptor {
+  /** Identity of this edit session. PdfStage re-seeds the input value only when
+   *  it changes, so a style-only update (e.g. a font-size auto-suggest snap)
+   *  keeps the text the user has already typed. */
+  editorId: string;
+  /** Page the editor is anchored to; PdfStage renders it only when this is the
+   *  focused page. */
+  pageIndex: number;
+  /** Top-left anchor in page fractions (0–1), matching the text-annotation anchor. */
+  xPct: number;
+  yPct: number;
+  /** Seed text — empty for a fresh placement, the object's text when editing. */
+  initialText: string;
+  /** Resolved CSS family stack, weight, and slant for a WYSIWYG box. */
+  fontCss: string;
+  fontWeight: number;
+  fontStyle: "normal" | "italic";
+  colorHex: string;
+  /** Text height as a fraction of page height; editor font-size = sizeFrac·fit.h. */
+  sizeFrac: number;
+  /** Commit the typed text (the owner trims + discards empties). */
+  onCommit: (text: string) => void;
+  /** Abandon the edit (Escape, or a page switch with empty text). */
+  onCancel: () => void;
+}
+
 // Value context (changes per tool render) + setter context (stable). Tools
 // consume only the setter, so they don't re-render on sibling stage churn.
 const StagePropsCtx = createContext<PdfStageProps>(EMPTY);
 const StageSetCtx = createContext<(p: PdfStageProps) => void>(() => {});
+
+// The inline editor rides a parallel channel for the reasons above: a stable
+// setter the owning tool calls imperatively on open/close, and a value context
+// PdfStage subscribes to. Mirrors the StageProps value/setter split.
+const InlineEditorCtx = createContext<InlineEditorDescriptor | null>(null);
+const InlineEditorSetCtx = createContext<(d: InlineEditorDescriptor | null) => void>(() => {});
 
 export function StageProvider({ children }: { children: ReactNode }) {
   const [props, setProps] = useState<PdfStageProps>(EMPTY);
   const set = useCallback((next: PdfStageProps) => {
     setProps((prev) => (shallowEqual(prev, next) ? prev : next));
   }, []);
+  const [inlineEditor, setInlineEditor] = useState<InlineEditorDescriptor | null>(null);
   return (
     <StageSetCtx.Provider value={set}>
-      <StagePropsCtx.Provider value={props}>{children}</StagePropsCtx.Provider>
+      <StagePropsCtx.Provider value={props}>
+        <InlineEditorSetCtx.Provider value={setInlineEditor}>
+          <InlineEditorCtx.Provider value={inlineEditor}>{children}</InlineEditorCtx.Provider>
+        </InlineEditorSetCtx.Provider>
+      </StagePropsCtx.Provider>
     </StageSetCtx.Provider>
   );
+}
+
+/** Imperative setter for the inline text editor (pass `null` to close it). The
+ *  setter identity is stable (useState), so calling it never re-renders the caller. */
+export function useInlineEditor(): (d: InlineEditorDescriptor | null) => void {
+  return useContext(InlineEditorSetCtx);
+}
+
+/** The active inline editor descriptor, or null. Consumed by PdfStage. */
+export function useActiveInlineEditor(): InlineEditorDescriptor | null {
+  return useContext(InlineEditorCtx);
 }
 
 /** Tool components call this each render to register their stage props. The

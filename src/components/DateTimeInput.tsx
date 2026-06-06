@@ -9,6 +9,16 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Select } from "./Select.tsx";
+
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
+  value: String(i + 1),
+  label: String(i + 1),
+}));
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => ({
+  value: String(i),
+  label: i.toString().padStart(2, "0"),
+}));
 
 const MONTHS = [
   "January",
@@ -78,9 +88,6 @@ interface DateTimeInputProps {
   value: string;
   onChange: (value: string) => void;
 }
-
-const timeSelectClass =
-  "px-2 py-1 rounded-md border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-bg text-xs text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow] appearance-none cursor-pointer";
 
 export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
   const [open, setOpen] = useState(false);
@@ -171,7 +178,13 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const t = e.target as Node;
+      // The hour/minute Selects portal their option lists to <body> (outside
+      // containerRef), so a click on an option must NOT count as "outside" — it
+      // would close the whole calendar mid-pick. Ignore clicks inside any
+      // portaled listbox.
+      if (t instanceof Element && t.closest('[role="listbox"]')) return;
+      if (containerRef.current && !containerRef.current.contains(t)) {
         setOpen(false);
       }
     }
@@ -588,37 +601,31 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
               Time
             </span>
 
-            <select
-              value={parsed ? hour12 : ""}
-              onChange={(e) => handleHour12Change(parseInt(e.target.value, 10))}
-              aria-label="Hour"
-              className={timeSelectClass}
-            >
-              {!parsed && <option value="">—</option>}
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                <option key={h} value={h}>
-                  {h}
-                </option>
-              ))}
-            </select>
+            <div className="w-14">
+              <Select
+                value={parsed ? String(hour12) : ""}
+                options={HOUR_OPTIONS}
+                onChange={(v) => handleHour12Change(parseInt(v, 10))}
+                ariaLabel="Hour"
+                placeholder="—"
+                size="sm"
+              />
+            </div>
 
             <span className="text-slate-400 font-medium text-xs select-none" aria-hidden="true">
               :
             </span>
 
-            <select
-              value={parsed?.minute ?? ""}
-              onChange={(e) => handleTimePart("minute", parseInt(e.target.value, 10))}
-              aria-label="Minute"
-              className={timeSelectClass}
-            >
-              {!parsed && <option value="">—</option>}
-              {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                <option key={m} value={m}>
-                  {m.toString().padStart(2, "0")}
-                </option>
-              ))}
-            </select>
+            <div className="w-16">
+              <Select
+                value={parsed ? String(parsed.minute) : ""}
+                options={MINUTE_OPTIONS}
+                onChange={(v) => handleTimePart("minute", parseInt(v, 10))}
+                ariaLabel="Minute"
+                placeholder="—"
+                size="sm"
+              />
+            </div>
 
             {/* AM/PM toggle — <fieldset> gives implicit role="group" */}
             <fieldset className="flex m-0 p-0 rounded-md border border-slate-200 dark:border-dark-border overflow-hidden text-xs">

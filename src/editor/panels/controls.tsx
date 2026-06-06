@@ -5,6 +5,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import { ColorPicker, hexToRgb, rgbToHex } from "../../components/ColorPicker.tsx";
+import { Select } from "../../components/Select.tsx";
 
 export interface Rgb {
   r: number;
@@ -136,8 +137,9 @@ export function TextField({
   );
 }
 
-/** Native select styled to match the panel's inputs. Generic over the option
- *  value so callers keep their string-literal unions. */
+/** App dropdown styled to match the panel's inputs (the custom {@link Select},
+ *  not a native control). Generic over the option value so callers keep their
+ *  string-literal unions. */
 export function SelectField<T extends string>({
   label,
   value,
@@ -153,17 +155,7 @@ export function SelectField<T extends string>({
 }) {
   return (
     <Labeled label={label} icon={icon}>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="w-full rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <Select value={value} options={options} onChange={onChange} ariaLabel={label} />
     </Labeled>
   );
 }

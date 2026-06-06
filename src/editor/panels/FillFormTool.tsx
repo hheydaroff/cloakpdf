@@ -7,6 +7,7 @@
 
 import { PDFCheckBox, PDFDocument, PDFDropdown, PDFRadioGroup, PDFTextField } from "@pdfme/pdf-lib";
 import { useEffect, useState } from "react";
+import { Select } from "../../components/Select.tsx";
 import { fillPdfForm, getFieldPageIndices } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
@@ -157,18 +158,16 @@ export function Panel() {
                 Checked
               </label>
             ) : (
-              <select
+              <Select
                 value={typeof v === "string" ? v : ""}
-                onChange={(e) => set(f.name, e.target.value)}
-                className={INPUT_CLS}
-              >
-                <option value="">— Select —</option>
-                {(f.options ?? []).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => set(f.name, val)}
+                ariaLabel={f.name}
+                placeholder="— Select —"
+                options={[
+                  { value: "", label: "— Select —" },
+                  ...(f.options ?? []).map((opt) => ({ value: opt, label: opt })),
+                ]}
+              />
             )}
           </Labeled>
         );

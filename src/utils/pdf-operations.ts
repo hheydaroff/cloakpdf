@@ -69,8 +69,15 @@ export { redactPdf } from "./pdf/redact.ts";
 export type { ScrubCategory, ScrubAnalysis } from "./pdf/scrub.ts";
 export { SCRUB_CATEGORIES, analyzePdfHiddenData, scrubPdf } from "./pdf/scrub.ts";
 
-export type { AnnotationColor, Annotation, TextFontId } from "./pdf/annotate.ts";
-export { annotatePdf, TEXT_BG_HEIGHT_EM, TEXT_BG_PAD_EM } from "./pdf/annotate.ts";
+export type { AnnotationColor, Annotation, TextFontId, FontFamily } from "./pdf/annotate.ts";
+export {
+  annotatePdf,
+  decomposeTextFont,
+  resolveTextFont,
+  TEXT_BG_HEIGHT_EM,
+  TEXT_BG_PAD_EM,
+  TEXT_FONT_IDS,
+} from "./pdf/annotate.ts";
 
 export { addPdfBookmarks } from "./pdf/bookmarks.ts";
 

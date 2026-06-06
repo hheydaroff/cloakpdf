@@ -17,16 +17,169 @@ import {
   useState,
 } from "react";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
-import { type StagePoint, useActiveStageProps } from "./stage.tsx";
+import {
+  type InlineEditorDescriptor,
+  type StagePoint,
+  useActiveInlineEditor,
+  useActiveStageProps,
+} from "./stage.tsx";
 import type { ViewState } from "./types.ts";
 
 type Pt = { x: number; y: number };
 const distance = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
 
+// One reused offscreen 2d context for sizing the inline editor's input to its
+// content (native <input> doesn't auto-grow).
+let _measureCtx: CanvasRenderingContext2D | null = null;
+function measureInlineWidth(text: string, font: string): number {
+  if (!_measureCtx) _measureCtx = document.createElement("canvas").getContext("2d");
+  if (!_measureCtx) return text.length * 8;
+  _measureCtx.font = font;
+  return _measureCtx.measureText(text).width;
+}
+
+/** Coarse-pointer (touch) primary input — phones/tablets, where the fit-to-screen
+ *  page renders small and the OS soft keyboard is in play. `pointer: coarse` is
+ *  true only when the PRIMARY input is touch (a touchscreen laptop with a
+ *  trackpad reports `fine`), which is exactly the set of devices that need the
+ *  legible editing floor below. */
+function isCoarsePointer(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(pointer: coarse)").matches
+  );
+}
+
+/**
+ * The in-place text-editing input, a child of the transformed page wrap so pan /
+ * zoom / pinch apply to it for free. Anchored at the annotation's top-left
+ * fraction; font-size is `sizeFrac · fit.h` (unscaled box px) so the wrap's own
+ * `scale(zoom)` matches it to the painted/burned text at any zoom — never read a
+ * post-scale rect or it double-applies zoom. Commit fires once (Enter or blur);
+ * Escape cancels; an empty value commits nothing (the accidental-add guard).
+ *
+ * Mobile legibility: on a phone the fit-to-screen page is tiny (≈130 pt wide),
+ * so a body-size label maps to a 3–6 px input — illegible to type into, and
+ * under iOS Safari's 16 px focus-zoom threshold (which yanks the whole canvas).
+ * On coarse pointers we therefore floor the *editing* font to 16 px while the
+ * placed annotation keeps its true `sizeFrac`. WYSIWYG still holds wherever the
+ * real size is already legible (desktop, or a zoomed-in / large label) — the
+ * floor only ever kicks in when the true size is too small to edit at all.
+ */
+function InlineTextEditor({
+  descriptor,
+  fit,
+}: {
+  descriptor: InlineEditorDescriptor;
+  fit: { w: number; h: number };
+}) {
+  const { xPct, yPct, fontCss, fontWeight, fontStyle, colorHex, sizeFrac, onCommit, onCancel } =
+    descriptor;
+  const [value, setValue] = useState(descriptor.initialText);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const committedRef = useRef(false);
+  const escapedRef = useRef(false);
+  // Latest callbacks via refs: the owning tool rebuilds onCommit/onCancel every
+  // render (and on a font-size auto-suggest snap), so depending on their
+  // identity in the unmount effect would fire a premature commit mid-edit.
+  const onCommitRef = useRef(onCommit);
+  onCommitRef.current = onCommit;
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+
+  const commit = useCallback(() => {
+    if (committedRef.current || escapedRef.current) return;
+    committedRef.current = true;
+    onCommitRef.current(valueRef.current);
+  }, []);
+  const cancel = useCallback(() => {
+    if (committedRef.current || escapedRef.current) return;
+    escapedRef.current = true;
+    onCancelRef.current();
+  }, []);
+
+  // Focus + caret-to-end once on mount (a new edit session always remounts — the
+  // owner clears the descriptor to null between sessions). The wrap captures the
+  // placing pointer, so focus programmatically rather than relying on the click.
+  // NOTE: do NOT commit/cancel on unmount — React StrictMode double-invokes
+  // effects in dev (mount→unmount→mount), which would fire a spurious commit and
+  // tear the editor down. Commit is driven entirely by blur / Enter / Escape;
+  // any UI that closes the editor (page rail, tool buttons, Apply) blurs the
+  // input first, so the value is never silently lost.
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    const n = el.value.length;
+    el.setSelectionRange(n, n);
+  }, []);
+
+  // True on-page size; floored to a legible editing size on touch (see above).
+  const truePx = sizeFrac * fit.h;
+  const fontSizePx = Math.max(isCoarsePointer() ? 16 : 6, truePx);
+  const font = `${fontStyle} ${fontWeight} ${fontSizePx}px ${fontCss}`;
+  const widthPx = Math.max(fontSizePx * 1.5, measureInlineWidth(value, font) + fontSizePx * 0.7);
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          commit();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          cancel();
+        }
+        // Keep editor keystrokes (incl. Backspace) off the window-level
+        // delete-selected listener; that listener also bails on a focused input.
+        e.stopPropagation();
+      }}
+      onBlur={commit}
+      // Only swallow PRIMARY pointers so a second finger still reaches the wrap
+      // and a pinch can form while editing.
+      onPointerDown={(e) => {
+        if (e.isPrimary) e.stopPropagation();
+      }}
+      onPointerUp={(e) => {
+        if (e.isPrimary) e.stopPropagation();
+      }}
+      // Escape the wrap's `touch-none select-none`, which would otherwise
+      // suppress the caret / soft keyboard (notably on iOS Safari).
+      className="absolute m-0 select-text touch-auto rounded-[3px] border border-primary-500/80 bg-white/90 p-0 leading-tight outline-none"
+      style={{
+        left: `${xPct * fit.w}px`,
+        top: `${yPct * fit.h}px`,
+        width: `${widthPx}px`,
+        height: `${fontSizePx * 1.25}px`,
+        fontFamily: fontCss,
+        fontWeight,
+        fontStyle,
+        fontSize: `${fontSizePx}px`,
+        color: colorHex,
+        userSelect: "text",
+        WebkitUserSelect: "text",
+        touchAction: "auto",
+      }}
+      aria-label="Text annotation"
+    />
+  );
+}
+
 export function PdfStage() {
   const { doc, selectedPage, view } = useEditorRead();
   const { setView } = useEditorActions();
   const stageProps = useActiveStageProps();
+  const inlineEditor = useActiveInlineEditor();
+  // The inline editor is open over the focused page → a tap on the page (off the
+  // input) must not start a pan/draw/select; it only blurs (commits) the editor.
+  const editorOpen = inlineEditor != null && inlineEditor.pageIndex === selectedPage;
 
   const availRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -110,16 +263,26 @@ export function PdfStage() {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
     if (!canvas || !wrap) return;
+    // getBoundingClientRect is post-transform, so `width`/`height` already track
+    // zoom. Back the canvas at DEVICE resolution (×DPR) so overlay text + marks
+    // stay crisp on retina screens — the page <img> is already high-DPI, so a
+    // CSS-resolution canvas made annotation text look soft next to it.
     const { width, height } = wrap.getBoundingClientRect();
     if (!width || !height) return;
-    if (canvas.width !== Math.round(width) || canvas.height !== Math.round(height)) {
-      canvas.width = Math.round(width);
-      canvas.height = Math.round(height);
+    const dpr = window.devicePixelRatio || 1;
+    const bw = Math.round(width * dpr);
+    const bh = Math.round(height * dpr);
+    if (canvas.width !== bw || canvas.height !== bh) {
+      canvas.width = bw;
+      canvas.height = bh;
     }
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    stageProps.paintOverlay?.(ctx, canvas.width, canvas.height, selectedPage);
+    // Draw in CSS px so every tool's geometry + hit-test tolerances are unchanged;
+    // the DPR transform renders that into the higher-res backing.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    stageProps.paintOverlay?.(ctx, width, height, selectedPage);
   }, [stageProps, selectedPage]);
 
   useEffect(() => {
@@ -176,6 +339,10 @@ export function PdfStage() {
       }
       if (pinchActiveRef.current) return; // residual finger from a pinch — ignore
 
+      // An open inline editor owns the single-finger gesture: a tap elsewhere on
+      // the page just blurs (commits) it; don't also start a tool/pan underneath.
+      if (editorOpen) return;
+
       if (hasToolPointer) {
         stageProps.onPointerDown?.(toPoint(e), e);
         return;
@@ -183,7 +350,7 @@ export function PdfStage() {
       // No active tool → drag to pan.
       panStart.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY };
     },
-    [hasToolPointer, stageProps, toPoint, view.panX, view.panY, view.zoom],
+    [editorOpen, hasToolPointer, stageProps, toPoint, view.panX, view.panY, view.zoom],
   );
 
   const onPointerMove = useCallback(
@@ -302,6 +469,13 @@ export function PdfStage() {
             <div className="h-full w-full bg-white" />
           )}
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
+          {editorOpen &&
+            fit &&
+            inlineEditor && (
+              // Key by session id so a new edit always remounts (re-seeds its
+              // value); a style-only update (same id) re-renders in place.
+              <InlineTextEditor key={inlineEditor.editorId} descriptor={inlineEditor} fit={fit} />
+            )}
         </div>
       </div>
     </div>

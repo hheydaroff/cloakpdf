@@ -63,10 +63,19 @@ interface ActionsValue {
   setSelectedPage: (i: number) => void;
   /** Apply a byte transform under the busy spinner, re-render pages, commit. */
   applyTransform: (t: DocTransform) => Promise<void>;
-  addObject: (obj: Omit<CanvasObject, "id">) => void;
-  /** Add many overlay objects in a single history entry (e.g. PII auto-detect). */
-  addObjects: (objs: Omit<CanvasObject, "id">[], label?: string) => void;
+  /** Append an overlay object and push one history entry; returns its
+   *  freshly-minted id so callers can immediately select it (arm-once). */
+  addObject: (obj: Omit<CanvasObject, "id">) => string;
+  /** Add many overlay objects in a single history entry (e.g. PII auto-detect).
+   *  Returns the minted ids, in order. */
+  addObjects: (objs: Omit<CanvasObject, "id">[], label?: string) => string[];
+  /** Merge `patch` into the live doc WITHOUT pushing history — for live drag /
+   *  in-flight edits the caller commits separately. */
   updateObject: (id: string, patch: Partial<CanvasObject>) => void;
+  /** Merge `patch` into one object AND push a single undoable history entry.
+   *  Use for a finished move/edit; `updateObject` (no history) is for the
+   *  in-flight preview. */
+  moveObject: (id: string, patch: Partial<CanvasObject>, label: string) => void;
   removeObject: (id: string) => void;
   commit: (label: string) => void;
   undo: () => void;
@@ -396,9 +405,9 @@ export function EditorProvider({
     else if (t?.mode === "overview") setViewModeState("overview");
   }, [initialTool, setActiveTool]);
 
-  const addObject = useCallback((obj: Omit<CanvasObject, "id">) => {
+  const addObject = useCallback((obj: Omit<CanvasObject, "id">): string => {
     const cur = docRef.current;
-    if (!cur) return;
+    if (!cur) return "";
     const full: CanvasObject = { ...obj, id: nextId(obj.kind) };
     const next: CanvasDoc = { ...cur, objects: [...cur.objects, full] };
     setDoc(next);
@@ -409,11 +418,12 @@ export function EditorProvider({
       objects: next.objects,
     });
     setHistoryVersion((v) => v + 1);
+    return full.id;
   }, []);
 
-  const addObjects = useCallback((objs: Omit<CanvasObject, "id">[], label?: string) => {
+  const addObjects = useCallback((objs: Omit<CanvasObject, "id">[], label?: string): string[] => {
     const cur = docRef.current;
-    if (!cur || objs.length === 0) return;
+    if (!cur || objs.length === 0) return [];
     const full = objs.map((o) => ({ ...o, id: nextId(o.kind) }));
     const next: CanvasDoc = { ...cur, objects: [...cur.objects, ...full] };
     setDoc(next);
@@ -424,6 +434,7 @@ export function EditorProvider({
       objects: next.objects,
     });
     setHistoryVersion((v) => v + 1);
+    return full.map((o) => o.id);
   }, []);
 
   const updateObject = useCallback((id: string, patch: Partial<CanvasObject>) => {
@@ -433,6 +444,26 @@ export function EditorProvider({
       ...cur,
       objects: cur.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
     });
+  }, []);
+
+  // Like updateObject, but pushes ONE history entry so a finished move/edit is a
+  // single undoable step. (Mirrors removeObject's snapshot; the live preview the
+  // caller paints between pointerdown and pointerup never touches the doc.)
+  const moveObject = useCallback((id: string, patch: Partial<CanvasObject>, label: string) => {
+    const cur = docRef.current;
+    if (!cur) return;
+    const next: CanvasDoc = {
+      ...cur,
+      objects: cur.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)),
+    };
+    setDoc(next);
+    historyRef.current.push({
+      label,
+      bytes: next.bytes,
+      pages: next.pages,
+      objects: next.objects,
+    });
+    setHistoryVersion((v) => v + 1);
   }, []);
 
   const removeObject = useCallback((id: string) => {
@@ -557,6 +588,7 @@ export function EditorProvider({
       addObject,
       addObjects,
       updateObject,
+      moveObject,
       removeObject,
       commit,
       undo,
@@ -583,6 +615,7 @@ export function EditorProvider({
       addObject,
       addObjects,
       updateObject,
+      moveObject,
       removeObject,
       commit,
       undo,

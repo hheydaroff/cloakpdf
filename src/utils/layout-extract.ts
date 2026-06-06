@@ -32,7 +32,7 @@
  * {@link layoutToReadingOrderText}, {@link detectPiiRects}) so they unit-test
  * without a browser.
  */
-import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
 import { getPdfJs } from "./pdf/raster.ts";
 import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 import { detectPii, type PiiType } from "./pii.ts";
@@ -663,6 +663,46 @@ export async function extractLayout(
  * pages fall back to Tesseract word boxes via {@link ocrScannedPages}, so the
  * output shape is identical for digital and scanned input.
  */
+/**
+ * Read one page's native text runs into a {@link LayoutPage} via PDF.js.
+ *
+ * The default viewport applies the page's /Rotate, so its width/height and
+ * `convertToViewportPoint()` live in the same rotated, top-left frame that
+ * renderAllThumbnails (preview/manual boxes) and redactPdf (burn-in) use.
+ * Mapping each run's baseline-left and opposite (top-right) corners through it,
+ * then taking the axis-aligned bounding box, keeps geometry correct on rotated
+ * pages, not just upright ones. Shared by {@link extractTextGeometry} (all
+ * pages) and {@link extractPageTextGeometry} (one page) so the corner maths
+ * never drifts between them.
+ */
+async function pageLayoutFromTextLayer(
+  page: PDFPageProxy,
+  pageNumber: number,
+): Promise<LayoutPage> {
+  const viewport = page.getViewport({ scale: 1 });
+  const content = await page.getTextContent();
+  const items: LayoutItem[] = [];
+  for (const raw of content.items) {
+    const it = raw as { str?: string; transform?: number[]; width?: number; height?: number };
+    const text = it.str ?? "";
+    if (!text.trim() || !it.transform) continue;
+    const tr = it.transform;
+    const height = it.height || Math.hypot(tr[1], tr[3]) || 0;
+    const width = it.width ?? 0;
+    const [ax, ay] = viewport.convertToViewportPoint(tr[4], tr[5]);
+    const [bx, by] = viewport.convertToViewportPoint(tr[4] + width, tr[5] + height);
+    items.push({
+      text,
+      x: Math.min(ax, bx),
+      y: Math.min(ay, by),
+      width: Math.abs(bx - ax),
+      height: Math.abs(by - ay),
+      fontSize: height,
+    });
+  }
+  return { pageNumber, width: viewport.width, height: viewport.height, text: "", items };
+}
+
 export async function extractTextGeometry(
   file: File,
   options: ExtractLayoutOptions = {},
@@ -681,43 +721,7 @@ export async function extractTextGeometry(
     for (let i = 1; i <= total; i++) {
       const page = await pdf.getPage(i);
       try {
-        // The default viewport applies the page's /Rotate, so its width/height
-        // and convertToViewportPoint() live in the same rotated, top-left frame
-        // that renderAllThumbnails (preview/manual boxes) and redactPdf (burn-in)
-        // use. Mapping each run's corners through it keeps auto-detected boxes
-        // correctly placed on rotated pages, not just upright ones.
-        const viewport = page.getViewport({ scale: 1 });
-        const content = await page.getTextContent();
-        const items: LayoutItem[] = [];
-        for (const raw of content.items) {
-          const it = raw as { str?: string; transform?: number[]; width?: number; height?: number };
-          const text = it.str ?? "";
-          if (!text.trim() || !it.transform) continue;
-          const tr = it.transform;
-          const height = it.height || Math.hypot(tr[1], tr[3]) || 0;
-          const width = it.width ?? 0;
-          // Convert the run's baseline-left and opposite (top-right) corners from
-          // PDF user space into rotated viewport space, then take the
-          // axis-aligned bounding box. For an unrotated page this reduces to the
-          // old `y = viewport.height - tr[5] - height` formula.
-          const [ax, ay] = viewport.convertToViewportPoint(tr[4], tr[5]);
-          const [bx, by] = viewport.convertToViewportPoint(tr[4] + width, tr[5] + height);
-          items.push({
-            text,
-            x: Math.min(ax, bx),
-            y: Math.min(ay, by),
-            width: Math.abs(bx - ax),
-            height: Math.abs(by - ay),
-            fontSize: height,
-          });
-        }
-        pages.push({
-          pageNumber: i,
-          width: viewport.width,
-          height: viewport.height,
-          text: "",
-          items,
-        });
+        pages.push(await pageLayoutFromTextLayer(page, i));
       } finally {
         page.cleanup();
       }
@@ -739,4 +743,38 @@ export async function extractTextGeometry(
   }
   for (const p of pages) if (!p.text) p.text = layoutToReadingOrderText(p);
   return pages;
+}
+
+/**
+ * Extract positioned text for a SINGLE page via PDF.js's text layer.
+ *
+ * A deliberately light path for the annotate tool's font-size auto-suggest:
+ * unlike {@link extractTextGeometry} it never loops the whole document and never
+ * OCRs — a scanned / text-sparse page simply returns zero items, and the caller
+ * falls back to a default size. Coordinates are the same top-left point space
+ * (with /Rotate applied), and each item's `fontSize` is the glyph-bbox height —
+ * the dependable size proxy (PDF.js's own font-size is degenerate on many PDFs).
+ *
+ * @param pageNumber - 1-based page index.
+ * @returns the page's {@link LayoutPage}, or null when the index is out of range.
+ */
+export async function extractPageTextGeometry(
+  file: File,
+  pageNumber: number,
+): Promise<LayoutPage | null> {
+  const pdfjsLib = await getPdfJs();
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, wasmUrl: PDFJS_WASM_URL });
+  const pdf = await loadingTask.promise;
+  try {
+    if (pageNumber < 1 || pageNumber > pdf.numPages) return null;
+    const page = await pdf.getPage(pageNumber);
+    try {
+      return await pageLayoutFromTextLayer(page, pageNumber);
+    } finally {
+      page.cleanup();
+    }
+  } finally {
+    void loadingTask.destroy();
+  }
 }

@@ -16,7 +16,8 @@
 // phone provides, mirroring the standalone OCR tool's `desktopOnly` flag.
 
 import { Loader2, ScanText } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { Select } from "../../components/Select.tsx";
 import {
   extractLayout,
   type LayoutPage,
@@ -131,6 +132,10 @@ export function Panel() {
   const { applyTransform, patchToolState } = useEditorActions();
   const slice = useToolSlice(OCR_ID);
   const language = (slice.language as string) ?? "auto";
+  const langOptions = useMemo<{ value: string; label: string }[]>(
+    () => LANGUAGES.map((l) => ({ value: l.code, label: l.label })),
+    [],
+  );
   const hasPreview = ocrHasPreview(slice, doc?.id);
   const [extracting, setExtracting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
@@ -204,18 +209,13 @@ export function Panel() {
       <span className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
         Language
       </span>
-      <select
+      <Select
         value={language}
-        onChange={(e) => patchToolState(OCR_ID, { language: e.target.value })}
+        options={langOptions}
+        onChange={(v) => patchToolState(OCR_ID, { language: v })}
         disabled={extracting || busy}
-        className="w-full rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50"
-      >
-        {LANGUAGES.map((l) => (
-          <option key={l.code} value={l.code}>
-            {l.label}
-          </option>
-        ))}
-      </select>
+        ariaLabel="OCR language"
+      />
     </label>
   );
 

@@ -13,16 +13,29 @@ export interface AnnotationColor {
   b: number;
 }
 
-/** Font for a text annotation. Limited to the PDF standard-14 families, which
- *  every viewer renders natively — no embedding, no licensing, no file bloat,
- *  and the on-canvas preview matches the output via each family's CSS stack. */
+/** Font for a text annotation: one of three standard-14 families × Bold × Italic
+ *  (12 combinations), which every viewer renders natively — no embedding, no
+ *  licensing, no file bloat, and the on-canvas preview matches the output via
+ *  each family's CSS stack.
+ *
+ *  Ids use a UNIFORM `-bold`/`-italic` suffix scheme: the all-off case is the
+ *  bare family (`helvetica`), so the original 6 ids stay byte-identical and
+ *  persisted drafts keep resolving. The Helvetica/Courier "Oblique" vs Times
+ *  "Italic" naming asymmetry is absorbed entirely by {@link STANDARD_FONT} — the
+ *  id scheme never branches on family. */
 export type TextFontId =
   | "helvetica"
   | "helvetica-bold"
+  | "helvetica-italic"
+  | "helvetica-bold-italic"
   | "times"
   | "times-bold"
+  | "times-italic"
+  | "times-bold-italic"
   | "courier"
-  | "courier-bold";
+  | "courier-bold"
+  | "courier-italic"
+  | "courier-bold-italic";
 
 /**
  * A single annotation, in page-relative fraction coordinates (0–1 from the
@@ -78,15 +91,50 @@ export type Annotation =
       bg?: { color: AnnotationColor; opacity?: number };
     };
 
-/** Text-font id → the pdf-lib standard font it embeds as. */
+/** Text-font id → the pdf-lib standard font it embeds as. The only place the
+ *  Oblique-vs-Italic naming asymmetry lives (Helvetica/Courier use `-Oblique`,
+ *  Times uses `-Italic`). */
 const STANDARD_FONT: Record<TextFontId, StandardFonts> = {
   helvetica: StandardFonts.Helvetica,
   "helvetica-bold": StandardFonts.HelveticaBold,
+  "helvetica-italic": StandardFonts.HelveticaOblique,
+  "helvetica-bold-italic": StandardFonts.HelveticaBoldOblique,
   times: StandardFonts.TimesRoman,
   "times-bold": StandardFonts.TimesRomanBold,
+  "times-italic": StandardFonts.TimesRomanItalic,
+  "times-bold-italic": StandardFonts.TimesRomanBoldItalic,
   courier: StandardFonts.Courier,
   "courier-bold": StandardFonts.CourierBold,
+  "courier-italic": StandardFonts.CourierOblique,
+  "courier-bold-italic": StandardFonts.CourierBoldOblique,
 };
+
+/** Every valid {@link TextFontId}, for exhaustiveness checks / tests. */
+export const TEXT_FONT_IDS: readonly TextFontId[] = Object.keys(STANDARD_FONT) as TextFontId[];
+
+/** The three standard-14 families a text annotation can use. */
+export type FontFamily = "helvetica" | "times" | "courier";
+
+/** (family, bold, italic) → the resolved {@link TextFontId}. Uniform suffix
+ *  scheme: the all-off case is the bare family, byte-identical to the original
+ *  6 ids — so persisted drafts keep resolving. The Oblique-vs-Italic naming
+ *  asymmetry lives only in {@link STANDARD_FONT}, never here. */
+export function resolveTextFont(family: FontFamily, bold: boolean, italic: boolean): TextFontId {
+  return `${family}${bold ? "-bold" : ""}${italic ? "-italic" : ""}` as TextFontId;
+}
+
+/** Inverse of {@link resolveTextFont}. */
+export function decomposeTextFont(id: TextFontId): {
+  family: FontFamily;
+  bold: boolean;
+  italic: boolean;
+} {
+  return {
+    family: id.split("-")[0] as FontFamily,
+    bold: id.includes("-bold"),
+    italic: id.includes("-italic"),
+  };
+}
 
 // Text-annotation box geometry, shared (by value) with the on-canvas preview in
 // AnnotateTool so what you place is what you get. The anchor `y` is the box top;
@@ -118,7 +166,13 @@ export async function annotatePdf(file: File, annotations: Annotation[]): Promis
   const getFont = async (id: TextFontId) => {
     let f = fontCache.get(id);
     if (!f) {
-      f = await pdf.embedFont(STANDARD_FONT[id]);
+      // A font id absent from the map (e.g. a corrupt draft) would otherwise make
+      // embedFont(undefined) throw inside the per-label try/catch below and drop
+      // the label silently — indistinguishable from an un-encodable-glyph skip.
+      // Surface it and fall back to Helvetica so the text still renders.
+      const std = STANDARD_FONT[id] as StandardFonts | undefined;
+      if (!std) console.warn(`annotatePdf: unknown text font id "${id}", using Helvetica`);
+      f = await pdf.embedFont(std ?? StandardFonts.Helvetica);
       fontCache.set(id, f);
     }
     return f;
