@@ -15,10 +15,33 @@ const UPDATE_CHECK_INTERVAL_MS = 10 * 60 * 1000;
 const RELOAD_FALLBACK_MS = 1500;
 
 export function ReloadPrompt() {
-  // Stash the SW update interval so the unmount cleanup can clear it.
-  // `useRegisterSW`'s onRegisteredSW callback fires once outside React's
-  // lifecycle, so we need our own ref to plumb the timer ID back out.
+  // Stash the SW update interval + the live registration so the unmount
+  // cleanup can clear the timer and so the focus/visibility listeners below —
+  // which fire outside `useRegisterSW`'s onRegisteredSW lifecycle — can reach
+  // the registration to trigger an update check.
   const updateIntervalRef = useRef<number | null>(null);
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const swUrlRef = useRef<string>("");
+  const lastCheckRef = useRef<number>(0);
+
+  // Poll sw.js for a freshly-deployed build. Throttled to once a minute so the
+  // interval and the focus/visibility listeners can all call it without
+  // hammering the network. `cache: "no-store"` bypasses the HTTP cache so an
+  // edge-revalidated sw.js is always seen.
+  const checkForUpdate = useCallback(async () => {
+    const registration = registrationRef.current;
+    if (!registration || registration.installing) return;
+    if (!navigator.onLine) return;
+    const now = Date.now();
+    if (now - lastCheckRef.current < 60_000) return;
+    lastCheckRef.current = now;
+    try {
+      const resp = await fetch(swUrlRef.current, { cache: "no-store" });
+      if (resp.status === 200) await registration.update();
+    } catch {
+      // Network blip — try again on the next interval or refocus.
+    }
+  }, []);
 
   const {
     needRefresh: [needRefresh, setNeedRefresh],
@@ -27,30 +50,34 @@ export function ReloadPrompt() {
   } = useRegisterSW({
     onRegisteredSW(swUrl, registration) {
       if (!registration) return;
+      registrationRef.current = registration;
+      swUrlRef.current = swUrl;
       if (updateIntervalRef.current !== null) {
         window.clearInterval(updateIntervalRef.current);
       }
-      updateIntervalRef.current = window.setInterval(async () => {
-        if (registration.installing || !navigator) return;
-        if ("connection" in navigator && !navigator.onLine) return;
-        try {
-          const resp = await fetch(swUrl, { cache: "no-store" });
-          if (resp.status === 200) await registration.update();
-        } catch {
-          // Network blip — try again next interval.
-        }
-      }, UPDATE_CHECK_INTERVAL_MS);
+      updateIntervalRef.current = window.setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
     },
   });
 
+  // A tab left open while a new build ships would otherwise wait up to a full
+  // poll interval to notice (this SPA has no real navigations to trigger the
+  // browser's own SW update check). Re-checking when the user returns to the
+  // tab makes the "Update available" prompt appear within seconds of refocus.
   useEffect(() => {
+    const onForeground = () => {
+      if (document.visibilityState === "visible") void checkForUpdate();
+    };
+    document.addEventListener("visibilitychange", onForeground);
+    window.addEventListener("focus", onForeground);
     return () => {
+      document.removeEventListener("visibilitychange", onForeground);
+      window.removeEventListener("focus", onForeground);
       if (updateIntervalRef.current !== null) {
         window.clearInterval(updateIntervalRef.current);
         updateIntervalRef.current = null;
       }
     };
-  }, []);
+  }, [checkForUpdate]);
 
   // Edge cases on freshly-launched origins can drop workbox-window's
   // controlling event. Fall back to an explicit reload so the Update
