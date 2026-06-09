@@ -9,7 +9,12 @@
 import { Loader2, ScanSearch, Search } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { canvas as canvasColors } from "../../config/theme.ts";
-import { detectPiiRects, extractTextGeometry, findTextRects } from "../../utils/layout-extract.ts";
+import {
+  detectPiiRects,
+  extractTextGeometry,
+  findTextRects,
+  type LayoutPage,
+} from "../../utils/layout-extract.ts";
 import { redactPdf } from "../../utils/pdf-operations.ts";
 import { PII_LABELS, PII_TYPES, type PiiType } from "../../utils/pii.ts";
 import { docToFile } from "../doc.ts";
@@ -99,6 +104,26 @@ export function Panel() {
   const [finding, setFinding] = useState(false);
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [wholeWord, setWholeWord] = useState(false);
+  const [ocr, setOcr] = useState<{ done: number; total: number } | null>(null);
+
+  // Geometry cache keyed by the doc's byte buffer — Detect and Find share one
+  // extraction (and one OCR pass) instead of re-reading the whole document on
+  // every click. Adding redaction objects keeps the same bytes, so the cache
+  // survives a detect→find sequence; applyTransform mints fresh bytes on Apply,
+  // which invalidates it automatically (the reference comparison fails).
+  const geomRef = useRef<{ key: Uint8Array; pages: LayoutPage[] } | null>(null);
+
+  const ensureGeometry = useCallback(async (): Promise<LayoutPage[]> => {
+    if (!doc) return [];
+    const cached = geomRef.current;
+    if (cached && cached.key === doc.bytes) return cached.pages;
+    const pages = await extractTextGeometry(docToFile(doc), {
+      ocr: true,
+      onOcrPage: (done, total) => setOcr({ done, total }),
+    });
+    geomRef.current = { key: doc.bytes, pages };
+    return pages;
+  }, [doc]);
 
   const redactions = (doc?.objects ?? []).filter((o) => o.kind === "redaction");
   const count = redactions.length;
@@ -115,8 +140,9 @@ export function Panel() {
     if (!doc || piiTypes.size === 0) return;
     setDetecting(true);
     setSummary(null);
+    setOcr(null);
     try {
-      const pages = await extractTextGeometry(docToFile(doc), { ocr: true });
+      const pages = await ensureGeometry();
       const found = detectPiiRects(pages, [...piiTypes]);
       if (found.length === 0) {
         setSummary("No matching sensitive data found — draw boxes by hand if needed.");
@@ -135,16 +161,18 @@ export function Panel() {
       setSummary("Couldn't scan this document for sensitive data.");
     } finally {
       setDetecting(false);
+      setOcr(null);
     }
-  }, [doc, piiTypes, addObjects]);
+  }, [doc, piiTypes, addObjects, ensureGeometry]);
 
   const find = useCallback(async () => {
     const q = term.trim();
     if (!doc || !q) return;
     setFinding(true);
     setSummary(null);
+    setOcr(null);
     try {
-      const pages = await extractTextGeometry(docToFile(doc), { ocr: true });
+      const pages = await ensureGeometry();
       const rects = findTextRects(pages, [q], { caseSensitive, wholeWord });
       if (rects.length === 0) {
         setSummary(`No text-layer matches for “${q}”. It may be an image — run OCR first.`);
@@ -158,14 +186,20 @@ export function Panel() {
         })),
         `Find “${q}”`,
       );
-      setSummary(`Added ${rects.length} box${rects.length === 1 ? "" : "es"} for “${q}”.`);
+      const onPages = [...new Set(rects.map((r) => r.pageIndex + 1))].sort((a, b) => a - b);
+      setSummary(
+        `Added ${rects.length} box${rects.length === 1 ? "" : "es"} for “${q}” on page${
+          onPages.length === 1 ? "" : "s"
+        } ${onPages.join(", ")}.`,
+      );
       setTerm("");
     } catch {
       setSummary("Couldn't search this document for that text.");
     } finally {
       setFinding(false);
+      setOcr(null);
     }
-  }, [doc, term, caseSensitive, wholeWord, addObjects]);
+  }, [doc, term, caseSensitive, wholeWord, addObjects, ensureGeometry]);
 
   const apply = useCallback(() => {
     void applyTransform(async (d) => {
@@ -282,6 +316,12 @@ export function Panel() {
           </label>
         </div>
       </div>
+
+      {(detecting || finding) && ocr && (
+        <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">
+          Reading scanned pages… ({ocr.done}/{ocr.total})
+        </p>
+      )}
 
       {summary && (
         <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">

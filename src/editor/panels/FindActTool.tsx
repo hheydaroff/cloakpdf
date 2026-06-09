@@ -338,7 +338,7 @@ export function Panel() {
                 onClick={() => removeTerm(t)}
                 disabled={detecting}
                 aria-label={`Remove “${t}”`}
-                className="rounded-full p-0.5 hover:bg-slate-200 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="-mr-1 rounded-full p-1 hover:bg-slate-200 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -425,14 +425,18 @@ export function Panel() {
                     </button>
                     <ul className="flex flex-col gap-1">
                       {list.map((m) => (
-                        <li key={m.id} className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            checked={m.on}
-                            onChange={() => toggleHit(m.id)}
-                            aria-label={`Include match on page ${pageIndex + 1}`}
-                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 text-primary-600 focus-visible:ring-primary-500"
-                          />
+                        <li key={m.id} className="flex items-start gap-1">
+                          {/* Padded label widens the tap target around the 16 px
+                              box without growing the row (negative y-margin). */}
+                          <label className="-my-0.5 flex shrink-0 cursor-pointer p-1.5">
+                            <input
+                              type="checkbox"
+                              checked={m.on}
+                              onChange={() => toggleHit(m.id)}
+                              aria-label={`Include match on page ${pageIndex + 1}`}
+                              className="h-4 w-4 rounded border-slate-300 text-primary-600 focus-visible:ring-primary-500"
+                            />
+                          </label>
                           <button
                             type="button"
                             onClick={() => jump(pageIndex)}
@@ -440,7 +444,12 @@ export function Panel() {
                             title={m.line}
                           >
                             {m.line.slice(0, m.matchStart)}
-                            <mark className="bg-amber-200/70 dark:bg-amber-500/30 text-slate-900 dark:text-dark-text">
+                            <mark
+                              className="rounded-sm text-slate-900 dark:text-dark-text"
+                              style={{
+                                backgroundColor: `rgba(${activeColor.r}, ${activeColor.g}, ${activeColor.b}, 0.35)`,
+                              }}
+                            >
                               {m.line.slice(m.matchStart, m.matchEnd)}
                             </mark>
                             {m.line.slice(m.matchEnd)}

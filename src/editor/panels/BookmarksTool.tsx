@@ -145,7 +145,7 @@ export function Panel() {
               type="button"
               onClick={() => update(r.id, { level: (r.level % 3) + 1 })}
               disabled={detecting}
-              aria-label={`Nesting level ${r.level} — tap to change`}
+              aria-label={`Nesting level ${r.level} — change`}
               title="Nesting level (H1 / H2 / H3)"
               className="w-8 shrink-0 rounded-md border border-slate-200 dark:border-dark-border py-1.5 text-xs font-medium tabular-nums text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >

@@ -118,7 +118,7 @@ export function Stage() {
 }
 
 export function Panel() {
-  const { applyTransform, patchToolState } = useEditorActions();
+  const { applyTransform, patchToolState, setSelectedPage, setViewMode } = useEditorActions();
   const slice = readSlice(useToolSlice(TOOL_ID));
   const { regions, mode, coarseness } = slice;
 
@@ -198,10 +198,20 @@ export function Panel() {
           </div>
           <ul className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
             {regions.map((r, i) => (
-              <li key={r.id} className="flex items-center justify-between px-2.5 py-1.5 text-xs">
-                <span className="text-slate-600 dark:text-dark-text-muted">
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-1 px-2.5 py-1.5 text-xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPage(r.pageIndex);
+                    setViewMode("focus");
+                  }}
+                  className="min-w-0 flex-1 truncate rounded text-left text-slate-600 dark:text-dark-text-muted hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                >
                   Area {i + 1} · page {r.pageIndex + 1}
-                </span>
+                </button>
                 <button
                   type="button"
                   onClick={() => remove(r.id)}

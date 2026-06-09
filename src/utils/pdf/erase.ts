@@ -43,9 +43,44 @@ function clampBlockFrac(f: number | undefined): number {
   return Math.min(0.4, Math.max(0.02, f));
 }
 
+/** Running RGB sum over sampled pixels — used to average the ring colour. */
+interface ColorAcc {
+  r: number;
+  g: number;
+  b: number;
+  n: number;
+}
+
+/** Add a rectangular strip's pixels into `acc`. No-op for an empty/degenerate
+ *  strip; silently skips a tainted canvas (getImageData throws). */
+function accumulateStrip(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  sw: number,
+  sh: number,
+  acc: ColorAcc,
+): void {
+  if (sw <= 0 || sh <= 0) return;
+  try {
+    const { data } = ctx.getImageData(sx, sy, sw, sh);
+    for (let o = 0; o < data.length; o += 4) {
+      acc.r += data[o];
+      acc.g += data[o + 1];
+      acc.b += data[o + 2];
+      acc.n++;
+    }
+  } catch {
+    // getImageData throws on a tainted canvas — caller falls through to white.
+  }
+}
+
 /** Average colour of a thin ring just OUTSIDE the box, then flood the box with
- *  it so the patch blends into a solid background. Falls back to white when no
- *  ring pixels are sampleable (box at the page edge, or a tainted canvas). */
+ *  it so the patch blends into a solid background. Reads only the four ring
+ *  strips (top / bottom / left / right) — never the box interior we're about to
+ *  cover — so a large fill never pulls back megapixels just to discard them.
+ *  Falls back to white when no ring pixels are sampleable (box at the page edge,
+ *  or a tainted canvas). */
 function fillRegion(
   ctx: CanvasRenderingContext2D,
   canvasW: number,
@@ -56,37 +91,21 @@ function fillRegion(
   h: number,
 ): void {
   const ring = Math.max(2, Math.round(Math.min(w, h) * 0.08));
-  const sx = Math.max(0, x - ring);
-  const sy = Math.max(0, y - ring);
-  const sw = Math.min(canvasW, x + w + ring) - sx;
-  const sh = Math.min(canvasH, y + h + ring) - sy;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  let n = 0;
-  if (sw > 0 && sh > 0) {
-    try {
-      const { data } = ctx.getImageData(sx, sy, sw, sh);
-      for (let py = 0; py < sh; py++) {
-        for (let px = 0; px < sw; px++) {
-          const absX = sx + px;
-          const absY = sy + py;
-          // Only sample the ring OUTSIDE the erase box — never the content
-          // we're about to cover.
-          if (absX >= x && absX < x + w && absY >= y && absY < y + h) continue;
-          const o = (py * sw + px) * 4;
-          r += data[o];
-          g += data[o + 1];
-          b += data[o + 2];
-          n++;
-        }
-      }
-    } catch {
-      // getImageData throws on a tainted canvas — fall through to white.
-    }
-  }
+  const ox = Math.max(0, x - ring);
+  const oy = Math.max(0, y - ring);
+  const ex = Math.min(canvasW, x + w + ring);
+  const ey = Math.min(canvasH, y + h + ring);
+  const acc: ColorAcc = { r: 0, g: 0, b: 0, n: 0 };
+  // Four disjoint strips that together tile the ring around the box: full-width
+  // bands above and below, then the slivers either side between them.
+  accumulateStrip(ctx, ox, oy, ex - ox, y - oy, acc); // top
+  accumulateStrip(ctx, ox, y + h, ex - ox, ey - (y + h), acc); // bottom
+  accumulateStrip(ctx, ox, y, x - ox, h, acc); // left
+  accumulateStrip(ctx, x + w, y, ex - (x + w), h, acc); // right
   ctx.fillStyle =
-    n > 0 ? `rgb(${Math.round(r / n)}, ${Math.round(g / n)}, ${Math.round(b / n)})` : "#ffffff";
+    acc.n > 0
+      ? `rgb(${Math.round(acc.r / acc.n)}, ${Math.round(acc.g / acc.n)}, ${Math.round(acc.b / acc.n)})`
+      : "#ffffff";
   ctx.fillRect(x, y, w, h);
 }
 
@@ -187,7 +206,9 @@ export async function erasePdf(
         const canvas = document.createElement("canvas");
         canvas.width = viewport.width;
         canvas.height = viewport.height;
-        const ctx = canvas.getContext("2d");
+        // willReadFrequently: fillRegion / pixelateRegion read this canvas back
+        // with getImageData, so opt into the CPU-readback-optimised path.
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
         if (!ctx) throw new Error("Failed to acquire 2D canvas context");
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
