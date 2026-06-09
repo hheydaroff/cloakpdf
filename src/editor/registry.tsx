@@ -11,12 +11,14 @@ import * as Attachments from "./panels/AttachmentsTool.tsx";
 import * as Bookmarks from "./panels/BookmarksTool.tsx";
 import * as Crop from "./panels/CropTool.tsx";
 import * as FillForm from "./panels/FillFormTool.tsx";
+import * as FindAct from "./panels/FindActTool.tsx";
 import * as Metadata from "./panels/MetadataTool.tsx";
 import * as Ocr from "./panels/OcrTool.tsx";
 import * as Organize from "./panels/OrganizeTool.tsx";
 import * as Redact from "./panels/RedactTool.tsx";
 import * as Scrub from "./panels/ScrubTool.tsx";
 import * as Signature from "./panels/SignatureTool.tsx";
+import * as SmartErase from "./panels/SmartEraseTool.tsx";
 import {
   BatesPanel,
   HeaderFooterPanel,
@@ -34,6 +36,10 @@ export interface ToolImpl {
 
 export const TOOL_IMPL: Record<string, ToolImpl> = {
   "redact-pdf": { Stage: Redact.Stage, Panel: Redact.Panel },
+  // Find-by-content: a Stage that paints the staged matches + a search/act Panel.
+  "find-act": { Stage: FindAct.Stage, Panel: FindAct.Panel },
+  // Smart Erase: destructive-drag like Redact, but fills/pixelates the box.
+  "smart-erase": { Stage: SmartErase.Stage, Panel: SmartErase.Panel },
   "annotate-pdf": { Stage: Annotate.Stage, Panel: Annotate.Panel },
   // Canvas-placement tools: a Stage to place/drag on the page + a Panel.
   signature: { Stage: Signature.Stage, Panel: Signature.Panel },

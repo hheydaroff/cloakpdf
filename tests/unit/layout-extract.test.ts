@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   detectHeadings,
   detectPiiRects,
+  findTextRects,
   itemFractionRect,
   type LayoutItem,
   type LayoutPage,
@@ -304,5 +305,112 @@ describe("detectPiiRects", () => {
     expect(rect).toBeDefined();
     expect(rect.wPct).toBeGreaterThan(0);
     expect(rect.hPct).toBeGreaterThan(0);
+  });
+});
+
+describe("findTextRects", () => {
+  it("finds every case-insensitive occurrence with page geometry + context", () => {
+    const p = page({
+      pageNumber: 3,
+      width: 600,
+      height: 800,
+      items: [
+        item({
+          text: "Contact John about the John Deere invoice",
+          x: 0,
+          y: 100,
+          width: 420,
+          height: 10,
+        }),
+      ],
+    });
+    const hits = findTextRects([p], ["john"]);
+    expect(hits).toHaveLength(2);
+    expect(hits[0]).toMatchObject({ pageIndex: 2, pageNumber: 3, term: "john", value: "John" });
+    // both land on the same row, and the second occurrence sits further right
+    expect(hits.every((h) => Math.abs(h.yPct - 100 / 800) < 0.02)).toBe(true);
+    expect(hits[1].xPct).toBeGreaterThan(hits[0].xPct);
+  });
+
+  it("respects caseSensitive", () => {
+    const p = page({
+      items: [item({ text: "John and john", x: 0, y: 10, width: 120, height: 10 })],
+    });
+    expect(findTextRects([p], ["John"], { caseSensitive: true })).toHaveLength(1);
+    expect(findTextRects([p], ["John"], { caseSensitive: false })).toHaveLength(2);
+  });
+
+  it("wholeWord skips the term inside larger words", () => {
+    const p = page({
+      items: [item({ text: "Sam met Samuel and Samantha", x: 0, y: 10, width: 260, height: 10 })],
+    });
+    expect(findTextRects([p], ["Sam"], { wholeWord: false }).length).toBeGreaterThanOrEqual(3);
+    const whole = findTextRects([p], ["Sam"], { wholeWord: true });
+    expect(whole).toHaveLength(1);
+    expect(whole[0].value).toBe("Sam");
+  });
+
+  it("matches a term split across word-items on a row (OCR / PDF.js split)", () => {
+    const p = page({
+      width: 600,
+      height: 800,
+      items: [
+        item({ text: "John", x: 0, y: 100, width: 40, height: 12 }),
+        item({ text: "Doe", x: 50, y: 100, width: 30, height: 12 }),
+      ],
+    });
+    const hits = findTextRects([p], ["John Doe"]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].value).toBe("John Doe");
+    expect(hits[0].xPct).toBeLessThan(0.05);
+    expect(hits[0].xPct + hits[0].wPct).toBeGreaterThan(50 / 600);
+  });
+
+  it("searches several terms, deduped, ordered by page then top-to-bottom", () => {
+    const p1 = page({
+      pageNumber: 1,
+      width: 600,
+      height: 800,
+      items: [
+        item({ text: "alpha", x: 0, y: 400, width: 50, height: 10 }),
+        item({ text: "beta", x: 0, y: 100, width: 40, height: 10 }),
+      ],
+    });
+    const p2 = page({
+      pageNumber: 2,
+      width: 600,
+      height: 800,
+      items: [item({ text: "alpha again", x: 0, y: 50, width: 90, height: 10 })],
+    });
+    const hits = findTextRects([p1, p2], ["alpha", "beta", "alpha"]);
+    expect(hits.map((h) => h.value)).toEqual(["beta", "alpha", "alpha"]);
+    expect(hits.map((h) => h.pageNumber)).toEqual([1, 1, 2]);
+  });
+
+  it("collapses case-variant terms in a case-insensitive search (no doubled hits)", () => {
+    const p = page({
+      items: [item({ text: "John and john", x: 0, y: 10, width: 120, height: 10 })],
+    });
+    // Case-insensitive: "John" and "john" fold to one term → each occurrence once.
+    expect(findTextRects([p], ["John", "john"])).toHaveLength(2);
+    // Case-sensitive: they stay distinct, but each still matches exactly once.
+    expect(findTextRects([p], ["John", "john"], { caseSensitive: true })).toHaveLength(2);
+  });
+
+  it("ignores blank terms and returns nothing on a miss", () => {
+    const p = page({
+      items: [item({ text: "nothing here", x: 0, y: 10, width: 100, height: 10 })],
+    });
+    expect(findTextRects([p], ["  ", ""])).toHaveLength(0);
+    expect(findTextRects([p], ["zzz"])).toHaveLength(0);
+  });
+
+  it("captures the line + match offsets for the hit-list", () => {
+    const p = page({
+      items: [item({ text: "Email: bob@x.com now", x: 0, y: 10, width: 200, height: 10 })],
+    });
+    const [hit] = findTextRects([p], ["bob@x.com"]);
+    expect(hit.line).toBe("Email: bob@x.com now");
+    expect(hit.line.slice(hit.matchStart, hit.matchEnd)).toBe("bob@x.com");
   });
 });

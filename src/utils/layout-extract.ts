@@ -371,6 +371,93 @@ export interface PiiRect extends FractionRect {
  * into RedactPdf's redaction map for user review. Pure — operates on the
  * extracted {@link LayoutPage}s, no wasm.
  */
+/** A char-span match within a reconstructed line — the shape both the PII
+ *  detector and the literal text matcher emit, so {@link collectRowRects} can
+ *  resolve either to page-fraction rectangles through one code path. */
+interface SpanMatch {
+  value: string;
+  start: number;
+  end: number;
+}
+
+/**
+ * Group a page's items into visual rows, reconstruct each row's text, run a
+ * line-level `matcher`, and union every match's character span into a single
+ * page-fraction rectangle.
+ *
+ * This is the shared geometry core behind {@link detectPiiRects} (PII matcher)
+ * and {@link findTextRects} (literal search). A value — a phone number or a
+ * searched name — can arrive split across several whitespace-separated
+ * word-items on one line (Tesseract OCR always splits on spaces, and PDF.js can
+ * split a run too), so we match over the *reconstructed line* instead of
+ * per-item and map the hit back to geometry. Pure — no wasm.
+ */
+function collectRowRects<M extends SpanMatch>(
+  page: LayoutPage,
+  matcher: (line: string) => M[],
+  rowTolerance: number,
+  padChars: number,
+): { rect: FractionRect; match: M; line: string }[] {
+  const out: { rect: FractionRect; match: M; line: string }[] = [];
+  const withText = page.items.filter((i) => i.text.length > 0);
+  if (withText.length === 0) return out;
+
+  // Group items into visual rows by y-baseline (same grouping as
+  // layoutToReadingOrderText).
+  const rows: LayoutItem[][] = [];
+  for (const item of [...withText].sort((a, b) => a.y - b.y)) {
+    const row = rows[rows.length - 1];
+    if (row && Math.abs(row[0].y - item.y) <= rowTolerance) row.push(item);
+    else rows.push([item]);
+  }
+
+  for (const row of rows) {
+    const sorted = [...row].sort((a, b) => a.x - b.x);
+    // Build the line text, recording each item's [start, end) char range in it.
+    let line = "";
+    const spans: { item: LayoutItem; start: number; end: number }[] = [];
+    for (const item of sorted) {
+      if (line.length > 0) line += " ";
+      const start = line.length;
+      line += item.text;
+      spans.push({ item, start, end: line.length });
+    }
+
+    for (const match of matcher(line)) {
+      // Every item the match overlaps — usually one, but several for a
+      // space-separated value (phone "123 456 7890", spaced card, IBAN…).
+      const touched = spans.filter((s) => s.start < match.end && s.end > match.start);
+      if (touched.length === 0) continue;
+      // Union the per-item sub-rects so a multi-word value gets one box that
+      // covers the whole span (partial first/last item, full interior items).
+      let xMin = 1;
+      let yMin = 1;
+      let xMax = 0;
+      let yMax = 0;
+      for (const { item, start } of touched) {
+        const localStart = Math.max(0, match.start - start);
+        const localEnd = Math.min(item.text.length, match.end - start);
+        const sub = substringFractionRect(item, page, localStart, localEnd, padChars);
+        xMin = Math.min(xMin, sub.xPct);
+        yMin = Math.min(yMin, sub.yPct);
+        xMax = Math.max(xMax, sub.xPct + sub.wPct);
+        yMax = Math.max(yMax, sub.yPct + sub.hPct);
+      }
+      out.push({
+        rect: {
+          xPct: clamp01(xMin),
+          yPct: clamp01(yMin),
+          wPct: clamp01(xMax - xMin),
+          hPct: clamp01(yMax - yMin),
+        },
+        match,
+        line,
+      });
+    }
+  }
+  return out;
+}
+
 export function detectPiiRects(
   pages: LayoutPage[],
   types?: PiiType[],
@@ -379,66 +466,154 @@ export function detectPiiRects(
   const rects: PiiRect[] = [];
   const opts = types ? { types } : undefined;
   for (const page of pages) {
-    const withText = page.items.filter((i) => i.text.length > 0);
-    if (withText.length === 0) continue;
-
-    // Group items into visual rows by y-baseline (same grouping as
-    // layoutToReadingOrderText). A PII value like a phone number can arrive as
-    // several whitespace-separated word-items on one line — Tesseract OCR
-    // always splits on spaces, and PDF.js can split a run too — so detecting
-    // per-item would miss it. We detect over the *reconstructed line* instead.
-    const rows: LayoutItem[][] = [];
-    for (const item of [...withText].sort((a, b) => a.y - b.y)) {
-      const row = rows[rows.length - 1];
-      if (row && Math.abs(row[0].y - item.y) <= rowTolerance) row.push(item);
-      else rows.push([item]);
+    // padChars 0.75 (substringFractionRect's default) — redaction over-covers
+    // so no sliver of the matched value is ever left exposed.
+    for (const { rect, match } of collectRowRects(
+      page,
+      (line) => detectPii(line, opts),
+      rowTolerance,
+      0.75,
+    )) {
+      rects.push({
+        pageIndex: page.pageNumber - 1,
+        type: match.type,
+        value: match.value,
+        xPct: rect.xPct,
+        yPct: rect.yPct,
+        wPct: rect.wPct,
+        hPct: rect.hPct,
+      });
     }
+  }
+  return rects;
+}
 
-    for (const row of rows) {
-      const sorted = [...row].sort((a, b) => a.x - b.x);
-      // Build the line text, recording each item's [start, end) char range in it.
-      let line = "";
-      const spans: { item: LayoutItem; start: number; end: number }[] = [];
-      for (const item of sorted) {
-        if (line.length > 0) line += " ";
-        const start = line.length;
-        line += item.text;
-        spans.push({ item, start, end: line.length });
+/** Options for {@link findTextRects} literal search. */
+export interface TextSearchOptions {
+  /** Match case exactly. Default false (case-insensitive). */
+  caseSensitive?: boolean;
+  /** Require the term to sit on word boundaries, so "Sam" skips "Samuel". */
+  wholeWord?: boolean;
+}
+
+/** A literal text hit resolved to a rectangle on a specific page, carrying the
+ *  surrounding line so a review hit-list can show it in context. */
+export interface TextMatchRect extends FractionRect {
+  /** 0-based page index (matches RedactPdf / annotatePdf `pageIndex`). */
+  pageIndex: number;
+  /** 1-based page number, for display. */
+  pageNumber: number;
+  /** The query term that produced this hit (a search can carry several). */
+  term: string;
+  /** The exact text matched on the page. */
+  value: string;
+  /** The full reconstructed line the hit sits on — context for the hit-list. */
+  line: string;
+  /** Offset of the match within {@link line} (for emphasising it in the list). */
+  matchStart: number;
+  matchEnd: number;
+}
+
+/** Word-character test for whole-word matching — Unicode-aware so accented
+ *  names ("José") and digits count as part of a word. */
+const WORD_CHAR = /[\p{L}\p{N}_]/u;
+
+/** Build a line-level matcher that finds every (non-overlapping) occurrence of
+ *  `term`, honouring the case / whole-word options. */
+function literalMatcher(
+  term: string,
+  { caseSensitive = false, wholeWord = false }: TextSearchOptions,
+): (line: string) => SpanMatch[] {
+  const needle = caseSensitive ? term : term.toLowerCase();
+  return (line: string): SpanMatch[] => {
+    if (!needle) return [];
+    const hay = caseSensitive ? line : line.toLowerCase();
+    const out: SpanMatch[] = [];
+    let from = 0;
+    for (;;) {
+      const idx = hay.indexOf(needle, from);
+      if (idx < 0) break;
+      const end = idx + needle.length;
+      const before = idx > 0 ? line[idx - 1] : "";
+      const after = end < line.length ? line[end] : "";
+      if (!wholeWord || (!WORD_CHAR.test(before) && !WORD_CHAR.test(after))) {
+        out.push({ value: line.slice(idx, end), start: idx, end });
       }
+      from = end; // advance past this hit — matches never overlap
+    }
+    return out;
+  };
+}
 
-      for (const match of detectPii(line, opts)) {
-        // Every item the match overlaps — usually one, but several for a
-        // space-separated value (phone "123 456 7890", spaced card, IBAN…).
-        const touched = spans.filter((s) => s.start < match.end && s.end > match.start);
-        if (touched.length === 0) continue;
-        // Union the per-item sub-rects so a multi-word value gets one box that
-        // covers the whole span (partial first/last item, full interior items).
-        let xMin = 1;
-        let yMin = 1;
-        let xMax = 0;
-        let yMax = 0;
-        for (const { item, start } of touched) {
-          const localStart = Math.max(0, match.start - start);
-          const localEnd = Math.min(item.text.length, match.end - start);
-          const sub = substringFractionRect(item, page, localStart, localEnd);
-          xMin = Math.min(xMin, sub.xPct);
-          yMin = Math.min(yMin, sub.yPct);
-          xMax = Math.max(xMax, sub.xPct + sub.wPct);
-          yMax = Math.max(yMax, sub.yPct + sub.hPct);
-        }
-        rects.push({
+/**
+ * Trim, drop-empty, and de-duplicate search terms. The dedup key folds case
+ * when the search is case-insensitive, so adding both "John" and "john" can't
+ * double every match (they resolve to the same hits). Order is preserved.
+ */
+export function dedupeTerms(terms: string[], caseSensitive: boolean): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of terms) {
+    const t = raw.trim();
+    if (!t) continue;
+    const key = caseSensitive ? t : t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * Find every occurrence of one or more literal search terms across extracted
+ * pages and resolve each to a page-fraction rectangle — the engine behind the
+ * Find & Act editor tool (search → redact / highlight / box). Unlike
+ * {@link detectPiiRects} (a fixed PII taxonomy), the terms are user-supplied
+ * arbitrary strings; there is no model in the loop, so it is deterministic and
+ * works identically on every device.
+ *
+ * Boxes over-cover slightly (`padChars`, default 0.75) so a redaction never
+ * leaves a sliver of the term exposed. Results are ordered by page, then
+ * top-to-bottom. Pure — operates on the extracted {@link LayoutPage}s.
+ *
+ * NOTE on completeness: this matches the *text layer* only (scanned pages must
+ * be OCR'd first by the caller). A term rendered as an image, or split mid-word
+ * by the text layer, can be missed — the UI must never present "0 matches" as
+ * proof of absence on scanned input.
+ */
+export function findTextRects(
+  pages: LayoutPage[],
+  terms: string[],
+  options: TextSearchOptions & { rowTolerance?: number; padChars?: number } = {},
+): TextMatchRect[] {
+  const rowTolerance = options.rowTolerance ?? 3;
+  const padChars = options.padChars ?? 0.75;
+  const cleaned = dedupeTerms(terms, options.caseSensitive ?? false);
+  if (cleaned.length === 0) return [];
+
+  const out: TextMatchRect[] = [];
+  for (const page of pages) {
+    for (const term of cleaned) {
+      const matcher = literalMatcher(term, options);
+      for (const { rect, match, line } of collectRowRects(page, matcher, rowTolerance, padChars)) {
+        out.push({
           pageIndex: page.pageNumber - 1,
-          type: match.type,
+          pageNumber: page.pageNumber,
+          term,
           value: match.value,
-          xPct: clamp01(xMin),
-          yPct: clamp01(yMin),
-          wPct: clamp01(xMax - xMin),
-          hPct: clamp01(yMax - yMin),
+          line,
+          matchStart: match.start,
+          matchEnd: match.end,
+          xPct: rect.xPct,
+          yPct: rect.yPct,
+          wPct: rect.wPct,
+          hPct: rect.hPct,
         });
       }
     }
   }
-  return rects;
+  out.sort((a, b) => a.pageIndex - b.pageIndex || a.yPct - b.yPct || a.xPct - b.xPct);
+  return out;
 }
 
 // ── browser orchestration (wasm + Tesseract) ──────────────────────────────

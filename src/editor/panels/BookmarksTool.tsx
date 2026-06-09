@@ -2,31 +2,39 @@
 // user adds {title → target page} rows — "Add current page" pre-fills the page
 // you're looking at, or "Auto-detect headings" fills the list from the
 // document's visual structure (liteparse layout → heading detection, with OCR
-// for scanned pages). Apply embeds them via addPdfBookmarks, which also flips
-// the document to open its bookmarks panel by default. Panel-only (no canvas
-// interaction); identical on desktop + mobile.
+// for scanned pages). Each row carries a nesting level (H1/H2/H3, tap to cycle)
+// so the outline can be hierarchical; auto-detect seeds it from the heading
+// font-size band. "Add a contents page" additionally prepends a clickable
+// in-document Table of Contents. Apply embeds them via addPdfBookmarks, which
+// also flips the document to open its bookmarks panel by default. Panel-only
+// (no canvas interaction); identical on desktop + mobile.
 
-import { Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ListTree, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { addPdfBookmarks } from "../../utils/pdf-operations.ts";
 import { detectHeadings, extractLayout } from "../../utils/layout-extract.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import { Toggle } from "./controls.tsx";
 
 interface Row {
   id: number;
   title: string;
   page: string;
+  /** Nesting level (1–3); 1 = top-level. Auto-detect fills it from the heading
+   *  font-size band, manual rows are top-level. */
+  level: number;
 }
 
 let rowSeq = 0;
-const newRow = (page: number): Row => ({ id: rowSeq++, title: "", page: String(page) });
+const newRow = (page: number): Row => ({ id: rowSeq++, title: "", page: String(page), level: 1 });
 
 export function Panel() {
   const { doc, selectedPage, busyLabel } = useEditorRead();
   const { applyTransform } = useEditorActions();
   const pageCount = doc?.pageCount ?? 1;
   const [rows, setRows] = useState<Row[]>(() => [newRow(1)]);
+  const [contentsPage, setContentsPage] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [detectProgress, setDetectProgress] = useState<{ current: number; total: number } | null>(
     null,
@@ -58,7 +66,14 @@ export function Panel() {
         setAutoNote("No headings detected — add bookmarks manually below.");
         return;
       }
-      setRows(headings.map((h) => ({ id: rowSeq++, title: h.text, page: String(h.pageNumber) })));
+      setRows(
+        headings.map((h) => ({
+          id: rowSeq++,
+          title: h.text,
+          page: String(h.pageNumber),
+          level: h.level,
+        })),
+      );
       setAutoNote(
         `Detected ${headings.length} heading${headings.length === 1 ? "" : "s"} — review and edit, then add them.`,
       );
@@ -76,11 +91,17 @@ export function Panel() {
       .map((r) => ({
         title: r.title.trim(),
         pageIndex: Math.max(0, Math.min((parseInt(r.page, 10) || 1) - 1, pageCount - 1)),
+        level: r.level,
       }));
     if (entries.length === 0) return;
     void applyTransform(async (d) => ({
-      bytes: await addPdfBookmarks(docToFile(d), entries),
-      label: `Add ${entries.length} bookmark${entries.length === 1 ? "" : "s"}`,
+      bytes: await addPdfBookmarks(docToFile(d), entries, { contentsPage }),
+      label: contentsPage
+        ? `Add contents page + ${entries.length} bookmark${entries.length === 1 ? "" : "s"}`
+        : `Add ${entries.length} bookmark${entries.length === 1 ? "" : "s"}`,
+      // A contents page changes the page count → drop overlay objects (their
+      // page indices would shift). Plain bookmarks leave the pages untouched.
+      objects: contentsPage ? [] : undefined,
     }));
   };
 
@@ -115,13 +136,28 @@ export function Panel() {
 
       <div className="flex flex-col gap-2">
         {rows.map((r) => (
-          <div key={r.id} className="flex items-center gap-1.5">
+          <div
+            key={r.id}
+            className="flex items-center gap-1.5"
+            style={{ paddingLeft: (r.level - 1) * 12 }}
+          >
+            <button
+              type="button"
+              onClick={() => update(r.id, { level: (r.level % 3) + 1 })}
+              disabled={detecting}
+              aria-label={`Nesting level ${r.level} — tap to change`}
+              title="Nesting level (H1 / H2 / H3)"
+              className="w-8 shrink-0 rounded-md border border-slate-200 dark:border-dark-border py-1.5 text-xs font-medium tabular-nums text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            >
+              H{r.level}
+            </button>
             <input
               type="text"
               value={r.title}
               placeholder="Bookmark title"
               onChange={(e) => update(r.id, { title: e.target.value })}
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              disabled={detecting}
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             />
             <input
               type="number"
@@ -130,13 +166,15 @@ export function Panel() {
               value={r.page}
               aria-label="Target page"
               onChange={(e) => update(r.id, { page: e.target.value })}
-              className="w-14 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2 py-1.5 text-sm tabular-nums text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              disabled={detecting}
+              className="w-14 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2 py-1.5 text-sm tabular-nums text-slate-800 dark:text-dark-text disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             />
             <button
               type="button"
               onClick={() => remove(r.id)}
+              disabled={detecting}
               aria-label="Remove bookmark"
-              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -147,16 +185,29 @@ export function Panel() {
       <button
         type="button"
         onClick={() => setRows((prev) => [...prev, newRow(selectedPage + 1)])}
-        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-2 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+        disabled={detecting}
+        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 dark:border-dark-border px-3 py-2 text-sm text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
       >
         <Plus className="h-4 w-4" />
         Add current page (page {selectedPage + 1})
       </button>
 
+      <div className="rounded-lg border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-3">
+        <div className="flex items-start gap-2">
+          <ListTree className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
+          <div className="flex-1">
+            <Toggle label="Add a contents page" checked={contentsPage} onChange={setContentsPage} />
+            <p className="mt-1 text-xs text-slate-400 dark:text-dark-text-muted">
+              Inserts a clickable Table of Contents at the front, nested by level.
+            </p>
+          </div>
+        </div>
+      </div>
+
       <button
         type="button"
         onClick={apply}
-        disabled={busy || validCount === 0}
+        disabled={busy || detecting || validCount === 0}
         className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
       >
         {busy ? "Working…" : `Add ${validCount} bookmark${validCount === 1 ? "" : "s"}`}

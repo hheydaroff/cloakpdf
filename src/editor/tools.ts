@@ -31,6 +31,8 @@ import {
   PenTool,
   Scale,
   ScanText,
+  Search,
+  SprayCan,
   Stamp,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -129,6 +131,15 @@ export const EDITOR_TOOLS = [
     status: "ready",
   },
   {
+    id: "find-act",
+    name: "Find & Act",
+    description: "Search any text, then redact, highlight, or box every match at once.",
+    icon: Search,
+    group: "security",
+    mode: "focus",
+    status: "ready",
+  },
+  {
     id: "pdf-scrub",
     name: "Scrub",
     description: "Strip hidden data: metadata, scripts, attachments, and annotations.",
@@ -153,6 +164,15 @@ export const EDITOR_TOOLS = [
     name: "Crop",
     description: "Trim page margins to a custom area.",
     icon: Crop,
+    group: "transform",
+    mode: "focus",
+    status: "ready",
+  },
+  {
+    id: "smart-erase",
+    name: "Smart Erase",
+    description: "Cover a blemish, logo, or face with a colour-matched patch or a mosaic.",
+    icon: SprayCan,
     group: "transform",
     mode: "focus",
     status: "ready",

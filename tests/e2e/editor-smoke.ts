@@ -51,6 +51,21 @@ async function clickByText(page: Page, label: string): Promise<boolean> {
   }, label);
 }
 
+/** Click the first visible element whose trimmed text STARTS WITH `prefix`
+ *  (case-insensitive) — for buttons whose label carries a dynamic count, e.g.
+ *  "Highlight 6". */
+async function clickByPrefix(page: Page, prefix: string): Promise<boolean> {
+  return page.evaluate((p) => {
+    const els = Array.from(document.querySelectorAll("button, a, [role=button]"));
+    const el = els.find((e) =>
+      (e.textContent ?? "").trim().toLowerCase().startsWith(p.toLowerCase()),
+    );
+    if (!el) return false;
+    (el as HTMLElement).click();
+    return true;
+  }, prefix);
+}
+
 /** Wait until the page's visible text matches `re`. Preserves the regex flags
  *  (e.g. `i`) — `document.body.innerText` reflects CSS text-transform, so an
  *  `uppercase`-styled label only matches case-insensitively. */
@@ -197,6 +212,8 @@ async function main() {
     if (!annBtn) fail("Annotate rail tool not found.");
     await annBtn.click();
     await waitForText(page, /Apply annotations/i, 5_000);
+    // Annotate opens in Select mode now — pick the Pen sub-tool before drawing.
+    if (!(await clickByText(page, "Pen"))) fail("Annotate Pen sub-tool not found.");
     await drawOnPage(page, { x: 0.3, y: 0.5 }, { x: 0.7, y: 0.65 });
     await waitForText(page, /\b1 mark\b/, 5_000);
     console.log("  ✓ annotate draw");
@@ -226,6 +243,38 @@ async function main() {
     if (!(await clickByText(page, "Apply signature"))) fail("Signature Apply button not found.");
     await waitForText(page, /\b0 signatures\b/, 60_000); // embed drops the placed object
     console.log("  ✓ signature place + apply");
+
+    // 3d. Find & Act: search the text layer for a recurring word, mark every
+    //     occurrence (non-destructive Highlight), and burn them in one pass.
+    const findBtn = await page.$('button[aria-label="Find & Act"]');
+    if (!findBtn) fail("Find & Act rail tool not found.");
+    await findBtn.click(); // focus mode
+    await waitForText(page, /redact, highlight, or box/i, 5_000);
+    if (!(await clickByText(page, "Highlight"))) fail("Find & Act Highlight mode not found.");
+    await page.type('input[placeholder^="Search text"]', "Exam"); // recurs across the fixture
+    await page.click('button[aria-label="Find matches"]'); // not the rail "Find" tool
+    await waitForText(page, /\d+ matches? ·/i, 60_000); // matches resolved + counted
+    if (!(await clickByPrefix(page, "Highlight "))) fail("Find & Act Highlight Apply not found.");
+    // Apply burns the highlights and clears the result list (searched → false).
+    await page.waitForFunction(() => !/\d+ match(?:es)? ·/.test(document.body.innerText), {
+      timeout: 60_000,
+    });
+    await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
+    console.log("  ✓ find & act search + highlight apply");
+
+    // 3e. Smart Erase: drag a box and erase it (Fill) — exercises the real
+    //     in-browser rasterise → patch → re-embed path (erasePdf).
+    const eraseBtn = await page.$('button[aria-label="Smart Erase"]');
+    if (!eraseBtn) fail("Smart Erase rail tool not found.");
+    await eraseBtn.click(); // focus mode
+    await waitForText(page, /anything you want gone/i, 5_000);
+    await drawOnPage(page, { x: 0.3, y: 0.3 }, { x: 0.6, y: 0.45 });
+    await waitForText(page, /\b1 area\b/i, 5_000);
+    if (!(await clickByText(page, "Erase 1 area"))) fail("Smart Erase Apply button not found.");
+    await waitForText(page, /Working/i, 10_000);
+    await waitForText(page, /Erase 0 areas/i, 60_000); // regions cleared after the burn
+    await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
+    console.log("  ✓ smart erase draw + apply (fill)");
 
     // 4. OCR panel mounts + is wired (we don't run the engine — that would
     //    download model weights; just assert the desktop controls render).
@@ -297,10 +346,16 @@ async function main() {
     console.log("  ✓ stamp-family apply (page numbers)");
 
     // 11. Fill form: the fixture has no AcroForm, so the reader reports it.
-    const formBtn = await page.$('button[aria-label="Fill form"]');
-    if (!formBtn) fail("Fill form rail tool not found.");
-    await formBtn.click();
-    await waitForText(page, /no fillable form fields/i, 10_000);
+    await page.waitForSelector('img[alt^="Page "]', { timeout: 10_000 }); // doc settled
+    if (!(await page.$('button[aria-label="Fill form"]'))) fail("Fill form rail tool not found.");
+    await page.click('button[aria-label="Fill form"]');
+    // A rail click right after the page-numbers re-render can be dropped — verify
+    // the panel switched (its description appears) and re-click once if it didn't.
+    const ffSwitched = await waitForText(page, /interactive form fields/i, 8_000)
+      .then(() => true)
+      .catch(() => false);
+    if (!ffSwitched) await page.click('button[aria-label="Fill form"]');
+    await waitForText(page, /no fillable form fields/i, 15_000);
     console.log("  ✓ fill-form reads fields (empty)");
 
     // 12. Bookmarks: add one row + apply, page count unchanged.
@@ -313,6 +368,21 @@ async function main() {
     await waitForText(page, /Working/i, 10_000);
     await waitForText(page, /Add 1 bookmark/i, 60_000);
     console.log("  ✓ bookmarks add + apply");
+
+    // 12b. Auto Contents: toggle "Add a contents page" and re-apply — inserts a
+    //      clickable in-document TOC page (embedFont + drawText + /Link annots).
+    //      Output correctness is unit-tested; this proves it runs in a browser.
+    await page.evaluate(() => {
+      const lbl = Array.from(document.querySelectorAll("label")).find((l) =>
+        /Add a contents page/i.test(l.textContent ?? ""),
+      );
+      (lbl?.querySelector("input") as HTMLInputElement | null)?.click();
+    });
+    if (!(await clickByText(page, "Add 1 bookmark")))
+      fail("Bookmarks contents re-apply not found.");
+    await waitForText(page, /Working/i, 10_000);
+    await waitForText(page, /Add 1 bookmark/i, 60_000);
+    console.log("  ✓ bookmarks contents page apply");
 
     // 13. Attachments: list panel loads its async report on open.
     const attBtn = await page.$('button[aria-label="Attachments"]');
@@ -347,7 +417,7 @@ async function main() {
     }
 
     console.log(
-      `✓ Editor smoke passed — redact burn, annotate, crop, signature, organize (now ${pageButtons.length} pages), overview/focus, stamps, forms, bookmarks, attachments, OCR wired.`,
+      `✓ Editor smoke passed — redact burn, find & act, smart erase, annotate, crop, signature, organize (now ${pageButtons.length} pages), overview/focus, stamps, forms, bookmarks (+ contents page), attachments, OCR wired.`,
     );
   } catch (e) {
     console.error(`✗ Smoke failed: ${e instanceof Error ? e.message : String(e)}`);

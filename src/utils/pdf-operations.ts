@@ -66,6 +66,9 @@ export { extractTextOcr, createSearchablePdf, createSearchablePdfFromLayout } fr
 
 export { redactPdf } from "./pdf/redact.ts";
 
+export type { EraseMode, EraseRegion } from "./pdf/erase.ts";
+export { erasePdf } from "./pdf/erase.ts";
+
 export type { ScrubCategory, ScrubAnalysis } from "./pdf/scrub.ts";
 export { SCRUB_CATEGORIES, analyzePdfHiddenData, scrubPdf } from "./pdf/scrub.ts";
 
@@ -79,6 +82,7 @@ export {
   TEXT_FONT_IDS,
 } from "./pdf/annotate.ts";
 
+export type { BookmarkEntry, BookmarkOptions } from "./pdf/bookmarks.ts";
 export { addPdfBookmarks } from "./pdf/bookmarks.ts";
 
 export type { PdfAttachment } from "./pdf/attachments.ts";

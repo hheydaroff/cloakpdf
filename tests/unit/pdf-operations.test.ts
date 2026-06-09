@@ -9,9 +9,12 @@
  * (comments, highlights, links) on the page.
  */
 import {
+  PDFArray,
   PDFDocument,
   PDFDict,
+  PDFHexString,
   PDFName,
+  PDFNumber,
   PDFRawStream,
   PDFString,
   degrees,
@@ -19,6 +22,7 @@ import {
 } from "@pdfme/pdf-lib";
 import { describe, expect, it } from "vitest";
 import {
+  addPdfBookmarks,
   analyzePdfHiddenData,
   annotatePdf,
   assemblePdf,
@@ -28,6 +32,21 @@ import {
   scrubPdf,
   stripMetadata,
 } from "../../src/utils/pdf-operations.ts";
+
+/** An n-page blank PDF as a File, for outline / page-shift assertions. */
+async function pagesFile(n: number): Promise<File> {
+  const doc = await PDFDocument.create();
+  for (let i = 0; i < n; i++) doc.addPage([612, 792]);
+  const bytes = await doc.save();
+  return new File([bytes], "pages.pdf", { type: "application/pdf" });
+}
+
+/** Resolve a dict value (following an indirect ref) to a PDFDict, or throw. */
+function lookupDict(doc: PDFDocument, value: unknown): PDFDict {
+  const resolved = doc.context.lookup(value as never);
+  if (!(resolved instanceof PDFDict)) throw new Error("expected a PDFDict");
+  return resolved;
+}
 
 /** A one-page PDF whose page carries a single non-widget annotation. */
 async function makeAnnotatedPdfBytes(): Promise<Uint8Array> {
@@ -511,5 +530,101 @@ describe("stripMetadata", () => {
     expect(after.catalog.get(PDFName.of("Metadata"))).toBeUndefined();
     // Page content is untouched.
     expect(after.getPageCount()).toBe(1);
+  });
+});
+
+describe("addPdfBookmarks", () => {
+  it("builds a flat outline (no level) and opens the bookmarks panel", async () => {
+    const out = await addPdfBookmarks(await pagesFile(3), [
+      { title: "One", pageIndex: 0 },
+      { title: "Two", pageIndex: 2 },
+    ]);
+    const doc = await PDFDocument.load(out);
+    expect(doc.getPageCount()).toBe(3); // no contents page inserted
+    const outlines = lookupDict(doc, doc.catalog.get(PDFName.of("Outlines")));
+    expect((outlines.lookup(PDFName.of("Count")) as PDFNumber).asNumber()).toBe(2);
+    expect(doc.catalog.get(PDFName.of("PageMode"))?.toString()).toBe("/UseOutlines");
+    // First/Last differ for two top-level siblings.
+    expect(outlines.get(PDFName.of("First"))).not.toBe(outlines.get(PDFName.of("Last")));
+  });
+
+  it("nests an entry under its parent by level", async () => {
+    const out = await addPdfBookmarks(await pagesFile(4), [
+      { title: "Chapter", pageIndex: 0, level: 1 },
+      { title: "Section", pageIndex: 1, level: 2 },
+    ]);
+    const doc = await PDFDocument.load(out);
+    const outlines = lookupDict(doc, doc.catalog.get(PDFName.of("Outlines")));
+    // Count is the total open subtree (chapter + section); one top-level node.
+    expect((outlines.lookup(PDFName.of("Count")) as PDFNumber).asNumber()).toBe(2);
+    const firstRef = outlines.get(PDFName.of("First"));
+    expect(firstRef).toBe(outlines.get(PDFName.of("Last")));
+
+    const chapter = lookupDict(doc, firstRef);
+    expect((chapter.lookup(PDFName.of("Title")) as PDFString).decodeText()).toBe("Chapter");
+    expect((chapter.lookup(PDFName.of("Count")) as PDFNumber).asNumber()).toBe(1);
+
+    const childRef = chapter.get(PDFName.of("First"));
+    const child = lookupDict(doc, childRef);
+    expect((child.lookup(PDFName.of("Title")) as PDFString).decodeText()).toBe("Section");
+    // The child points back up to its parent.
+    expect(child.get(PDFName.of("Parent"))).toBe(firstRef);
+  });
+
+  it("inserts a clickable contents page, shifts targets, and adds a Contents bookmark", async () => {
+    const out = await addPdfBookmarks(
+      await pagesFile(3),
+      [
+        { title: "Intro", pageIndex: 0, level: 1 },
+        { title: "Body", pageIndex: 1, level: 1 },
+      ],
+      { contentsPage: true },
+    );
+    const doc = await PDFDocument.load(out);
+    expect(doc.getPageCount()).toBe(4); // one TOC page prepended
+
+    // The TOC page carries one /Link annotation per entry.
+    const annots = doc.getPage(0).node.lookup(PDFName.of("Annots"));
+    expect(annots).toBeInstanceOf(PDFArray);
+    expect((annots as PDFArray).size()).toBe(2);
+    const link0 = lookupDict(doc, (annots as PDFArray).get(0));
+    expect(link0.get(PDFName.of("Subtype"))?.toString()).toBe("/Link");
+
+    // The outline now leads with a synthetic "Contents" bookmark (3 total).
+    const outlines = lookupDict(doc, doc.catalog.get(PDFName.of("Outlines")));
+    expect((outlines.lookup(PDFName.of("Count")) as PDFNumber).asNumber()).toBe(3);
+    const first = lookupDict(doc, outlines.get(PDFName.of("First")));
+    expect((first.lookup(PDFName.of("Title")) as PDFHexString).decodeText()).toBe("Contents");
+  });
+
+  it("round-trips a non-Latin outline title (UTF-16 via PDFHexString)", async () => {
+    const out = await addPdfBookmarks(await pagesFile(2), [{ title: "第一章 概要", pageIndex: 0 }]);
+    const doc = await PDFDocument.load(out);
+    const outlines = lookupDict(doc, doc.catalog.get(PDFName.of("Outlines")));
+    const first = lookupDict(doc, outlines.get(PDFName.of("First")));
+    expect((first.lookup(PDFName.of("Title")) as PDFHexString).decodeText()).toBe("第一章 概要");
+  });
+
+  it("keeps a leading H2 at top level when a contents page is added", async () => {
+    const out = await addPdfBookmarks(
+      await pagesFile(3),
+      [
+        { title: "Sub", pageIndex: 0, level: 2 },
+        { title: "Top", pageIndex: 1, level: 1 },
+      ],
+      { contentsPage: true },
+    );
+    const doc = await PDFDocument.load(out);
+    const outlines = lookupDict(doc, doc.catalog.get(PDFName.of("Outlines")));
+    // Roots are Contents, Sub, Top — the synthetic Contents must capture NO
+    // children (a leading H2 stays a top-level sibling, not its child).
+    const contents = lookupDict(doc, outlines.get(PDFName.of("First")));
+    expect((contents.lookup(PDFName.of("Title")) as PDFHexString).decodeText()).toBe("Contents");
+    expect(contents.get(PDFName.of("First"))).toBeUndefined();
+    expect(contents.get(PDFName.of("Count"))).toBeUndefined();
+    const sub = lookupDict(doc, contents.get(PDFName.of("Next")));
+    expect((sub.lookup(PDFName.of("Title")) as PDFHexString).decodeText()).toBe("Sub");
+    // Sub's parent is the outline root, not the Contents node.
+    expect(sub.get(PDFName.of("Parent"))).toBe(doc.catalog.get(PDFName.of("Outlines")));
   });
 });
