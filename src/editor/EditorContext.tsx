@@ -29,8 +29,11 @@ import {
   type CanvasObject,
   createDocFromBytes,
   createDocFromFile,
+  flattenDestructiveObjects,
+  hasPendingDestructive,
   nextId,
   revokeThumbnails,
+  withoutDestructive,
 } from "./doc.ts";
 import {
   deleteDraft,
@@ -77,6 +80,9 @@ interface ActionsValue {
    *  in-flight preview. */
   moveObject: (id: string, patch: Partial<CanvasObject>, label: string) => void;
   removeObject: (id: string) => void;
+  /** Remove many objects in a single undoable history entry (e.g. "Clear all"
+   *  pending redaction / erase marks). */
+  removeObjects: (ids: string[], label?: string) => void;
   commit: (label: string) => void;
   undo: () => void;
   redo: () => void;
@@ -480,20 +486,48 @@ export function EditorProvider({
     setHistoryVersion((v) => v + 1);
   }, []);
 
+  // Remove many objects in ONE history entry — e.g. "Clear all" of the pending
+  // redaction / erase marks, so undo restores them in a single step.
+  const removeObjects = useCallback((ids: string[], label?: string) => {
+    const cur = docRef.current;
+    if (!cur || ids.length === 0) return;
+    const drop = new Set(ids);
+    const next: CanvasDoc = { ...cur, objects: cur.objects.filter((o) => !drop.has(o.id)) };
+    setDoc(next);
+    historyRef.current.push({
+      label: label ?? `Remove ${ids.length} objects`,
+      bytes: next.bytes,
+      pages: next.pages,
+      objects: next.objects,
+    });
+    setHistoryVersion((v) => v + 1);
+  }, []);
+
   const applyTransform = useCallback(
     async (t: DocTransform) => {
       const cur = docRef.current;
       if (!cur) return;
       await runBusy("Applying…", async () => {
-        const { bytes, label, objects } = await t(cur);
+        // Burn any pending destructive marks (redaction / erase) FIRST, so they
+        // land on the geometry they were drawn on before this transform changes
+        // the bytes or page structure. Redact/erase themselves never call
+        // applyTransform (they only add overlay objects), so multiple rounds
+        // stay non-destructive — the marks materialise here (a different edit)
+        // or at export, never the moment a box is placed.
+        let base = cur;
+        if (hasPendingDestructive(cur)) {
+          const burned = await flattenDestructiveObjects(cur);
+          base = { ...cur, bytes: burned, objects: withoutDestructive(cur.objects) };
+        }
+        const { bytes, label, objects } = await t(base);
         // Re-derive page geometry + thumbnails from the new bytes. Keep the
         // objects the transform returned (used to drop just-burned marks), or
         // preserve the current ones (still valid in fraction space).
-        const rebuilt = await createDocFromBytes(bytes, cur.fileName);
+        const rebuilt = await createDocFromBytes(bytes, base.fileName);
         // Do NOT revoke cur's thumbnails here: the prior history entry (the undo
         // target) still references them. They're freed when that entry is
         // evicted from the stack — see history.setOnEvict above.
-        commitDoc({ ...rebuilt, id: cur.id, objects: objects ?? cur.objects }, label);
+        commitDoc({ ...rebuilt, id: cur.id, objects: objects ?? base.objects }, label);
       });
     },
     [runBusy, commitDoc],
@@ -564,6 +598,11 @@ export function EditorProvider({
     const key = draftKeyRef.current;
     if (!key || !doc) return;
     if (historyRef.current.index() <= 0) return; // pristine — nothing to save yet
+    // Privacy guard: while redaction / erase marks are pending, the original
+    // text is still present in `bytes` (the burn is deferred to export). Do NOT
+    // persist that to IndexedDB — a draft that looks redacted but isn't would
+    // leak. Autosave resumes once the marks are flattened (export / next edit).
+    if (hasPendingDestructive(doc)) return;
     const id = setTimeout(() => {
       void saveDraft({
         key,
@@ -590,6 +629,7 @@ export function EditorProvider({
       updateObject,
       moveObject,
       removeObject,
+      removeObjects,
       commit,
       undo,
       redo,
@@ -617,6 +657,7 @@ export function EditorProvider({
       updateObject,
       moveObject,
       removeObject,
+      removeObjects,
       commit,
       undo,
       redo,

@@ -1,77 +1,61 @@
 // SmartEraseTool.tsx — Drag boxes over blemishes, logos, stains, or faces and
 // make them vanish: Fill samples the surrounding colour and patches the box
 // (best on solid backgrounds), Pixelate mosaics it (de-identify a face / plate).
-// Like Redact it is destructive — erasePdf rasterises the touched pages and
-// burns the patch into the pixels, so the covered content is physically gone,
-// not just hidden behind a vector shape. Regions live in the tool slice (like
-// Crop's `keep`); the Stage drags them, the Panel applies + clears.
+//
+// Like Redact it is destructive — but the burn is DEFERRED. Each box is stored
+// as a persistent `erase` overlay object (carrying its method + coarseness in
+// the payload), NON-destructive while you work; erasePdf rasterises the touched
+// pages and burns the patch into the pixels only at export, or just before the
+// next byte transform (see EditorContext.applyTransform + flattenDestructiveObjects).
+// So the underlying content survives — and stays searchable — until you're done.
+// The committed regions paint as the PdfStage base layer; the Stage here draws
+// only the in-progress drag box. Method + coarseness live in the tool slice and
+// are captured onto each region when it's drawn.
 
 import { Trash2 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
-import { type EraseRegion, erasePdf } from "../../utils/pdf-operations.ts";
-import { docToFile, nextId } from "../doc.ts";
+import type { EraseMode } from "../../utils/pdf-operations.ts";
+import { type ErasePayload } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { drawEraseMark } from "../overlay-paint.ts";
 import { useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
 import { Labeled } from "./controls.tsx";
-import { Segmented, WholeDocPanel } from "./WholeDocPanel.tsx";
+import { Segmented } from "./WholeDocPanel.tsx";
 
 const TOOL_ID = "smart-erase";
 
-type Mode = "fill" | "pixelate";
 type Coarseness = "subtle" | "medium" | "strong";
 
 const BLOCK_FRAC: Record<Coarseness, number> = { subtle: 0.06, medium: 0.12, strong: 0.22 };
+const MODE_LABEL: Record<EraseMode, string> = { fill: "Fill", pixelate: "Pixelate" };
 
-interface Region {
-  id: string;
-  pageIndex: number;
-  rect: FractionRect;
-}
-
-interface EraseSlice {
-  regions: Region[];
-  mode: Mode;
+interface EraseSettings {
+  mode: EraseMode;
   coarseness: Coarseness;
 }
 
-function readSlice(slice: Record<string, unknown>): EraseSlice {
+function readSettings(slice: Record<string, unknown>): EraseSettings {
   return {
-    regions: (slice.regions as Region[]) ?? [],
-    mode: (slice.mode as Mode) ?? "fill",
+    mode: (slice.mode as EraseMode) ?? "fill",
     coarseness: (slice.coarseness as Coarseness) ?? "medium",
   };
 }
 
-function drawBox(ctx: CanvasRenderingContext2D, r: FractionRect, w: number, h: number) {
-  const x = r.xPct * w;
-  const y = r.yPct * h;
-  const bw = r.wPct * w;
-  const bh = r.hPct * h;
-  ctx.save();
-  ctx.fillStyle = "rgba(100, 116, 139, 0.30)";
-  ctx.fillRect(x, y, bw, bh);
-  ctx.strokeStyle = "rgba(71, 85, 105, 0.9)";
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([4, 3]);
-  ctx.strokeRect(x, y, bw, bh);
-  ctx.restore();
-}
-
 export function Stage() {
-  const slice = useToolSlice(TOOL_ID);
-  const { regions } = readSlice(slice);
   const { selectedPage } = useEditorRead();
-  const { patchToolState } = useEditorActions();
+  const { mode, coarseness } = readSettings(useToolSlice(TOOL_ID));
+  const { addObject } = useEditorActions();
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState<FractionRect | null>(null);
 
+  // Committed regions paint as the PdfStage base layer; here we draw only the
+  // in-progress drag box.
   const paintOverlay = useCallback(
-    (ctx: CanvasRenderingContext2D, w: number, h: number, pageIndex: number) => {
-      for (const r of regions) if (r.pageIndex === pageIndex) drawBox(ctx, r.rect, w, h);
-      if (box) drawBox(ctx, box, w, h);
+    (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      if (box) drawEraseMark(ctx, box, w, h);
     },
-    [regions, box],
+    [box],
   );
 
   useStageProps({
@@ -102,10 +86,8 @@ export function Stage() {
         hPct: Math.abs(p.yPct - s.y),
       };
       if (rect.wPct > 0.01 && rect.hPct > 0.01) {
-        const { regions: cur } = readSlice(slice);
-        patchToolState(TOOL_ID, {
-          regions: [...cur, { id: nextId("erase"), pageIndex: selectedPage, rect }],
-        });
+        const payload: ErasePayload = { mode, blockFrac: BLOCK_FRAC[coarseness] };
+        addObject({ kind: "erase", pageIndex: selectedPage, rect, payload });
       }
     },
     onPointerCancel: () => {
@@ -118,45 +100,29 @@ export function Stage() {
 }
 
 export function Panel() {
-  const { applyTransform, patchToolState, setSelectedPage, setViewMode } = useEditorActions();
-  const slice = readSlice(useToolSlice(TOOL_ID));
-  const { regions, mode, coarseness } = slice;
+  const { doc } = useEditorRead();
+  const { patchToolState, removeObject, removeObjects, setSelectedPage, setViewMode } =
+    useEditorActions();
+  const { mode, coarseness } = readSettings(useToolSlice(TOOL_ID));
 
-  const remove = (id: string) =>
-    patchToolState(TOOL_ID, { regions: regions.filter((r) => r.id !== id) });
-  const clearAll = () => patchToolState(TOOL_ID, { regions: [] });
+  const regions = (doc?.objects ?? []).filter((o) => o.kind === "erase");
 
-  const apply = useCallback(() => {
-    if (regions.length === 0) return;
-    const eraseRegions: EraseRegion[] = regions.map((r) => ({
-      pageIndex: r.pageIndex,
-      xPct: r.rect.xPct,
-      yPct: r.rect.yPct,
-      wPct: r.rect.wPct,
-      hPct: r.rect.hPct,
-      mode,
-      blockFrac: BLOCK_FRAC[coarseness],
-    }));
-    void applyTransform(async (d) => ({
-      bytes: await erasePdf(docToFile(d), eraseRegions),
-      label: `Erase ${eraseRegions.length} area${eraseRegions.length === 1 ? "" : "s"}`,
-      objects: d.objects,
-    })).then(() => patchToolState(TOOL_ID, { regions: [] }));
-  }, [regions, mode, coarseness, applyTransform, patchToolState]);
+  const clearAll = () => {
+    const ids = regions.map((o) => o.id);
+    if (ids.length > 0) removeObjects(ids, "Clear erase areas");
+  };
 
   return (
-    <WholeDocPanel
-      blurb="Drag a box over anything you want gone — a stain, a logo, a face — then erase."
-      applyLabel={`Erase ${regions.length} area${regions.length === 1 ? "" : "s"}`}
-      danger
-      disabled={regions.length === 0}
-      onApply={apply}
-      note="Erased pages are flattened to images, so the covered content is permanently removed."
-    >
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-slate-500 dark:text-dark-text-muted">
+        Drag a box over anything you want gone — a stain, a logo, a face. It stays editable until
+        you export, when it's burned into the page for good.
+      </p>
+
       <Labeled label="Method">
         <Segmented
           value={mode}
-          onChange={(m: Mode) => patchToolState(TOOL_ID, { mode: m })}
+          onChange={(m: EraseMode) => patchToolState(TOOL_ID, { mode: m })}
           options={[
             { value: "fill", label: "Fill", sub: "solid bg" },
             { value: "pixelate", label: "Pixelate", sub: "faces" },
@@ -180,7 +146,8 @@ export function Panel() {
 
       {regions.length === 0 ? (
         <div className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
-          Drag on the page to mark an area to erase.
+          Drag on the page to mark an area to erase. Method &amp; coarseness apply to the next area
+          you draw.
         </div>
       ) : (
         <div className="flex flex-col gap-1">
@@ -191,44 +158,48 @@ export function Panel() {
             <button
               type="button"
               onClick={clearAll}
-              className="text-xs text-primary-600 hover:underline"
+              className="text-xs text-primary-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
             >
               Clear all
             </button>
           </div>
           <ul className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
-            {regions.map((r, i) => (
-              <li
-                key={r.id}
-                className="flex items-center justify-between gap-1 px-2.5 py-1.5 text-xs"
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedPage(r.pageIndex);
-                    setViewMode("focus");
-                  }}
-                  className="min-w-0 flex-1 truncate rounded text-left text-slate-600 dark:text-dark-text-muted hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            {regions.map((r, i) => {
+              const m = (r.payload as Partial<ErasePayload> | undefined)?.mode ?? "fill";
+              return (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between gap-1 px-2.5 py-1.5 text-xs"
                 >
-                  Area {i + 1} · page {r.pageIndex + 1}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(r.id)}
-                  aria-label={`Remove area ${i + 1}`}
-                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPage(r.pageIndex);
+                      setViewMode("focus");
+                    }}
+                    className="min-w-0 flex-1 truncate rounded text-left text-slate-600 dark:text-dark-text-muted hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                  >
+                    Area {i + 1} · page {r.pageIndex + 1} · {MODE_LABEL[m]}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeObject(r.id)}
+                    aria-label={`Remove area ${i + 1}`}
+                    className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
 
       <p className="text-xs text-slate-400 dark:text-dark-text-muted">
-        Fill matches a solid surrounding colour; for textured areas or faces, use Pixelate.
+        Fill matches a solid surrounding colour; for textured areas or faces, use Pixelate. Erased
+        pages are flattened to images on export, so the covered content is permanently removed.
       </p>
-    </WholeDocPanel>
+    </div>
   );
 }

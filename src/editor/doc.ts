@@ -8,6 +8,7 @@
 // (history snapshots cheap bytes-by-ref + object deltas, never page rasters).
 
 import { PDFDocument } from "@pdfme/pdf-lib";
+import { type EraseMode, erasePdf, redactPdf } from "../utils/pdf-operations.ts";
 import { PREVIEW_SCALE, renderAllThumbnails, revokeThumbnails } from "../utils/pdf-renderer.ts";
 import type { FractionRect } from "./types.ts";
 
@@ -34,12 +35,46 @@ export interface PageMeta {
  *  per-tool dispatch read. */
 export type CanvasObjectKind =
   | "redaction"
+  | "erase"
   | "annotation"
   | "signature"
   | "stamp"
   | "text"
   | "watermark"
   | "pageNumber";
+
+/** Payload for an `erase` overlay object — how the region is flattened at
+ *  export. Captured from the Smart-Erase controls when the region is drawn. */
+export interface ErasePayload {
+  mode: EraseMode;
+  /** Pixelate block size as a fraction of the region's smaller dimension. */
+  blockFrac: number;
+}
+
+/** A 0–255 RGB colour — structurally the editor's `Rgb` (panels/controls). */
+export interface RgbColor {
+  r: number;
+  g: number;
+  b: number;
+}
+
+/** Payload for a `redaction` overlay object — the box appearance the user
+ *  chose, previewed on canvas and burned in at flatten. */
+export interface RedactionPayload {
+  fill: RgbColor;
+  border: RgbColor;
+}
+
+/** Default redaction box look: a solid black bar with a red border — the
+ *  recognisable, conventional redaction look. The single source of truth the
+ *  Redact tool seeds its colour pickers from, so the preview and burn agree. */
+export const DEFAULT_REDACTION_FILL: RgbColor = { r: 0, g: 0, b: 0 };
+export const DEFAULT_REDACTION_BORDER: RgbColor = { r: 220, g: 38, b: 38 };
+
+/** CSS `rgb(...)` string for a colour (for canvas fillStyle / strokeStyle). */
+export function rgbCss(c: RgbColor): string {
+  return `rgb(${c.r}, ${c.g}, ${c.b})`;
+}
 
 /** A non-destructive overlay placed on one page. `rect` carries simple
  *  box-shaped marks (redaction, stamp); freeform marks (pen strokes) keep
@@ -143,4 +178,80 @@ export function docToFile(doc: CanvasDoc): File {
   // the doc's canonical bytes.
   const copy = doc.bytes.slice(0);
   return new File([copy], doc.fileName, { type: "application/pdf" });
+}
+
+// ── Deferred destructive flattening ───────────────────────────────────────
+//
+// Redaction and erase RASTERISE the pages they touch, destroying the text layer
+// — so doing it the instant you place a box would stop you searching or
+// redacting the rest of that page (the bug this defers). Instead those marks
+// live as ordinary overlay objects and are burned in only at export, or just
+// before the next byte transform (EditorContext.applyTransform), so they always
+// land on the geometry they were drawn on and multiple rounds stay lossless.
+
+/** Overlay kinds that destroy page content when flattened (they rasterise). */
+const DESTRUCTIVE_KINDS = new Set<CanvasObjectKind>(["redaction", "erase"]);
+
+/** Any pending redaction / erase marks still waiting to be burned in? */
+export function hasPendingDestructive(doc: CanvasDoc | null): boolean {
+  return !!doc && doc.objects.some((o) => DESTRUCTIVE_KINDS.has(o.kind));
+}
+
+/** The object list minus every destructive mark — used once they've been
+ *  burned into the bytes so they aren't double-applied. */
+export function withoutDestructive(objects: CanvasObject[]): CanvasObject[] {
+  return objects.filter((o) => !DESTRUCTIVE_KINDS.has(o.kind));
+}
+
+/**
+ * Burn every pending destructive overlay into the document bytes — erase regions
+ * first, then redaction boxes — rasterising the affected pages. This is the
+ * deferred flatten the editor runs at export (and just before any other byte
+ * transform). Returns the doc's own bytes untouched when there are none.
+ *
+ * Order matters when a page carries BOTH marks: erase runs first so its Fill
+ * sampler reads the original page pixels (not a just-burned black redaction box,
+ * which would tint the patch dark), and redaction's hard black boxes are laid
+ * down last so they always win on any overlap.
+ */
+export async function flattenDestructiveObjects(doc: CanvasDoc): Promise<Uint8Array> {
+  let bytes = doc.bytes;
+  const asFile = () => new File([bytes.slice(0)], doc.fileName, { type: "application/pdf" });
+
+  const erases = doc.objects
+    .filter((o) => o.kind === "erase" && o.rect)
+    .map((o) => {
+      const r = o.rect as FractionRect;
+      const p = (o.payload ?? {}) as Partial<ErasePayload>;
+      return {
+        pageIndex: o.pageIndex,
+        xPct: r.xPct,
+        yPct: r.yPct,
+        wPct: r.wPct,
+        hPct: r.hPct,
+        mode: (p.mode ?? "fill") as EraseMode,
+        blockFrac: p.blockFrac,
+      };
+    });
+  if (erases.length > 0) bytes = await erasePdf(asFile(), erases);
+
+  const redactions = doc.objects
+    .filter((o) => o.kind === "redaction" && o.rect)
+    .map((o) => {
+      const r = o.rect as FractionRect;
+      const p = (o.payload ?? {}) as Partial<RedactionPayload>;
+      return {
+        pageIndex: o.pageIndex,
+        xPct: r.xPct,
+        yPct: r.yPct,
+        wPct: r.wPct,
+        hPct: r.hPct,
+        fillColor: rgbCss(p.fill ?? DEFAULT_REDACTION_FILL),
+        // No payload (legacy mark) → no border, the original pure-black look.
+        borderColor: p.border ? rgbCss(p.border) : undefined,
+      };
+    });
+  if (redactions.length > 0) bytes = await redactPdf(asFile(), redactions);
+
+  return bytes;
 }

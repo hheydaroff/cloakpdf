@@ -17,6 +17,7 @@ import {
   useState,
 } from "react";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { paintDestructiveMarks } from "./overlay-paint.ts";
 import {
   type InlineEditorDescriptor,
   type StagePoint,
@@ -282,8 +283,12 @@ export function PdfStage() {
     // the DPR transform renders that into the higher-res backing.
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
+    // Always-on base layer: the pending destructive marks (redaction / erase),
+    // so they stay visible no matter which tool is active — they aren't burned
+    // into the page until export. The active tool's overlay paints on top.
+    paintDestructiveMarks(ctx, width, height, selectedPage, doc?.objects ?? []);
     stageProps.paintOverlay?.(ctx, width, height, selectedPage);
-  }, [stageProps, selectedPage]);
+  }, [stageProps, selectedPage, doc?.objects]);
 
   useEffect(() => {
     repaint();

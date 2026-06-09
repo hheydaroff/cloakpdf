@@ -44,7 +44,7 @@ import {
   stripMetadata,
 } from "../utils/pdf-operations.ts";
 import { renderPagesToBlobs } from "../utils/pdf-renderer.ts";
-import { docToFile } from "./doc.ts";
+import { flattenDestructiveObjects, hasPendingDestructive } from "./doc.ts";
 import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { Segmented } from "./panels/WholeDocPanel.tsx";
 
@@ -233,6 +233,25 @@ export function ExportButton() {
   }, [open]);
 
   const baseName = doc ? doc.fileName.replace(/\.pdf$/i, "") : "document";
+  // Pending redaction / erase marks are flattened into the bytes at export — so
+  // every output path starts from the burned document, never the live bytes
+  // (which still hold the original text). Surfaced as a note in the modal too.
+  const pendingMarks = doc
+    ? doc.objects.filter((o) => o.kind === "redaction" || o.kind === "erase").length
+    : 0;
+
+  // The document with every destructive mark burned in, wrapped as a File for
+  // the writers. The single source of bytes for every export format.
+  const flattenedFile = useCallback(async (): Promise<File> => {
+    if (!doc) throw new Error("No document");
+    const bytes = await flattenDestructiveObjects(doc);
+    // slice(0): hand the writer a private copy so its PDF.js worker can detach
+    // the buffer without corrupting the doc's canonical bytes (flatten returns
+    // doc.bytes verbatim when there's nothing to burn).
+    return new File([bytes.slice(0) as Uint8Array<ArrayBuffer>], doc.fileName, {
+      type: "application/pdf",
+    });
+  }, [doc]);
 
   // Build the final PDF by applying the enabled modifiers in a fixed order:
   // flatten (bake vectors) → grayscale → compress (rasterise) → repair (clean up).
@@ -240,8 +259,12 @@ export function ExportButton() {
   const buildPdf = useCallback(async (): Promise<{ bytes: Uint8Array; suffix: string }> => {
     if (!doc) throw new Error("No document");
     const tags: string[] = [];
-    let file = docToFile(doc);
-    let bytes = doc.bytes;
+    let bytes = await flattenDestructiveObjects(doc);
+    // Private copy (slice) so the first modifier's PDF.js worker can't detach
+    // the doc's canonical bytes — flatten returns them verbatim when empty.
+    let file = new File([bytes.slice(0) as Uint8Array<ArrayBuffer>], doc.fileName, {
+      type: "application/pdf",
+    });
     const next = (b: Uint8Array) => {
       bytes = b;
       file = new File([b as Uint8Array<ArrayBuffer>], doc.fileName, { type: "application/pdf" });
@@ -278,7 +301,12 @@ export function ExportButton() {
     if (format === "images") {
       void runTask("Rendering images…", async () => {
         const indices = Array.from({ length: doc.pageCount }, (_, i) => i);
-        const rendered = await renderPagesToBlobs(docToFile(doc), indices, IMAGE_DPI, "image/png");
+        const rendered = await renderPagesToBlobs(
+          await flattenedFile(),
+          indices,
+          IMAGE_DPI,
+          "image/png",
+        );
         if (rendered.length === 1) {
           downloadBlob(rendered[0].blob, `${baseName}.png`);
           return;
@@ -295,7 +323,7 @@ export function ExportButton() {
 
     if (format === "contact") {
       void runTask("Building contact sheet…", async () => {
-        const bytes = await nupPages(docToFile(doc), "3x3");
+        const bytes = await nupPages(await flattenedFile(), "3x3");
         downloadPdf(bytes, pdfFilename(doc.fileName, "_contact-sheet"));
       });
       return;
@@ -304,7 +332,7 @@ export function ExportButton() {
     if (format === "split") {
       void runTask("Splitting pages…", async () => {
         const parts = Array.from({ length: doc.pageCount }, (_, i) => [i]);
-        const pdfs = await splitPdfIntoParts(docToFile(doc), parts);
+        const pdfs = await splitPdfIntoParts(await flattenedFile(), parts);
         const JSZip = (await import("jszip")).default;
         const zip = new JSZip();
         pdfs.forEach((bytes, i) => {
@@ -315,16 +343,35 @@ export function ExportButton() {
       return;
     }
 
-    // PDF — fast path when no modifiers are on (no overlay flash).
+    // PDF — fast path when no modifiers are on AND nothing to burn in.
     if (!(compress || grayscale || flatten || repair || stripMeta)) {
-      downloadPdf(doc.bytes, pdfFilename(doc.fileName, "_edited"));
+      if (!hasPendingDestructive(doc)) {
+        downloadPdf(doc.bytes, pdfFilename(doc.fileName, "_edited"));
+        return;
+      }
+      void runTask("Exporting…", async () => {
+        const bytes = await flattenDestructiveObjects(doc);
+        downloadPdf(bytes, pdfFilename(doc.fileName, "_edited"));
+      });
       return;
     }
     void runTask("Exporting…", async () => {
       const { bytes, suffix } = await buildPdf();
       downloadPdf(bytes, pdfFilename(doc.fileName, suffix));
     });
-  }, [doc, format, compress, grayscale, flatten, repair, stripMeta, baseName, runTask, buildPdf]);
+  }, [
+    doc,
+    format,
+    compress,
+    grayscale,
+    flatten,
+    repair,
+    stripMeta,
+    baseName,
+    runTask,
+    buildPdf,
+    flattenedFile,
+  ]);
 
   const isPdf = format === "pdf";
 
@@ -382,6 +429,15 @@ export function ExportButton() {
 
               {/* Body */}
               <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
+                {pendingMarks > 0 && (
+                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/15 dark:text-amber-300">
+                    <Layers className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>
+                      {pendingMarks} redaction/erase mark{pendingMarks === 1 ? "" : "s"} will be
+                      permanently burned into the pages on export.
+                    </span>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <SectionLabel>Format</SectionLabel>
                   <div

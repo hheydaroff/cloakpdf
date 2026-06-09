@@ -6,16 +6,35 @@ import { PDFDocument } from "@pdfme/pdf-lib";
 import { PDFJS_WASM_URL } from "../pdfjs-config.ts";
 import { getPdfJs, canvasToImageBytes } from "./raster.ts";
 
+/** One redaction box, in page fractions, with an optional burned-in appearance.
+ *  `fillColor` / `borderColor` are any CSS colour string; defaults keep the
+ *  conventional solid-black bar with no border for callers that omit them. */
+export interface RedactionRegion {
+  pageIndex: number;
+  xPct: number;
+  yPct: number;
+  wPct: number;
+  hPct: number;
+  /** Box fill burned into the pixels. Default `#000000`. */
+  fillColor?: string;
+  /** Box border burned into the pixels. Omit for no border. */
+  borderColor?: string;
+}
+
 /**
  * Permanently redact regions of a PDF — destructively.
  *
  * A black rectangle drawn on top of a page is NOT a redaction: the text and
  * images underneath survive in the byte stream and are trivially recovered by
  * copy/paste or text extraction. So instead, any page that carries a redaction
- * is **rasterised, has the black boxes burned into the pixels, and is rebuilt
- * as an image-only page** — the original text/vectors under (and around) the
- * boxes no longer exist in the output. Pages without redactions are copied
- * through untouched, so they keep their crisp vector text and small size.
+ * is **rasterised, has the boxes burned into the pixels, and is rebuilt as an
+ * image-only page** — the original text/vectors under (and around) the boxes no
+ * longer exist in the output. Pages without redactions are copied through
+ * untouched, so they keep their crisp vector text and small size.
+ *
+ * Box appearance (fill + optional border colour) is per-region so the user's
+ * chosen colours burn in exactly as previewed; content destruction is identical
+ * regardless of colour (the page is rasterised either way).
  *
  * Trade-off (surfaced in the UI): redacted pages become flattened images —
  * their remaining text is no longer selectable and the file grows. That is the
@@ -29,7 +48,7 @@ import { getPdfJs, canvasToImageBytes } from "./raster.ts";
  */
 export async function redactPdf(
   file: File,
-  redactions: Array<{ pageIndex: number; xPct: number; yPct: number; wPct: number; hPct: number }>,
+  redactions: RedactionRegion[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<Uint8Array> {
   const arrayBuffer = await file.arrayBuffer();
@@ -81,15 +100,19 @@ export async function redactPdf(
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         await page.render({ canvasContext: ctx, viewport, canvas }).promise;
 
-        // Burn the redaction boxes into the pixels.
-        ctx.fillStyle = "#000000";
+        // Burn the redaction boxes into the pixels, each with its own colours.
         for (const r of rects) {
-          ctx.fillRect(
-            r.xPct * canvas.width,
-            r.yPct * canvas.height,
-            r.wPct * canvas.width,
-            r.hPct * canvas.height,
-          );
+          const x = r.xPct * canvas.width;
+          const y = r.yPct * canvas.height;
+          const w = r.wPct * canvas.width;
+          const h = r.hPct * canvas.height;
+          ctx.fillStyle = r.fillColor ?? "#000000";
+          ctx.fillRect(x, y, w, h);
+          if (r.borderColor) {
+            ctx.strokeStyle = r.borderColor;
+            ctx.lineWidth = Math.max(1, Math.round(scale)); // ~1 pt at REDACT_DPI
+            ctx.strokeRect(x, y, w, h);
+          }
         }
 
         const jpeg = await canvasToImageBytes(canvas, "image/jpeg", 0.92);

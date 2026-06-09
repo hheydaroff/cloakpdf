@@ -1,54 +1,66 @@
-// RedactTool.tsx — Destructive-drag tool. The Stage lets the user drag
-// redaction boxes on the focused page (stored as `redaction` overlay objects in
-// fraction space); the Panel auto-detects PII and applies the burn. On Apply,
-// `redactPdf` rasterises the boxed pages and destroys the underlying text — so
-// the redaction objects are dropped from the doc afterwards (they're now in the
-// pixels). Reuses the exact geometry + PII pipeline the standalone RedactPdf
-// tool proved. See REDESIGN.md (destructive-drag class).
+// RedactTool.tsx — Redaction-marking tool. The Stage lets the user drag
+// redaction boxes on the focused page; the Panel auto-detects PII or finds a
+// term and boxes every match. Boxes are stored as persistent `redaction` overlay
+// objects in fraction space — NON-destructive while you work, so you can keep
+// searching and redacting the same pages. They're rasterised into the pixels
+// (text physically destroyed) only at export, or just before the next byte
+// transform — see EditorContext.applyTransform + doc.ts flattenDestructiveObjects.
+// The committed boxes paint as an always-on base layer in PdfStage; the Stage
+// here only draws the in-progress drag box. Reuses the geometry + PII pipeline
+// the standalone RedactPdf tool proved. See REDESIGN.md (destructive-drag class).
 
-import { Loader2, ScanSearch, Search } from "lucide-react";
+import { Loader2, ScanSearch, Search, Trash2 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
-import { canvas as canvasColors } from "../../config/theme.ts";
 import {
   detectPiiRects,
   extractTextGeometry,
   findTextRects,
   type LayoutPage,
 } from "../../utils/layout-extract.ts";
-import { redactPdf } from "../../utils/pdf-operations.ts";
 import { PII_LABELS, PII_TYPES, type PiiType } from "../../utils/pii.ts";
-import { docToFile } from "../doc.ts";
-import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import {
+  DEFAULT_REDACTION_BORDER,
+  DEFAULT_REDACTION_FILL,
+  docToFile,
+  type RedactionPayload,
+} from "../doc.ts";
+import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { drawRedactionMark } from "../overlay-paint.ts";
 import { useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
+import { ColorRow, Labeled, type Rgb } from "./controls.tsx";
 
-function drawBox(ctx: CanvasRenderingContext2D, r: FractionRect, w: number, h: number) {
-  const x = r.xPct * w;
-  const y = r.yPct * h;
-  const bw = r.wPct * w;
-  const bh = r.hPct * h;
-  ctx.fillStyle = canvasColors.redactFill;
-  ctx.fillRect(x, y, bw, bh);
-  ctx.strokeStyle = canvasColors.redactStroke;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x, y, bw, bh);
+const TOOL_ID = "redact-pdf";
+
+/** The box appearance shared by the Stage (in-progress box) and Panel (pickers).
+ *  Lives in the tool slice so both read the same colours; each drawn box also
+ *  captures them into its payload so the burn matches the preview. */
+interface RedactStyle {
+  fillColor: Rgb;
+  borderColor: Rgb;
+}
+
+function readStyle(slice: Record<string, unknown>): RedactStyle {
+  return {
+    fillColor: (slice.fillColor as Rgb) ?? DEFAULT_REDACTION_FILL,
+    borderColor: (slice.borderColor as Rgb) ?? DEFAULT_REDACTION_BORDER,
+  };
 }
 
 export function Stage() {
-  const { doc, selectedPage } = useEditorRead();
+  const { selectedPage } = useEditorRead();
   const { addObject } = useEditorActions();
+  const { fillColor, borderColor } = readStyle(useToolSlice(TOOL_ID));
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState<FractionRect | null>(null);
 
+  // Committed redaction boxes paint as the PdfStage base layer (always visible);
+  // here we draw only the in-progress drag box, in the current chosen colours.
   const paintOverlay = useCallback(
-    (ctx: CanvasRenderingContext2D, w: number, h: number, pageIndex: number) => {
-      for (const o of doc?.objects ?? []) {
-        if (o.kind === "redaction" && o.pageIndex === pageIndex && o.rect)
-          drawBox(ctx, o.rect, w, h);
-      }
-      if (box) drawBox(ctx, box, w, h);
+    (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+      if (box) drawRedactionMark(ctx, box, w, h, fillColor, borderColor);
     },
-    [doc, box],
+    [box, fillColor, borderColor],
   );
 
   useStageProps({
@@ -79,7 +91,12 @@ export function Stage() {
         hPct: Math.abs(p.yPct - s.y),
       };
       if (rect.wPct > 0.01 && rect.hPct > 0.01) {
-        addObject({ kind: "redaction", pageIndex: selectedPage, rect });
+        addObject({
+          kind: "redaction",
+          pageIndex: selectedPage,
+          rect,
+          payload: { fill: fillColor, border: borderColor } satisfies RedactionPayload,
+        });
       }
     },
     onPointerCancel: () => {
@@ -93,7 +110,9 @@ export function Stage() {
 
 export function Panel() {
   const { doc } = useEditorRead();
-  const { addObjects, applyTransform } = useEditorActions();
+  const { addObjects, removeObject, removeObjects, patchToolState, setSelectedPage, setViewMode } =
+    useEditorActions();
+  const { fillColor, borderColor } = readStyle(useToolSlice(TOOL_ID));
   const [piiTypes, setPiiTypes] = useState<Set<PiiType>>(
     () => new Set(PII_TYPES.filter((t) => t !== "date")),
   );
@@ -153,6 +172,7 @@ export function Panel() {
           kind: "redaction" as const,
           pageIndex: r.pageIndex,
           rect: { xPct: r.xPct, yPct: r.yPct, wPct: r.wPct, hPct: r.hPct },
+          payload: { fill: fillColor, border: borderColor } satisfies RedactionPayload,
         })),
         "Detect PII",
       );
@@ -163,7 +183,7 @@ export function Panel() {
       setDetecting(false);
       setOcr(null);
     }
-  }, [doc, piiTypes, addObjects, ensureGeometry]);
+  }, [doc, piiTypes, addObjects, ensureGeometry, fillColor, borderColor]);
 
   const find = useCallback(async () => {
     const q = term.trim();
@@ -183,6 +203,7 @@ export function Panel() {
           kind: "redaction" as const,
           pageIndex: r.pageIndex,
           rect: { xPct: r.xPct, yPct: r.yPct, wPct: r.wPct, hPct: r.hPct },
+          payload: { fill: fillColor, border: borderColor } satisfies RedactionPayload,
         })),
         `Find “${q}”`,
       );
@@ -199,21 +220,12 @@ export function Panel() {
       setFinding(false);
       setOcr(null);
     }
-  }, [doc, term, caseSensitive, wholeWord, addObjects, ensureGeometry]);
+  }, [doc, term, caseSensitive, wholeWord, addObjects, ensureGeometry, fillColor, borderColor]);
 
-  const apply = useCallback(() => {
-    void applyTransform(async (d) => {
-      const rects = d.objects
-        .filter((o) => o.kind === "redaction" && o.rect)
-        .map((o) => ({ pageIndex: o.pageIndex, ...o.rect! }));
-      const bytes = await redactPdf(docToFile(d), rects);
-      return {
-        bytes,
-        label: `Redact ${rects.length}`,
-        objects: d.objects.filter((o) => o.kind !== "redaction"),
-      };
-    });
-  }, [applyTransform]);
+  const clearAll = () => {
+    const ids = (doc?.objects ?? []).filter((o) => o.kind === "redaction").map((o) => o.id);
+    if (ids.length > 0) removeObjects(ids, "Clear redactions");
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -317,6 +329,20 @@ export function Panel() {
         </div>
       </div>
 
+      {/* Box appearance — fill + border, the same colour picker + presets every
+          tool uses. Applies to new boxes (detect / find / hand-drawn). */}
+      <div className="flex flex-col gap-3">
+        <Labeled label="Fill colour">
+          <ColorRow value={fillColor} onChange={(c) => patchToolState(TOOL_ID, { fillColor: c })} />
+        </Labeled>
+        <Labeled label="Border colour">
+          <ColorRow
+            value={borderColor}
+            onChange={(c) => patchToolState(TOOL_ID, { borderColor: c })}
+          />
+        </Labeled>
+      </div>
+
       {(detecting || finding) && ocr && (
         <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">
           Reading scanned pages… ({ocr.done}/{ocr.total})
@@ -329,20 +355,54 @@ export function Panel() {
         </p>
       )}
 
-      <span className="text-sm text-slate-600 dark:text-dark-text-muted">
-        {count} redaction{count === 1 ? "" : "s"}
-      </span>
-
-      <button
-        type="button"
-        onClick={apply}
-        disabled={count === 0}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
-      >
-        Apply {count} redaction{count === 1 ? "" : "s"}
-      </button>
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-600 dark:text-dark-text-muted">
+            {count} redaction{count === 1 ? "" : "s"}
+          </span>
+          {count > 0 && (
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-xs text-primary-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 rounded"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+        {count > 0 && (
+          <ul className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
+            {redactions.map((r, i) => (
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-1 px-2.5 py-1.5 text-xs"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPage(r.pageIndex);
+                    setViewMode("focus");
+                  }}
+                  className="min-w-0 flex-1 truncate rounded text-left text-slate-600 dark:text-dark-text-muted hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                >
+                  Box {i + 1} · page {r.pageIndex + 1}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeObject(r.id)}
+                  aria-label={`Remove box ${i + 1}`}
+                  className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <p className="text-xs text-slate-400 dark:text-dark-text-muted">
-        Redacted pages are flattened to images so the hidden text is permanently removed.
+        Redactions stay editable — your text remains searchable — and are burned into the pages
+        permanently when you export.
       </p>
     </div>
   );

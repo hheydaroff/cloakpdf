@@ -4,7 +4,7 @@
  * Unlike `ai-tools.e2e.ts` this downloads NO model weights — it drives the
  * editor's happy path in a real browser and asserts the chrome + the migrated
  * tools work without console errors:
- *   open → render → redact (draw → destructive burn) → annotate (draw) →
+ *   open → render → redact (draw, deferred — burns at export/next edit) → annotate (draw) →
  *   crop (drag → apply) → signature (pad → place → embed) → OCR panel mounts →
  *   organize (delete → assemble) → overview/focus → flatten → metadata/scrub →
  *   extract → page numbers → fill-form → bookmarks → attachments →
@@ -138,6 +138,14 @@ async function scribbleOnPad(page: Page): Promise<void> {
   await page.mouse.up();
 }
 
+/** Read the Redact panel's live "{N} redactions" count (-1 if absent). */
+async function redactionCount(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const m = document.body.innerText.match(/(\d+)\s+redactions?/i);
+    return m ? parseInt(m[1], 10) : -1;
+  });
+}
+
 async function main() {
   const errors: string[] = [];
   const browser = await launch({
@@ -196,21 +204,43 @@ async function main() {
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
     console.log("  ✓ density control (single ↔ grid)");
 
-    // 2. Redact: find-text-and-redact (new) + a hand-drawn box → destructive burn.
+    // 2. Redact: marks are now DEFERRED — burned at export / the next byte
+    //    transform, NOT in-tool — so the text layer survives and you can keep
+    //    searching + redacting. Prove it: find a word, draw a manual box, then
+    //    find the SAME word again — the second find adding more boxes can only
+    //    happen if the first round didn't rasterise the text away.
     const redactBtn = await page.$('button[aria-label="Redact"]');
     if (!redactBtn) fail("Redact rail tool not found.");
     await redactBtn.click();
     await waitForText(page, /Detect & add boxes/i, 5_000);
-    // 2a. Find & redact a recurring word (pristine doc → no OCR needed).
+    // 2a. Find & box a recurring word (pristine doc → no OCR needed).
     await page.type('input[placeholder^="Search text"]', "Introduction");
     await page.click('button[aria-label="Find and redact"]');
     await waitForText(page, /Added \d+ box/i, 60_000);
-    // 2b. Plus a hand-drawn box, then burn them all.
+    // 2b. A hand-drawn box — no in-tool Apply now; marks just accumulate.
     await drawOnPage(page, { x: 0.25, y: 0.3 }, { x: 0.6, y: 0.45 });
-    await waitForText(page, /\bredactions?\b/, 5_000);
-    if (!(await clickByPrefix(page, "Apply "))) fail("Redact Apply button not found.");
-    await waitForText(page, /\b0 redactions\b/, 60_000); // burn drops the boxes; rebuild re-renders
-    console.log("  ✓ redact find-text + manual draw + destructive apply");
+    await waitForText(page, /\d+ redactions?/i, 5_000);
+    const beforeSecondFind = await redactionCount(page);
+    // 2c. Find the word AGAIN — the count must grow, which is only possible if
+    //     the text layer is still intact (the bug this change fixes).
+    await page.type('input[placeholder^="Search text"]', "Introduction");
+    await page.click('button[aria-label="Find and redact"]');
+    await page.waitForFunction(
+      (prev: number) => {
+        const m = document.body.innerText.match(/(\d+)\s+redactions?/i);
+        return m ? parseInt(m[1], 10) > prev : false;
+      },
+      { timeout: 60_000 },
+      beforeSecondFind,
+    );
+    // 2d. Box colours: the Fill + Border pickers (same shared ColorPicker as the
+    //     other tools) render and are interactive — pick a preset for new boxes.
+    await waitForText(page, /fill colour/i, 5_000);
+    await waitForText(page, /border colour/i, 5_000);
+    if (!(await page.$('button[aria-label^="Blue color"]')))
+      fail("Redact colour picker not found.");
+    await page.click('button[aria-label^="Blue color"]'); // change the fill colour
+    console.log("  ✓ redact deferred — repeated find, box-colour pickers wired (no burn)");
 
     // 3. Annotate (overlay-object): select tool, draw a pen stroke.
     const annBtn = await page.$('button[aria-label="Annotate"]');
@@ -267,19 +297,15 @@ async function main() {
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
     console.log("  ✓ find & act search + highlight apply");
 
-    // 3e. Erase: drag a box and erase it (Fill) — exercises the real in-browser
-    //     rasterise → patch → re-embed path (erasePdf).
+    // 3e. Erase: drag a box → a persistent `erase` mark. Deferred like redaction
+    //     (burned at export / the next byte transform), so no in-tool Apply.
     const eraseBtn = await page.$('button[aria-label="Erase"]');
     if (!eraseBtn) fail("Erase rail tool not found.");
     await eraseBtn.click(); // focus mode
     await waitForText(page, /anything you want gone/i, 5_000);
     await drawOnPage(page, { x: 0.3, y: 0.3 }, { x: 0.6, y: 0.45 });
-    await waitForText(page, /\b1 area\b/i, 5_000);
-    if (!(await clickByText(page, "Erase 1 area"))) fail("Smart Erase Apply button not found.");
-    await waitForText(page, /Working/i, 10_000);
-    await waitForText(page, /Erase 0 areas/i, 60_000); // regions cleared after the burn
-    await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
-    console.log("  ✓ smart erase draw + apply (fill)");
+    await waitForText(page, /\b1 area\b/i, 5_000); // region listed, not burned
+    console.log("  ✓ smart erase draw (deferred mark)");
 
     // 4. OCR panel mounts + is wired (we don't run the engine — that would
     //    download model weights; just assert the desktop controls render).
@@ -422,7 +448,7 @@ async function main() {
     }
 
     console.log(
-      `✓ Editor smoke passed — redact burn, find & act, smart erase, annotate, crop, signature, organize (now ${pageButtons.length} pages), overview/focus, stamps, forms, bookmarks (+ contents page), attachments, OCR wired.`,
+      `✓ Editor smoke passed — redact (deferred), find & act, smart erase (deferred), annotate, crop, signature, organize (now ${pageButtons.length} pages), overview/focus, stamps, forms, bookmarks (+ contents page), attachments, OCR wired.`,
     );
   } catch (e) {
     console.error(`✗ Smoke failed: ${e instanceof Error ? e.message : String(e)}`);
