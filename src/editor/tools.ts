@@ -124,7 +124,7 @@ export const EDITOR_TOOLS = [
   {
     id: "redact-pdf",
     name: "Redact",
-    description: "Black out text or detected PII — burned into the pixels.",
+    description: "Black out searched text or detected PII — burned into the pixels.",
     icon: EyeOff,
     group: "security",
     mode: "focus",
@@ -133,7 +133,7 @@ export const EDITOR_TOOLS = [
   {
     id: "find-act",
     name: "Find & Act",
-    description: "Search any text, then redact, highlight, or box every match at once.",
+    description: "Search any text, then highlight or box every match at once.",
     icon: Search,
     group: "security",
     mode: "focus",
@@ -170,7 +170,7 @@ export const EDITOR_TOOLS = [
   },
   {
     id: "smart-erase",
-    name: "Smart Erase",
+    name: "Erase",
     description: "Cover a blemish, logo, or face with a colour-matched patch or a mosaic.",
     icon: SprayCan,
     group: "transform",

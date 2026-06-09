@@ -196,16 +196,21 @@ async function main() {
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
     console.log("  ✓ density control (single ↔ grid)");
 
-    // 2. Redact (destructive-drag): select tool, draw a box, apply the burn.
+    // 2. Redact: find-text-and-redact (new) + a hand-drawn box → destructive burn.
     const redactBtn = await page.$('button[aria-label="Redact"]');
     if (!redactBtn) fail("Redact rail tool not found.");
     await redactBtn.click();
     await waitForText(page, /Detect & add boxes/i, 5_000);
+    // 2a. Find & redact a recurring word (pristine doc → no OCR needed).
+    await page.type('input[placeholder^="Search text"]', "Introduction");
+    await page.click('button[aria-label="Find and redact"]');
+    await waitForText(page, /Added \d+ box/i, 60_000);
+    // 2b. Plus a hand-drawn box, then burn them all.
     await drawOnPage(page, { x: 0.25, y: 0.3 }, { x: 0.6, y: 0.45 });
-    await waitForText(page, /\b1 redaction\b/, 5_000);
-    if (!(await clickByText(page, "Apply 1 redaction"))) fail("Redact Apply button not found.");
-    await waitForText(page, /\b0 redactions\b/, 60_000); // burn drops the box; rebuild re-renders
-    console.log("  ✓ redact draw + destructive apply");
+    await waitForText(page, /\bredactions?\b/, 5_000);
+    if (!(await clickByPrefix(page, "Apply "))) fail("Redact Apply button not found.");
+    await waitForText(page, /\b0 redactions\b/, 60_000); // burn drops the boxes; rebuild re-renders
+    console.log("  ✓ redact find-text + manual draw + destructive apply");
 
     // 3. Annotate (overlay-object): select tool, draw a pen stroke.
     const annBtn = await page.$('button[aria-label="Annotate"]');
@@ -249,7 +254,7 @@ async function main() {
     const findBtn = await page.$('button[aria-label="Find & Act"]');
     if (!findBtn) fail("Find & Act rail tool not found.");
     await findBtn.click(); // focus mode
-    await waitForText(page, /redact, highlight, or box/i, 5_000);
+    await waitForText(page, /highlight or box/i, 5_000);
     if (!(await clickByText(page, "Highlight"))) fail("Find & Act Highlight mode not found.");
     await page.type('input[placeholder^="Search text"]', "Exam"); // recurs across the fixture
     await page.click('button[aria-label="Find matches"]'); // not the rail "Find" tool
@@ -262,10 +267,10 @@ async function main() {
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
     console.log("  ✓ find & act search + highlight apply");
 
-    // 3e. Smart Erase: drag a box and erase it (Fill) — exercises the real
-    //     in-browser rasterise → patch → re-embed path (erasePdf).
-    const eraseBtn = await page.$('button[aria-label="Smart Erase"]');
-    if (!eraseBtn) fail("Smart Erase rail tool not found.");
+    // 3e. Erase: drag a box and erase it (Fill) — exercises the real in-browser
+    //     rasterise → patch → re-embed path (erasePdf).
+    const eraseBtn = await page.$('button[aria-label="Erase"]');
+    if (!eraseBtn) fail("Erase rail tool not found.");
     await eraseBtn.click(); // focus mode
     await waitForText(page, /anything you want gone/i, 5_000);
     await drawOnPage(page, { x: 0.3, y: 0.3 }, { x: 0.6, y: 0.45 });

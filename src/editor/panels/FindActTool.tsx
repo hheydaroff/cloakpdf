@@ -1,18 +1,17 @@
-// FindActTool.tsx — Search the document's text layer for any term and act on
-// every occurrence at once: black it out (Redact), Highlight it, or Box it for
-// review. This is the only path that *locates* existing user-supplied text —
-// Redact finds a fixed PII taxonomy or hand-drawn boxes; Annotate places new
-// marks but can't find existing ones. Deterministic literal matching (no model)
-// over the same PDF.js text layer + Tesseract OCR fallback the Redact tool uses,
-// so it works identically on every device.
+// FindActTool.tsx — Search the document's text layer for any term and mark
+// every occurrence at once: Highlight it or Box it for review, in a colour you
+// pick. This is the only path that *locates* existing user-supplied text and
+// draws a non-destructive mark on it (Annotate places new marks but can't find
+// existing ones; redacting found text lives in the Redact tool). Deterministic
+// literal matching (no model) over the same PDF.js text layer + Tesseract OCR
+// fallback the Redact tool uses, so it works identically on every device.
 //
 // State lives in the tool slice (like Crop's `keep`), not as doc objects: the
 // Stage paints the staged matches for the focused page, the Panel drives search
-// + apply. On Apply the matches are burned (redactPdf / annotatePdf) and cleared.
+// + apply. On Apply the matches are burned via annotatePdf and cleared.
 
 import { Loader2, Search, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
-import { canvas as canvasColors } from "../../config/theme.ts";
 import {
   dedupeTerms,
   extractTextGeometry,
@@ -20,16 +19,17 @@ import {
   type LayoutPage,
   type TextMatchRect,
 } from "../../utils/layout-extract.ts";
-import { type Annotation, annotatePdf, redactPdf } from "../../utils/pdf-operations.ts";
+import { type Annotation, annotatePdf } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
 import { useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
+import { ColorRow, Labeled, type Rgb } from "./controls.tsx";
 import { Segmented } from "./WholeDocPanel.tsx";
 
 const TOOL_ID = "find-act";
 
-type ActMode = "redact" | "highlight" | "box";
+type ActMode = "highlight" | "box";
 
 /** A resolved match staged in the tool slice. */
 interface StoredMatch extends TextMatchRect {
@@ -43,6 +43,8 @@ interface FindActSlice {
   mode: ActMode;
   caseSensitive: boolean;
   wholeWord: boolean;
+  highlightColor: Rgb;
+  boxColor: Rgb;
   matches: StoredMatch[];
   /** A scanned page was OCR'd — matching is over recognised text only. */
   scanned: boolean;
@@ -50,15 +52,17 @@ interface FindActSlice {
   searched: boolean;
 }
 
-const HIGHLIGHT = { r: 250, g: 204, b: 21 }; // amber-400
-const BOX = { r: 220, g: 38, b: 38 }; // red-600
+const DEFAULT_HIGHLIGHT: Rgb = { r: 250, g: 204, b: 21 }; // amber-400
+const DEFAULT_BOX: Rgb = { r: 220, g: 38, b: 38 }; // red-600
 
 function readSlice(slice: Record<string, unknown>): FindActSlice {
   return {
     terms: (slice.terms as string[]) ?? [],
-    mode: (slice.mode as ActMode) ?? "redact",
+    mode: (slice.mode as ActMode) ?? "highlight",
     caseSensitive: (slice.caseSensitive as boolean) ?? false,
     wholeWord: (slice.wholeWord as boolean) ?? false,
+    highlightColor: (slice.highlightColor as Rgb) ?? DEFAULT_HIGHLIGHT,
+    boxColor: (slice.boxColor as Rgb) ?? DEFAULT_BOX,
     matches: (slice.matches as StoredMatch[]) ?? [],
     scanned: (slice.scanned as boolean) ?? false,
     searched: (slice.searched as boolean) ?? false,
@@ -71,22 +75,17 @@ function paintMatch(
   w: number,
   h: number,
   mode: ActMode,
+  color: Rgb,
 ) {
   const x = r.xPct * w;
   const y = r.yPct * h;
   const bw = r.wPct * w;
   const bh = r.hPct * h;
-  if (mode === "redact") {
-    ctx.fillStyle = canvasColors.redactFill;
-    ctx.fillRect(x, y, bw, bh);
-    ctx.strokeStyle = canvasColors.redactStroke;
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(x, y, bw, bh);
-  } else if (mode === "highlight") {
-    ctx.fillStyle = "rgba(250, 204, 21, 0.4)";
+  if (mode === "highlight") {
+    ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, 0.4)`;
     ctx.fillRect(x, y, bw, bh);
   } else {
-    ctx.strokeStyle = "rgba(220, 38, 38, 0.95)";
+    ctx.strokeStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, bw, bh);
   }
@@ -94,15 +93,16 @@ function paintMatch(
 
 export function Stage() {
   const slice = useToolSlice(TOOL_ID);
-  const { matches, mode } = readSlice(slice);
+  const { matches, mode, highlightColor, boxColor } = readSlice(slice);
+  const color = mode === "highlight" ? highlightColor : boxColor;
 
   const paintOverlay = useCallback(
     (ctx: CanvasRenderingContext2D, w: number, h: number, pageIndex: number) => {
       for (const m of matches) {
-        if (m.on && m.pageIndex === pageIndex) paintMatch(ctx, m, w, h, mode);
+        if (m.on && m.pageIndex === pageIndex) paintMatch(ctx, m, w, h, mode, color);
       }
     },
-    [matches, mode],
+    [matches, mode, color],
   );
 
   useStageProps({ cursor: "default", paintOverlay });
@@ -113,7 +113,18 @@ export function Panel() {
   const { doc, busyLabel } = useEditorRead();
   const { patchToolState, applyTransform, setSelectedPage, setViewMode } = useEditorActions();
   const slice = readSlice(useToolSlice(TOOL_ID));
-  const { terms, mode, caseSensitive, wholeWord, matches, scanned, searched } = slice;
+  const {
+    terms,
+    mode,
+    caseSensitive,
+    wholeWord,
+    highlightColor,
+    boxColor,
+    matches,
+    scanned,
+    searched,
+  } = slice;
+  const activeColor = mode === "highlight" ? highlightColor : boxColor;
 
   const [input, setInput] = useState("");
   const [detecting, setDetecting] = useState(false);
@@ -226,23 +237,7 @@ export function Panel() {
 
   const apply = useCallback(() => {
     if (enabled.length === 0) return;
-    const afterApply = () =>
-      patchToolState(TOOL_ID, { matches: [], terms: [], searched: false, scanned: false });
-    if (mode === "redact") {
-      void applyTransform(async (d) => {
-        const rects = enabled.map((m) => ({
-          pageIndex: m.pageIndex,
-          xPct: m.xPct,
-          yPct: m.yPct,
-          wPct: m.wPct,
-          hPct: m.hPct,
-        }));
-        const bytes = await redactPdf(docToFile(d), rects);
-        return { bytes, label: `Redact ${rects.length} match${rects.length === 1 ? "" : "es"}` };
-      }).then(afterApply);
-      return;
-    }
-    const color = mode === "highlight" ? HIGHLIGHT : BOX;
+    const color = mode === "highlight" ? highlightColor : boxColor;
     const anns: Annotation[] = enabled.map((m) => {
       // Highlight: translucent fill + a hairline border in the fill colour
       // (≈ invisible). Box: a visible ~2-pt outline, no fill.
@@ -261,8 +256,10 @@ export function Panel() {
     void applyTransform(async (d) => ({
       bytes: await annotatePdf(docToFile(d), anns),
       label: `${mode === "highlight" ? "Highlight" : "Box"} ${anns.length}`,
-    })).then(afterApply);
-  }, [enabled, mode, applyTransform, patchToolState]);
+    })).then(() =>
+      patchToolState(TOOL_ID, { matches: [], terms: [], searched: false, scanned: false }),
+    );
+  }, [enabled, mode, highlightColor, boxColor, applyTransform, patchToolState]);
 
   // Group matches by page for the hit-list.
   const byPage = new Map<number, StoredMatch[]>();
@@ -275,18 +272,27 @@ export function Panel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-slate-500 dark:text-dark-text-muted">
-        Find every occurrence of a word or phrase, then redact, highlight, or box them all at once.
+        Find every occurrence of a word or phrase, then highlight or box them all at once. To black
+        text out instead, use the Redact tool.
       </p>
 
       <Segmented
         value={mode}
         onChange={(m: ActMode) => patchToolState(TOOL_ID, { mode: m })}
         options={[
-          { value: "redact", label: "Redact" },
           { value: "highlight", label: "Highlight" },
           { value: "box", label: "Box" },
         ]}
       />
+
+      <Labeled label={mode === "highlight" ? "Highlight colour" : "Box colour"}>
+        <ColorRow
+          value={activeColor}
+          onChange={(c) =>
+            patchToolState(TOOL_ID, { [mode === "highlight" ? "highlightColor" : "boxColor"]: c })
+          }
+        />
+      </Labeled>
 
       {/* Search box */}
       <div className="flex items-center gap-1.5">
@@ -451,15 +457,11 @@ export function Panel() {
                   type="button"
                   onClick={apply}
                   disabled={busy || enabled.length === 0}
-                  className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
-                    mode === "redact"
-                      ? "bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
-                      : "bg-primary-600 hover:bg-primary-700 focus-visible:ring-primary-500"
-                  }`}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
                 >
                   {busy
                     ? "Working…"
-                    : `${mode === "redact" ? "Redact" : mode === "highlight" ? "Highlight" : "Box"} ${enabled.length}`}
+                    : `${mode === "highlight" ? "Highlight" : "Box"} ${enabled.length}`}
                 </button>
                 <button
                   type="button"
@@ -469,11 +471,6 @@ export function Panel() {
                   Clear
                 </button>
               </div>
-              {mode === "redact" && (
-                <p className="text-xs text-slate-400 dark:text-dark-text-muted">
-                  Redacted pages are flattened to images so the hidden text is permanently removed.
-                </p>
-              )}
             </div>
           )}
         </>

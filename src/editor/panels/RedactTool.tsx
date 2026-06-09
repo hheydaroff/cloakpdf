@@ -6,10 +6,10 @@
 // pixels). Reuses the exact geometry + PII pipeline the standalone RedactPdf
 // tool proved. See REDESIGN.md (destructive-drag class).
 
-import { Loader2, ScanSearch } from "lucide-react";
+import { Loader2, ScanSearch, Search } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { canvas as canvasColors } from "../../config/theme.ts";
-import { detectPiiRects, extractTextGeometry } from "../../utils/layout-extract.ts";
+import { detectPiiRects, extractTextGeometry, findTextRects } from "../../utils/layout-extract.ts";
 import { redactPdf } from "../../utils/pdf-operations.ts";
 import { PII_LABELS, PII_TYPES, type PiiType } from "../../utils/pii.ts";
 import { docToFile } from "../doc.ts";
@@ -94,6 +94,11 @@ export function Panel() {
   );
   const [detecting, setDetecting] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
+  // Find-text-and-redact: type a name/phrase, black out every occurrence.
+  const [term, setTerm] = useState("");
+  const [finding, setFinding] = useState(false);
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [wholeWord, setWholeWord] = useState(false);
 
   const redactions = (doc?.objects ?? []).filter((o) => o.kind === "redaction");
   const count = redactions.length;
@@ -133,6 +138,35 @@ export function Panel() {
     }
   }, [doc, piiTypes, addObjects]);
 
+  const find = useCallback(async () => {
+    const q = term.trim();
+    if (!doc || !q) return;
+    setFinding(true);
+    setSummary(null);
+    try {
+      const pages = await extractTextGeometry(docToFile(doc), { ocr: true });
+      const rects = findTextRects(pages, [q], { caseSensitive, wholeWord });
+      if (rects.length === 0) {
+        setSummary(`No text-layer matches for “${q}”. It may be an image — run OCR first.`);
+        return;
+      }
+      addObjects(
+        rects.map((r) => ({
+          kind: "redaction" as const,
+          pageIndex: r.pageIndex,
+          rect: { xPct: r.xPct, yPct: r.yPct, wPct: r.wPct, hPct: r.hPct },
+        })),
+        `Find “${q}”`,
+      );
+      setSummary(`Added ${rects.length} box${rects.length === 1 ? "" : "es"} for “${q}”.`);
+      setTerm("");
+    } catch {
+      setSummary("Couldn't search this document for that text.");
+    } finally {
+      setFinding(false);
+    }
+  }, [doc, term, caseSensitive, wholeWord, addObjects]);
+
   const apply = useCallback(() => {
     void applyTransform(async (d) => {
       const rects = d.objects
@@ -153,8 +187,7 @@ export function Panel() {
         <div className="flex items-start gap-2">
           <ScanSearch className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
           <p className="text-xs text-slate-500 dark:text-dark-text-muted">
-            Auto-detect emails, phones & IDs, or drag boxes on the page. Names aren't auto-detected
-            — box those by hand.
+            Auto-detect emails, phones & IDs, or drag boxes on the page.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -181,7 +214,7 @@ export function Panel() {
         <button
           type="button"
           onClick={() => void detect()}
-          disabled={detecting || piiTypes.size === 0}
+          disabled={detecting || finding || piiTypes.size === 0}
           className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
         >
           {detecting ? (
@@ -191,12 +224,70 @@ export function Panel() {
           )}
           {detecting ? "Scanning…" : "Detect & add boxes"}
         </button>
-        {summary && (
-          <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">
-            {summary}
-          </p>
-        )}
       </div>
+
+      {/* Find text & redact — black out every occurrence of a name or phrase. */}
+      <div className="space-y-2 rounded-xl border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-3">
+        <div className="flex items-start gap-2">
+          <Search className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
+          <p className="text-xs text-slate-500 dark:text-dark-text-muted">
+            Type a name or phrase to black out every occurrence — what auto-detect can't catch.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="text"
+            value={term}
+            placeholder="Search text…"
+            onChange={(e) => setTerm(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void find();
+              }
+            }}
+            disabled={finding}
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={() => void find()}
+            disabled={detecting || finding || !term.trim()}
+            aria-label="Find and redact"
+            className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+          >
+            {finding ? <Loader2 className="h-4 w-4 animate-spin" /> : "Find"}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-dark-text-muted">
+            <input
+              type="checkbox"
+              checked={caseSensitive}
+              onChange={(e) => setCaseSensitive(e.target.checked)}
+              disabled={finding}
+              className="h-4 w-4 rounded border-slate-300 text-primary-600 focus-visible:ring-primary-500"
+            />
+            Match case
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-dark-text-muted">
+            <input
+              type="checkbox"
+              checked={wholeWord}
+              onChange={(e) => setWholeWord(e.target.checked)}
+              disabled={finding}
+              className="h-4 w-4 rounded border-slate-300 text-primary-600 focus-visible:ring-primary-500"
+            />
+            Whole word
+          </label>
+        </div>
+      </div>
+
+      {summary && (
+        <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">
+          {summary}
+        </p>
+      )}
 
       <span className="text-sm text-slate-600 dark:text-dark-text-muted">
         {count} redaction{count === 1 ? "" : "s"}
