@@ -49,12 +49,13 @@ export function PrimaryAction({
   const onApplyRef = useRef(onApply);
   onApplyRef.current = onApply;
 
-  // On mobile, route the action to the sheet's global ✓. Register only while
-  // actionable; clear on unmount / when unavailable so the ✓ no-ops (just closes
-  // the tool) when there's nothing to apply.
+  // On mobile, route the action to the sheet's global ✓. Always register while
+  // mounted (carrying `ready`) so the ✓ can grey out when the apply isn't
+  // actionable — matching this button's disabled state on desktop — instead of
+  // looking tappable but silently closing. Cleared on unmount.
   useEffect(() => {
     if (!isMobile) return;
-    registerPendingApply(ready ? () => onApplyRef.current() : null);
+    registerPendingApply({ run: () => onApplyRef.current(), ready });
     return () => registerPendingApply(null);
   }, [isMobile, ready, registerPendingApply]);
 

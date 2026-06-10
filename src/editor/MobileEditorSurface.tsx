@@ -22,7 +22,7 @@
 
 import { Check, ChevronUp, Grid2x2, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
-import { useActiveTool, useEditorActions } from "./EditorContext.tsx";
+import { useActiveTool, useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { ToolControls } from "./ToolControls.tsx";
 import { EDITOR_TOOLS, findEditorTool } from "./tools.ts";
 
@@ -33,7 +33,12 @@ type SheetView = { kind: "picker" } | { kind: "tool"; id: string };
 export function MobileEditorSurface() {
   const activeTool = useActiveTool();
   const { setActiveTool, setViewMode, cancelCurrentTool, flushPendingApply } = useEditorActions();
+  const { pendingApply } = useEditorRead();
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Grey out ✓ only when the active tool registered a primary apply that isn't
+  // ready (no input yet / busy) — parity with the desktop Apply button. Deferred
+  // / multi-action tools register nothing, so ✓ stays enabled to close.
+  const applyDisabled = pendingApply !== null && !pendingApply.ready;
 
   const tool = findEditorTool(activeTool);
   const open = pickerOpen || tool !== null;
@@ -102,7 +107,12 @@ export function MobileEditorSurface() {
               <button
                 type="button"
                 onClick={done}
-                className="flex h-11 w-11 items-center justify-center rounded-md bg-primary-600 text-white hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+                disabled={applyDisabled}
+                className={`flex h-11 w-11 items-center justify-center rounded-md text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
+                  applyDisabled
+                    ? "cursor-not-allowed bg-primary-300 dark:bg-primary-900/50"
+                    : "bg-primary-600 hover:bg-primary-700"
+                }`}
                 aria-label="Done"
               >
                 <Check className="h-4 w-4" />

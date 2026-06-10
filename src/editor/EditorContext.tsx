@@ -59,6 +59,17 @@ export type DocTransform = (
   doc: CanvasDoc,
 ) => Promise<{ bytes: Uint8Array; label: string; objects?: CanvasObject[] }>;
 
+/** The active tool's primary "apply" action, surfaced to the mobile sheet's
+ *  global ✓. `ready` is false when that apply is currently disabled (no input
+ *  yet, or a transform is running) so the ✓ can grey out — matching the
+ *  desktop Apply button's disabled state. Tools with no single primary apply
+ *  (deferred Redact/Erase, multi-action OCR/Attachments) register nothing, so
+ *  the ✓ stays enabled and simply closes the tool. */
+export interface PendingApply {
+  run: () => void | Promise<void>;
+  ready: boolean;
+}
+
 interface ActionsValue {
   loadFile: (file: File) => Promise<void>;
   setActiveTool: (id: string | null) => void;
@@ -90,7 +101,7 @@ interface ActionsValue {
   redo: () => void;
   jumpTo: (index: number) => void;
   reset: () => void;
-  registerPendingApply: (fn: (() => void | Promise<void>) | null) => void;
+  registerPendingApply: (action: PendingApply | null) => void;
   flushPendingApply: () => Promise<void>;
   cancelCurrentTool: () => Promise<void>;
   /** Run an async task under the busy spinner WITHOUT committing to history
@@ -119,6 +130,9 @@ interface ReadValue {
   canRedo: boolean;
   canReset: boolean;
   canCancelCurrentTool: boolean;
+  /** The active tool's primary apply (or null). The mobile sheet's ✓ greys out
+   *  when this is present but `ready` is false. */
+  pendingApply: PendingApply | null;
   /** Bumps on every history mutation so consumers re-derive from the doc. */
   historyVersion: number;
   /** Unsaved edits recovered for the just-loaded file, pending the user's
@@ -194,7 +208,7 @@ export function EditorProvider({
   docRef.current = doc;
 
   const historyRef = useRef(new EditorHistory());
-  const pendingApplyRef = useRef<(() => void | Promise<void>) | null>(null);
+  const pendingApplyRef = useRef<PendingApply | null>(null);
   const [pendingApplyVersion, setPendingApplyVersion] = useState(0);
   const toolCheckpointRef = useRef(0);
 
@@ -538,18 +552,22 @@ export function EditorProvider({
     [runBusy, commitDoc],
   );
 
-  const registerPendingApply = useCallback((fn: (() => void | Promise<void>) | null) => {
-    const wasNull = pendingApplyRef.current === null;
-    pendingApplyRef.current = fn;
-    if (wasNull !== (fn === null)) setPendingApplyVersion((v) => v + 1);
+  const registerPendingApply = useCallback((action: PendingApply | null) => {
+    const prev = pendingApplyRef.current;
+    pendingApplyRef.current = action;
+    // Re-render only when PRESENCE or READINESS changes — that's all the mobile
+    // ✓ keys off (greys out on !ready, enabled-to-close when nothing registered).
+    const changed =
+      (prev === null) !== (action === null) || (prev?.ready ?? false) !== (action?.ready ?? false);
+    if (changed) setPendingApplyVersion((v) => v + 1);
   }, []);
 
   const flushPendingApply = useCallback(async () => {
-    const fn = pendingApplyRef.current;
-    if (!fn) return;
+    const action = pendingApplyRef.current;
+    if (!action || !action.ready) return; // nothing to apply, or not ready yet
     pendingApplyRef.current = null;
     setPendingApplyVersion((v) => v + 1);
-    await fn();
+    await action.run();
   }, []);
 
   const cancelCurrentTool = useCallback(async () => {
@@ -697,6 +715,8 @@ export function EditorProvider({
         pendingApplyVersion >= 0 &&
         (pendingApplyRef.current !== null ||
           historyRef.current.index() > toolCheckpointRef.current),
+      // Read fresh on every pendingApplyVersion bump (registration/readiness change).
+      pendingApply: pendingApplyVersion >= 0 ? pendingApplyRef.current : null,
       historyVersion,
       pendingDraft,
     }),

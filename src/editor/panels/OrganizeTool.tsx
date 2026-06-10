@@ -58,12 +58,27 @@ function readState(slice: Record<string, unknown>, pageCount: number): OrganizeS
 // ── Board (center, overview mode) ────────────────────────────────────
 
 export function Board() {
-  const { doc } = useEditorRead();
+  const { doc, layout } = useEditorRead();
   const view = useEditorView();
   const { patchToolState } = useEditorActions();
   const slice = useToolSlice(ORGANIZE_ID);
   const dragFrom = useRef<number | null>(null);
-  const coarse = useRef(window.matchMedia("(pointer: coarse)").matches);
+  // Show the Up/Down reorder buttons on touch — HTML5 drag-and-drop doesn't fire
+  // for touch, so they're the only way to reorder on a phone. Reactive (not a
+  // mount-time ref): a fine→coarse switch or a desktop→mobile resize now flips
+  // it. `layout === "mobile"` guarantees they show in the mobile sheet even if a
+  // headless/emulated browser doesn't report `pointer: coarse`.
+  const [coarsePointer, setCoarsePointer] = useState(
+    () => typeof window !== "undefined" && !!window.matchMedia?.("(pointer: coarse)").matches,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(pointer: coarse)");
+    const onChange = () => setCoarsePointer(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  const coarse = coarsePointer || layout === "mobile";
 
   const pageCount = doc?.pageCount ?? 0;
   const state = readState(slice, pageCount);
@@ -102,11 +117,16 @@ export function Board() {
     patchToolState(ORGANIZE_ID, { order });
   };
 
+  // Cap the column count on mobile so each cell stays wide enough for the
+  // touch-sized reorder / rotate / delete buttons — 3 columns on a phone makes
+  // the action row overflow the cell (and a tap lands on the wrong page).
+  const cols = layout === "mobile" ? Math.min(view.gridCols, 2) : view.gridCols;
+
   return (
     <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
       <div
         className="mx-auto grid max-w-5xl gap-3"
-        style={{ gridTemplateColumns: `repeat(${view.gridCols}, minmax(0, 1fr))` }}
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
       >
         {state.order.map((origIdx, pos) => {
           const page = doc.pages[origIdx];
@@ -150,8 +170,8 @@ export function Board() {
                 <span className="text-xs font-medium tabular-nums text-slate-500 dark:text-dark-text-muted">
                   {origIdx + 1}
                 </span>
-                <div className="flex items-center gap-0.5 pointer-coarse:gap-2">
-                  {coarse.current && pos > 0 && (
+                <div className="flex flex-wrap items-center justify-end gap-0.5 pointer-coarse:gap-1.5">
+                  {coarse && pos > 0 && (
                     <button
                       type="button"
                       onClick={() => reorder(pos, pos - 1)}
@@ -161,7 +181,7 @@ export function Board() {
                       <ChevronUp className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  {coarse.current && pos < state.order.length - 1 && (
+                  {coarse && pos < state.order.length - 1 && (
                     <button
                       type="button"
                       onClick={() => reorder(pos, pos + 1)}
