@@ -39,8 +39,9 @@ export function EditorShell() {
 
   // OCR's side-by-side preview takes over the center once an extraction exists
   // for the current doc, regardless of focus/overview; otherwise the normal
-  // stage / page grid. Desktop-only, mirroring the OCR Panel's mobile guard.
-  const showOcrPreview = activeTool === OCR_ID && !isMobile && ocrHasPreview(ocrSlice, doc?.id);
+  // stage / page grid. On mobile it fills the canvas area (≥60%) above the tool
+  // sheet — the recognised-text/page panels stack under that width.
+  const showOcrPreview = activeTool === OCR_ID && ocrHasPreview(ocrSlice, doc?.id);
   const center = showOcrPreview ? (
     <OcrPreview />
   ) : viewMode === "overview" ? (

@@ -13,6 +13,7 @@ import {
 } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 
 const LABELS: Record<ScrubCategory, string> = {
   metadata: "Document metadata",
@@ -23,7 +24,7 @@ const LABELS: Record<ScrubCategory, string> = {
 };
 
 export function Panel() {
-  const { doc, busyLabel } = useEditorRead();
+  const { doc } = useEditorRead();
   const { applyTransform } = useEditorActions();
   const [analysis, setAnalysis] = useState<ScrubAnalysis | null>(null);
   const [removeAnnotations, setRemoveAnnotations] = useState(false);
@@ -47,7 +48,6 @@ export function Panel() {
     };
   }, [doc]);
 
-  const busy = busyLabel !== null;
   const counts = analysis?.counts;
   const total = counts ? Object.values(counts).reduce((a, b) => a + b, 0) : 0;
 
@@ -110,14 +110,7 @@ export function Panel() {
         Also remove annotations & markup
       </label>
 
-      <button
-        type="button"
-        onClick={apply}
-        disabled={busy || total === 0}
-        className="inline-flex items-center justify-center rounded-lg bg-red-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2"
-      >
-        {busy ? "Working…" : "Scrub hidden data"}
-      </button>
+      <PrimaryAction label="Scrub hidden data" onApply={apply} disabled={total === 0} danger />
     </div>
   );
 }

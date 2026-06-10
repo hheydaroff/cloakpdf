@@ -18,6 +18,7 @@ import { assemblePdf, type AssembleOp } from "../../utils/pdf-operations.ts";
 import { renderThumbnailsAndScores, revokeThumbnails } from "../../utils/pdf-renderer.ts";
 import { type CanvasObject, docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useEditorView, useToolSlice } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 
 export const ORGANIZE_ID = "organize-pages";
 
@@ -377,14 +378,11 @@ export function Panel() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={apply}
+        <PrimaryAction
+          label="Apply changes"
+          onApply={apply}
           disabled={!dirty || kept.length === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-        >
-          Apply changes
-        </button>
+        />
         {dirty && (
           <button
             type="button"

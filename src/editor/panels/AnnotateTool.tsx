@@ -49,6 +49,7 @@ import {
 import { extractPageTextGeometry, type LayoutPage } from "../../utils/layout-extract.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 import { type StagePoint, useInlineEditor, useStageProps } from "../stage.tsx";
 import { Labeled, RangeField, Toggle } from "./controls.tsx";
 
@@ -1462,14 +1463,7 @@ export function Panel() {
         {count} mark{count === 1 ? "" : "s"}
       </span>
 
-      <button
-        type="button"
-        onClick={apply}
-        disabled={count === 0}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-      >
-        Apply annotations
-      </button>
+      <PrimaryAction label="Apply annotations" onApply={apply} disabled={count === 0} />
       <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         {mode === "select"
           ? "Tap a mark to select, drag or use arrow keys to move (Shift = bigger step), Delete to remove. Double-click a label to edit it."

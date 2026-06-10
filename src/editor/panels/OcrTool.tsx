@@ -12,8 +12,12 @@
 // (OcrPreview, rendered by EditorShell when this tool has an extraction); the
 // Panel owns the language picker + the two actions.
 //
-// Desktop-only: the OCR engine + page rasterisation need more memory than a
-// phone provides, mirroring the standalone OCR tool's `desktopOnly` flag.
+// Runs on mobile too (enabled by request): the recognised-text/page preview
+// fills the canvas area above the tool sheet, and the Extract / Make-searchable
+// actions live in the sheet. The OCR engine + page rasterisation are memory-
+// hungry, so a very large scanned PDF can still strain a low-RAM phone — that
+// trade-off was accepted deliberately (the standalone OCR card stays desktop-
+// only via its own `desktopOnly` flag).
 
 import { Loader2, ScanText } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -128,7 +132,7 @@ export function OcrPreview() {
 
 // ── Panel: language + extract + make searchable ──────────────────────
 export function Panel() {
-  const { doc, busyLabel, layout: screen } = useEditorRead();
+  const { doc, busyLabel } = useEditorRead();
   const { applyTransform, patchToolState } = useEditorActions();
   const slice = useToolSlice(OCR_ID);
   const language = (slice.language as string) ?? "auto";
@@ -140,19 +144,6 @@ export function Panel() {
   const [extracting, setExtracting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const busy = busyLabel !== null;
-
-  if (screen === "mobile") {
-    return (
-      <div className="flex flex-col gap-2">
-        <p className="text-sm text-slate-500 dark:text-dark-text-muted">
-          OCR runs a text-recognition engine on-device and needs more memory than a phone provides.
-        </p>
-        <p className="text-sm text-slate-500 dark:text-dark-text-muted">
-          Open this PDF on a desktop to make it searchable.
-        </p>
-      </div>
-    );
-  }
 
   const extract = () => {
     if (!doc) return;

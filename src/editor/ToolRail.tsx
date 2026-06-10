@@ -14,7 +14,7 @@ export const ToolRail = memo(function ToolRail() {
   const groups = editorToolGroups();
 
   return (
-    <div className="thin-scrollbar flex w-18 shrink-0 flex-col overflow-y-auto border-r border-slate-200/70 dark:border-dark-border px-1 py-2">
+    <div className="no-scrollbar flex w-18 shrink-0 flex-col overflow-y-auto border-r border-slate-200/70 dark:border-dark-border py-2 pr-1 pl-0">
       {groups.map((group, gi) => (
         <div key={group.group} className="flex flex-col">
           {gi > 0 && <div className="mx-3 my-1.5 h-px bg-slate-200/70 dark:bg-dark-border" />}
@@ -50,7 +50,7 @@ export const ToolRail = memo(function ToolRail() {
                 {active && (
                   <span
                     aria-hidden="true"
-                    className="absolute top-[18%] left-0.5 bottom-[18%] w-[2.5px] rounded-r-sm bg-primary-500"
+                    className="absolute top-[18%] left-0 bottom-[18%] w-0.75 rounded-r-sm bg-primary-500"
                   />
                 )}
               </button>

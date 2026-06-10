@@ -15,6 +15,7 @@ import { addPdfBookmarks } from "../../utils/pdf-operations.ts";
 import { detectHeadings, extractLayout } from "../../utils/layout-extract.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 import { Toggle } from "./controls.tsx";
 
 interface Row {
@@ -205,14 +206,11 @@ export function Panel() {
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={apply}
-        disabled={busy || detecting || validCount === 0}
-        className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-      >
-        {busy ? "Working…" : `Add ${validCount} bookmark${validCount === 1 ? "" : "s"}`}
-      </button>
+      <PrimaryAction
+        label={`Add ${validCount} bookmark${validCount === 1 ? "" : "s"}`}
+        onApply={apply}
+        disabled={detecting || validCount === 0}
+      />
     </div>
   );
 }

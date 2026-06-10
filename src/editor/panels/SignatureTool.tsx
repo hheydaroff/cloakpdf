@@ -14,6 +14,7 @@ import { ColorPicker } from "../../components/ColorPicker.tsx";
 import { SignaturePad } from "../../components/SignaturePad.tsx";
 import { addSignature } from "../../utils/pdf-operations.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 import { useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
 import { RangeField } from "./controls.tsx";
@@ -360,14 +361,11 @@ export function Panel() {
         </button>
       )}
 
-      <button
-        type="button"
-        onClick={apply}
+      <PrimaryAction
+        label={`Apply signature${count === 1 ? "" : "s"}`}
+        onApply={apply}
         disabled={count === 0}
-        className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-      >
-        Apply signature{count === 1 ? "" : "s"}
-      </button>
+      />
       <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         Signatures embed as images — the page text underneath stays selectable.
       </p>

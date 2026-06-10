@@ -22,6 +22,7 @@ import {
 import { type Annotation, annotatePdf } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 import { useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
 import { ColorRow, Labeled, type Rgb } from "./controls.tsx";
@@ -110,7 +111,7 @@ export function Stage() {
 }
 
 export function Panel() {
-  const { doc, busyLabel } = useEditorRead();
+  const { doc } = useEditorRead();
   const { patchToolState, applyTransform, setSelectedPage, setViewMode } = useEditorActions();
   const slice = readSlice(useToolSlice(TOOL_ID));
   const {
@@ -136,7 +137,6 @@ export function Panel() {
   // edits / option toggles re-match without re-OCRing the same file.
   const geomRef = useRef<{ key: Uint8Array; pages: LayoutPage[]; scanned: boolean } | null>(null);
 
-  const busy = busyLabel !== null;
   const enabled = matches.filter((m) => m.on);
   const pagesHit = new Set(matches.map((m) => m.pageIndex)).size;
 
@@ -466,16 +466,12 @@ export function Panel() {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={apply}
-                  disabled={busy || enabled.length === 0}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 transition-colors disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-                >
-                  {busy
-                    ? "Working…"
-                    : `${mode === "highlight" ? "Highlight" : "Box"} ${enabled.length}`}
-                </button>
+                <PrimaryAction
+                  label={`${mode === "highlight" ? "Highlight" : "Box"} ${enabled.length}`}
+                  onApply={apply}
+                  disabled={enabled.length === 0}
+                  className="flex-1"
+                />
                 <button
                   type="button"
                   onClick={clearAll}

@@ -31,6 +31,7 @@ import { getPdfInfo, getPdfMetadata, setPdfMetadata } from "../../utils/pdf-oper
 import type { PdfInfo } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 import { Labeled, TextField } from "./controls.tsx";
 
 function DateField({
@@ -105,7 +106,7 @@ function pageSizeLabel(pages: PdfInfo["pages"]): string | null {
 }
 
 export function Panel() {
-  const { doc, busyLabel } = useEditorRead();
+  const { doc } = useEditorRead();
   const { applyTransform } = useEditorActions();
   const [fields, setFields] = useState<PdfMetadata | null>(null);
   const [info, setInfo] = useState<PdfInfo | null>(null);
@@ -143,7 +144,6 @@ export function Panel() {
   }
 
   const set = (key: keyof PdfMetadata, value: string) => setFields({ ...fields, [key]: value });
-  const busy = busyLabel !== null;
   const pageSize = info ? pageSizeLabel(info.pages) : null;
 
   const apply = () =>
@@ -223,14 +223,7 @@ export function Panel() {
       </div>
 
       <div className="mt-1 flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={apply}
-          disabled={busy}
-          className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-        >
-          {busy ? "Working…" : "Save metadata"}
-        </button>
+        <PrimaryAction label="Save metadata" onApply={apply} />
         <button
           type="button"
           onClick={() => setFields({ ...EMPTY })}

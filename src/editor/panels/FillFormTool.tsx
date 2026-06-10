@@ -11,6 +11,7 @@ import { Select } from "../../components/Select.tsx";
 import { fillPdfForm, getFieldPageIndices } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead } from "../EditorContext.tsx";
+import { PrimaryAction } from "./PrimaryAction.tsx";
 import { Labeled, Toggle } from "./controls.tsx";
 
 type FieldType = "text" | "checkbox" | "dropdown" | "radio";
@@ -77,7 +78,7 @@ const INPUT_CLS =
   "w-full rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500";
 
 export function Panel() {
-  const { doc, busyLabel } = useEditorRead();
+  const { doc } = useEditorRead();
   const { applyTransform } = useEditorActions();
   const [fields, setFields] = useState<FieldInfo[] | null>(null);
   const [values, setValues] = useState<Record<string, string | boolean>>({});
@@ -115,7 +116,6 @@ export function Panel() {
     );
   }
 
-  const busy = busyLabel !== null;
   const set = (name: string, v: string | boolean) => setValues((prev) => ({ ...prev, [name]: v }));
 
   const apply = () =>
@@ -178,14 +178,7 @@ export function Panel() {
         checked={flatten}
         onChange={setFlatten}
       />
-      <button
-        type="button"
-        onClick={apply}
-        disabled={busy}
-        className="inline-flex items-center justify-center rounded-lg bg-primary-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
-      >
-        {busy ? "Working…" : flatten ? "Fill & flatten" : "Fill form"}
-      </button>
+      <PrimaryAction label={flatten ? "Fill & flatten" : "Fill form"} onApply={apply} />
     </div>
   );
 }
