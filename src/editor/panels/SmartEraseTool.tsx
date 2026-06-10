@@ -13,12 +13,12 @@
 // are captured onto each region when it's drawn.
 
 import { Trash2 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { EraseMode } from "../../utils/pdf-operations.ts";
 import { type ErasePayload } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
 import { drawEraseMark } from "../overlay-paint.ts";
-import { useStageProps } from "../stage.tsx";
+import { type StagePoint, useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
 import { Labeled } from "./controls.tsx";
 import { Segmented } from "./WholeDocPanel.tsx";
@@ -49,6 +49,27 @@ export function Stage() {
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState<FractionRect | null>(null);
 
+  // rAF-coalesce the in-progress drag box (see RedactTool for the rationale): at
+  // most one setBox → one overlay repaint per frame regardless of pointer Hz.
+  const pendingRef = useRef<FractionRect | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const scheduleBox = useCallback((r: FractionRect) => {
+    pendingRef.current = r;
+    if (frameRef.current != null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      if (pendingRef.current) setBox(pendingRef.current);
+    });
+  }, []);
+  const cancelFrame = useCallback(() => {
+    if (frameRef.current != null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingRef.current = null;
+  }, []);
+  useEffect(() => cancelFrame, [cancelFrame]);
+
   // Committed regions paint as the PdfStage base layer; here we draw only the
   // in-progress drag box.
   const paintOverlay = useCallback(
@@ -58,25 +79,27 @@ export function Stage() {
     [box],
   );
 
-  useStageProps({
-    cursor: "crosshair",
-    paintOverlay,
-    onPointerDown: (p) => {
-      startRef.current = { x: p.xPct, y: p.yPct };
-    },
-    onPointerMove: (p) => {
+  const onPointerDown = useCallback((p: StagePoint) => {
+    startRef.current = { x: p.xPct, y: p.yPct };
+  }, []);
+  const onPointerMove = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       if (!s) return;
-      setBox({
+      scheduleBox({
         xPct: Math.min(s.x, p.xPct),
         yPct: Math.min(s.y, p.yPct),
         wPct: Math.abs(p.xPct - s.x),
         hPct: Math.abs(p.yPct - s.y),
       });
     },
-    onPointerUp: (p) => {
+    [scheduleBox],
+  );
+  const onPointerUp = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       startRef.current = null;
+      cancelFrame();
       setBox(null);
       if (!s) return;
       const rect: FractionRect = {
@@ -90,10 +113,21 @@ export function Stage() {
         addObject({ kind: "erase", pageIndex: selectedPage, rect, payload });
       }
     },
-    onPointerCancel: () => {
-      startRef.current = null;
-      setBox(null);
-    },
+    [addObject, selectedPage, mode, coarseness, cancelFrame],
+  );
+  const onPointerCancel = useCallback(() => {
+    startRef.current = null;
+    cancelFrame();
+    setBox(null);
+  }, [cancelFrame]);
+
+  useStageProps({
+    cursor: "crosshair",
+    paintOverlay,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
   });
 
   return null;
@@ -196,7 +230,7 @@ export function Panel() {
         </div>
       )}
 
-      <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+      <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         Fill matches a solid surrounding colour; for textured areas or faces, use Pixelate. Erased
         pages are flattened to images on export, so the covered content is permanently removed.
       </p>

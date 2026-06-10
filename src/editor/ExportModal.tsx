@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useFocusTrap } from "../utils/useFocusTrap";
 import { createPortal } from "react-dom";
 import { downloadBlob, downloadPdf, pdfFilename } from "../utils/file-helpers.ts";
 import {
@@ -87,7 +88,7 @@ function FormatCard({
       aria-checked={selected}
       aria-label={label}
       onClick={onSelect}
-      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+      className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[color,background-color,border-color,transform] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
         selected
           ? "border-primary-500 bg-primary-50 ring-1 ring-primary-500 dark:border-primary-500 dark:bg-primary-900/20"
           : "border-slate-200 bg-white hover:border-primary-300 hover:bg-slate-50 dark:border-dark-border dark:bg-dark-surface dark:hover:border-primary-700 dark:hover:bg-dark-surface-alt"
@@ -132,7 +133,7 @@ function Switch({
       aria-checked={checked}
       aria-label={label}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
+      className={`relative h-6 w-11 shrink-0 rounded-full transition-[color,background-color,transform] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 ${
         checked ? "bg-primary-600" : "bg-slate-300 dark:bg-dark-border"
       }`}
     >
@@ -215,6 +216,9 @@ export function ExportButton() {
 
   const busy = busyLabel !== null;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  // Trap Tab within the dialog + restore focus to the Export trigger on close.
+  useFocusTrap(dialogRef, open);
 
   // Scroll-lock + Escape while open. Mirrors the app's modal idiom.
   useEffect(() => {
@@ -391,6 +395,7 @@ export function ExportButton() {
       {open &&
         createPortal(
           <div
+            ref={dialogRef}
             className="fixed inset-0 z-200 flex items-end justify-center sm:items-center sm:px-3 md:px-6"
             role="dialog"
             aria-modal="true"
@@ -411,7 +416,7 @@ export function ExportButton() {
                     Export
                   </h2>
                   {doc && (
-                    <p className="truncate text-xs text-slate-400 dark:text-dark-text-muted">
+                    <p className="truncate text-xs text-slate-500 dark:text-dark-text-muted">
                       {doc.fileName} · {doc.pageCount} {doc.pageCount === 1 ? "page" : "pages"}
                     </p>
                   )}

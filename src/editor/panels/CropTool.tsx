@@ -7,12 +7,12 @@
 // trim is non-destructive (hidden content stays in the file). Reuses the crop
 // geometry the standalone Crop Pages tool proved. See REDESIGN.md.
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CropMargins } from "../../types.ts";
 import { cropPagesIndividual } from "../../utils/pdf-operations.ts";
 import { docToFile } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
-import { useStageProps } from "../stage.tsx";
+import { type StagePoint, useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
 import { Labeled } from "./controls.tsx";
 import { Segmented, WholeDocPanel } from "./WholeDocPanel.tsx";
@@ -27,6 +27,26 @@ export function Stage() {
 
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const [draft, setDraft] = useState<FractionRect | null>(null);
+
+  // rAF-coalesce the in-progress keep rect (see RedactTool for rationale).
+  const pendingRef = useRef<FractionRect | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const scheduleDraft = useCallback((r: FractionRect) => {
+    pendingRef.current = r;
+    if (frameRef.current != null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      if (pendingRef.current) setDraft(pendingRef.current);
+    });
+  }, []);
+  const cancelFrame = useCallback(() => {
+    if (frameRef.current != null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingRef.current = null;
+  }, []);
+  useEffect(() => cancelFrame, [cancelFrame]);
 
   const paintOverlay = useCallback(
     (ctx: CanvasRenderingContext2D, w: number, h: number) => {
@@ -51,26 +71,28 @@ export function Stage() {
     [draft, keep],
   );
 
-  useStageProps({
-    cursor: "crosshair",
-    paintOverlay,
-    onPointerDown: (p) => {
-      startRef.current = { x: p.xPct, y: p.yPct };
-      setDraft({ xPct: p.xPct, yPct: p.yPct, wPct: 0, hPct: 0 });
-    },
-    onPointerMove: (p) => {
+  const onPointerDown = useCallback((p: StagePoint) => {
+    startRef.current = { x: p.xPct, y: p.yPct };
+    setDraft({ xPct: p.xPct, yPct: p.yPct, wPct: 0, hPct: 0 });
+  }, []);
+  const onPointerMove = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       if (!s) return;
-      setDraft({
+      scheduleDraft({
         xPct: Math.min(s.x, p.xPct),
         yPct: Math.min(s.y, p.yPct),
         wPct: Math.abs(p.xPct - s.x),
         hPct: Math.abs(p.yPct - s.y),
       });
     },
-    onPointerUp: (p) => {
+    [scheduleDraft],
+  );
+  const onPointerUp = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       startRef.current = null;
+      cancelFrame();
       setDraft(null);
       if (!s) return;
       const rect: FractionRect = {
@@ -81,10 +103,21 @@ export function Stage() {
       };
       if (rect.wPct > 0.02 && rect.hPct > 0.02) patchToolState(TOOL_ID, { keep: rect });
     },
-    onPointerCancel: () => {
-      startRef.current = null;
-      setDraft(null);
-    },
+    [cancelFrame, patchToolState],
+  );
+  const onPointerCancel = useCallback(() => {
+    startRef.current = null;
+    cancelFrame();
+    setDraft(null);
+  }, [cancelFrame]);
+
+  useStageProps({
+    cursor: "crosshair",
+    paintOverlay,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
   });
 
   return null;
@@ -158,7 +191,7 @@ export function Panel() {
         )}
       </div>
 
-      <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+      <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         Cropping is non-destructive — hidden content stays in the file but won't print. Rotated
         pages are skipped.
       </p>

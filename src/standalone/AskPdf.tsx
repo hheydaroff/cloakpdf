@@ -24,7 +24,7 @@ import {
   Sparkles,
   User,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ActiveModelBar } from "../components/ActiveModelBar.tsx";
@@ -80,6 +80,13 @@ export default function AskPdf() {
   const rag = useRagModels();
 
   const sessionRef = useRef<RagSession | null>(null);
+  // Token-stream coalescing: tokens arrive faster than a frame; buffer the
+  // deltas and flush to React state at most once per animation frame so the
+  // transcript re-renders (and the smooth-scroll effect re-fires) ~60×/s instead
+  // of once per token. The final answer is written authoritatively after the
+  // stream resolves, so the buffered tail is then dropped.
+  const pendingDeltaRef = useRef("");
+  const tokenRafRef = useRef<number | null>(null);
 
   const pdf = usePdfFile({
     onReset: () => {
@@ -163,7 +170,13 @@ export default function AskPdf() {
    * writing into a component that's gone. interrupt() stops both at once.
    */
   useEffect(() => {
-    return () => sessionRef.current?.interrupt();
+    return () => {
+      sessionRef.current?.interrupt();
+      if (tokenRafRef.current !== null) {
+        cancelAnimationFrame(tokenRafRef.current);
+        tokenRafRef.current = null;
+      }
+    };
   }, []);
 
   /**
@@ -199,7 +212,13 @@ export default function AskPdf() {
         throw e;
       }
     }, "Failed to index the PDF. Please try again.");
-  }, [pdf.file, rag.status, rag, task, isIndexing, scannedHint]);
+    // Depend on the specific stable values the effect reads — not the whole
+    // `rag`/`task` objects, which get new identities on every streaming-token
+    // render and would otherwise re-evaluate this expensive effect needlessly.
+    // `rag.ensureReady`/`task.run` are useCallback-stable, `rag.chat.info` is
+    // registry-derived (stable per chatModelId), and the in-body guard still
+    // short-circuits when a session exists / is indexing / scanned.
+  }, [pdf.file, rag.status, rag.ensureReady, rag.chat.info, task.run, isIndexing, scannedHint]);
 
   const handleAsk = useCallback(async () => {
     if (!pdf.file || !sessionRef.current) return;
@@ -216,15 +235,33 @@ export default function AskPdf() {
     ]);
     setQuestion("");
 
+    const flushDeltas = () => {
+      tokenRafRef.current = null;
+      const delta = pendingDeltaRef.current;
+      if (!delta) return;
+      pendingDeltaRef.current = "";
+      setTurns((prev) =>
+        prev.map((t) => (t.id === assistantId ? { ...t, content: t.content + delta } : t)),
+      );
+    };
+
     await task.run(async () => {
       const result = await session.ask({
         question: q,
         onToken: (delta) => {
-          setTurns((prev) =>
-            prev.map((t) => (t.id === assistantId ? { ...t, content: t.content + delta } : t)),
-          );
+          pendingDeltaRef.current += delta;
+          if (tokenRafRef.current === null) {
+            tokenRafRef.current = requestAnimationFrame(flushDeltas);
+          }
         },
       });
+      // The final setTurns below writes the authoritative full answer, so cancel
+      // any queued frame and drop the buffered tail to avoid a double-append.
+      if (tokenRafRef.current !== null) {
+        cancelAnimationFrame(tokenRafRef.current);
+        tokenRafRef.current = null;
+      }
+      pendingDeltaRef.current = "";
       setTurns((prev) =>
         prev.map((t) =>
           t.id === assistantId
@@ -246,6 +283,13 @@ export default function AskPdf() {
   // On task error, mark any streaming assistant turn as failed.
   useEffect(() => {
     if (!task.error) return;
+    // Drop any queued token frame so a stray flush can't re-add content to the
+    // turn we're about to clear.
+    if (tokenRafRef.current !== null) {
+      cancelAnimationFrame(tokenRafRef.current);
+      tokenRafRef.current = null;
+    }
+    pendingDeltaRef.current = "";
     setTurns((prev) =>
       prev.map((t) => (t.streaming ? { ...t, content: "", streaming: false } : t)),
     );
@@ -436,6 +480,7 @@ export default function AskPdf() {
                   onKeyDown={onKeyDown}
                   onSubmit={handleAsk}
                   disabled={task.processing || !sessionReady}
+                  inputDisabled={!sessionReady}
                   placeholder="Ask something about this PDF…"
                   busyLabel={task.processing ? "Thinking…" : "Preparing…"}
                 />
@@ -805,7 +850,11 @@ function AssistantMarkdown({ content }: { content: string }) {
   );
 }
 
-function Bubble({ turn }: { turn: ChatTurn }) {
+// memo so only the bubble whose object identity changed re-renders. Each token
+// rebuilds just the in-flight assistant turn (setTurns maps a new object for
+// that id only); every finished bubble keeps its reference and is skipped —
+// turning a per-token "re-render the whole transcript" into "re-render one node".
+const Bubble = memo(function Bubble({ turn }: { turn: ChatTurn }) {
   const isUser = turn.role === "user";
   return (
     // `data-bubble` is the stable hook the e2e probe uses to count
@@ -851,6 +900,13 @@ function Bubble({ turn }: { turn: ChatTurn }) {
           // verbatim). Whitespace-pre-wrap keeps any line breaks
           // the user typed with Shift+Enter.
           <p className="whitespace-pre-wrap wrap-anywhere">{turn.content}</p>
+        ) : turn.streaming ? (
+          // While streaming, render the partial answer as plain text. Re-running
+          // the full remark-gfm + rehype markdown parse on every token is
+          // O(tokens × length) of wasted main-thread work; the final frame
+          // (streaming=false, below) renders markdown — which is what the e2e
+          // probe asserts on.
+          <p className="whitespace-pre-wrap wrap-anywhere">{turn.content}</p>
         ) : (
           // Assistant turns are markdown — the prompt allows the model
           // to use lists, headings, bold, and code spans when the
@@ -866,7 +922,7 @@ function Bubble({ turn }: { turn: ChatTurn }) {
           />
         )}
         {!isUser && turn.citedPages && turn.citedPages.length > 0 && !turn.streaming && (
-          <p className="mt-2 pt-2 border-t border-slate-100 dark:border-dark-border/60 text-xs text-slate-400 dark:text-dark-text-muted">
+          <p className="mt-2 pt-2 border-t border-slate-100 dark:border-dark-border/60 text-xs text-slate-500 dark:text-dark-text-muted">
             Context from {turn.citedPages.length === 1 ? "page" : "pages"}{" "}
             {turn.citedPages.join(", ")}
           </p>
@@ -874,7 +930,7 @@ function Bubble({ turn }: { turn: ChatTurn }) {
       </div>
     </div>
   );
-}
+});
 
 function Composer({
   value,
@@ -882,6 +938,7 @@ function Composer({
   onKeyDown,
   onSubmit,
   disabled,
+  inputDisabled,
   placeholder,
   busyLabel,
 }: {
@@ -889,7 +946,13 @@ function Composer({
   onChange: (next: string) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: () => void;
+  /** Gates the Send button + busy label (true while streaming OR not ready). */
   disabled: boolean;
+  /** Gates only the textarea's editability (true only when the session isn't
+   *  ready). Kept separate from `disabled` so the user can keep typing their
+   *  next question while the current answer streams — the single-flight guard
+   *  still prevents sending until streaming finishes. */
+  inputDisabled: boolean;
   placeholder?: string;
   busyLabel?: string;
 }) {
@@ -908,7 +971,7 @@ function Composer({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
-        disabled={disabled}
+        disabled={inputDisabled}
         aria-label="Ask a question about this PDF"
         placeholder={placeholder ?? "Ask something about this PDF…"}
         rows={2}
@@ -921,7 +984,7 @@ function Composer({
         className="thin-scrollbar w-full resize-none bg-transparent text-sm text-slate-800 dark:text-dark-text placeholder-slate-500 dark:placeholder-dark-text-muted focus-visible:outline-none disabled:opacity-50"
       />
       <div className="flex items-center justify-between gap-3 mt-2 pt-2 border-t border-slate-100 dark:border-dark-border/60">
-        <p className="text-xs text-slate-400 dark:text-dark-text-muted hidden sm:block">
+        <p className="text-xs text-slate-500 dark:text-dark-text-muted hidden sm:block">
           Press{" "}
           <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted font-mono">
             Enter

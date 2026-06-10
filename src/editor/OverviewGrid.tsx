@@ -3,10 +3,11 @@
 // editing (reorder / rotate / delete / extract) lands in M2 with the
 // organize-pages tool; M0 ships read-only browse + jump-to-focus.
 
-import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { useEditorActions, useEditorRead, useEditorView } from "./EditorContext.tsx";
 
 export function OverviewGrid() {
-  const { doc, selectedPage, view } = useEditorRead();
+  const { doc, selectedPage } = useEditorRead();
+  const view = useEditorView();
   const { setSelectedPage, setViewMode } = useEditorActions();
 
   if (!doc) return null;

@@ -18,13 +18,15 @@ import {
   Maximize2,
   Redo2,
   RotateCcw,
+  ShieldAlert,
   Square,
   Undo2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { PagePreviewNav } from "../components/PagePreviewNav.tsx";
-import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { countPendingDestructive } from "./doc.ts";
+import { useEditorActions, useEditorRead, useEditorView } from "./EditorContext.tsx";
 import { ExportButton } from "./ExportModal.tsx";
 import { DEFAULT_VIEW } from "./types.ts";
 
@@ -55,15 +57,27 @@ const ZOOM_BTN =
   "flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-dark-text-muted dark:hover:bg-dark-surface-alt dark:hover:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500";
 
 export function EditorTopBar() {
-  const { doc, viewMode, view, selectedPage, canUndo, canRedo, canReset, layout } = useEditorRead();
+  const { doc, viewMode, selectedPage, canUndo, canRedo, canReset, layout } = useEditorRead();
+  const view = useEditorView();
   const { exit, setViewMode, setView, setSelectedPage, undo, redo, reset } = useEditorActions();
   const isMobile = layout === "mobile";
   const isDesktop = layout === "desktop";
 
+  // Icon buttons get a 44px hit area on mobile (touch), keeping the dense 36px
+  // glyph box on desktop where a mouse is precise and the bar is height-limited.
+  const iconBtn = isMobile ? ICON_BTN.replace("h-9 w-9", "h-11 w-11") : ICON_BTN;
+
+  // Redaction / erase marks are burned in at export, not at Apply — surface a
+  // persistent count so the un-applied destructive state is visible no matter
+  // which tool is active (or none).
+  const pendingMarks = countPendingDestructive(doc);
+
   const zoomPct = Math.round(view.zoom * 100);
 
   // Density: 1 column === focus (single editable page); >1 === overview grid.
-  const activeCols = viewMode === "focus" ? 1 : view.gridCols;
+  // Clamp to the 1–3 segments the toggle renders so the sliding indicator can
+  // never translate past the last segment if gridCols is ever set out of range.
+  const activeCols = Math.min(3, Math.max(1, viewMode === "focus" ? 1 : view.gridCols));
   const setDensity = (cols: number) => {
     if (cols === 1) {
       setViewMode("focus");
@@ -201,7 +215,7 @@ export function EditorTopBar() {
     >
       {/* LEFT zone */}
       <div className="flex min-w-0 items-center gap-2">
-        <button type="button" onClick={exit} className={ICON_BTN} aria-label="Back to home">
+        <button type="button" onClick={exit} className={iconBtn} aria-label="Back to home">
           <ChevronLeft className="h-5 w-5" />
         </button>
 
@@ -223,7 +237,7 @@ export function EditorTopBar() {
             <span className="max-w-50 truncate text-sm font-medium text-slate-700 dark:text-dark-text">
               {doc.fileName}
             </span>
-            <span className="text-xs tabular-nums text-slate-400 dark:text-dark-text-muted">
+            <span className="text-xs tabular-nums text-slate-500 dark:text-dark-text-muted">
               · {doc.pageCount} {doc.pageCount === 1 ? "page" : "pages"}
             </span>
           </div>
@@ -245,13 +259,29 @@ export function EditorTopBar() {
       </div>
 
       {/* RIGHT zone */}
-      <div className="flex items-center justify-self-end">
+      <div className="flex items-center justify-self-end gap-1">
+        {pendingMarks > 0 && (
+          <div
+            role="status"
+            title={`${pendingMarks} redaction/erase ${
+              pendingMarks === 1 ? "mark" : "marks"
+            } pending — burned into the file when you export`}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+          >
+            <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="tabular-nums">{pendingMarks}</span>
+            <span className="hidden sm:inline">pending</span>
+            <span className="sr-only">
+              {pendingMarks === 1 ? "mark" : "marks"} pending, applied when you export
+            </span>
+          </div>
+        )}
         <div className="flex items-center">
           <button
             type="button"
             onClick={undo}
             disabled={!canUndo}
-            className={ICON_BTN}
+            className={iconBtn}
             aria-label="Undo"
           >
             <Undo2 className="h-5 w-5" />
@@ -260,17 +290,20 @@ export function EditorTopBar() {
             type="button"
             onClick={redo}
             disabled={!canRedo}
-            className={ICON_BTN}
+            className={iconBtn}
             aria-label="Redo"
           >
             <Redo2 className="h-5 w-5" />
           </button>
+          {/* Reset stays desktop-only: a 4th 44px button would crowd the
+              mobile centre stepper off-screen on 320px phones. Mobile reach to
+              "reset to original" is a tracked follow-up (overflow menu). */}
           {!isMobile && (
             <button
               type="button"
               onClick={reset}
               disabled={!canReset}
-              className={ICON_BTN}
+              className={iconBtn}
               aria-label="Reset to original"
             >
               <RotateCcw className="h-5 w-5" />

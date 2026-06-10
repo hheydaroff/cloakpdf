@@ -9,7 +9,7 @@
 // also flips the document to open its bookmarks panel by default. Panel-only
 // (no canvas interaction); identical on desktop + mobile.
 
-import { ListTree, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ChevronDown, ListTree, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { addPdfBookmarks } from "../../utils/pdf-operations.ts";
 import { detectHeadings, extractLayout } from "../../utils/layout-extract.ts";
@@ -147,9 +147,10 @@ export function Panel() {
               disabled={detecting}
               aria-label={`Nesting level ${r.level} — change`}
               title="Nesting level (H1 / H2 / H3)"
-              className="w-8 shrink-0 rounded-md border border-slate-200 dark:border-dark-border py-1.5 text-xs font-medium tabular-nums text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              className="inline-flex w-12 min-h-11 shrink-0 items-center justify-center gap-0.5 rounded-md border border-slate-200 dark:border-dark-border py-1.5 text-xs font-medium tabular-nums text-slate-500 dark:text-dark-text-muted hover:border-primary-400 hover:text-primary-600 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               H{r.level}
+              <ChevronDown className="h-3 w-3 opacity-60" />
             </button>
             <input
               type="text"
@@ -157,7 +158,7 @@ export function Panel() {
               placeholder="Bookmark title"
               onChange={(e) => update(r.id, { title: e.target.value })}
               disabled={detecting}
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              className="min-w-0 min-h-11 flex-1 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-1.5 text-sm text-slate-800 dark:text-dark-text disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             />
             <input
               type="number"
@@ -167,14 +168,14 @@ export function Panel() {
               aria-label="Target page"
               onChange={(e) => update(r.id, { page: e.target.value })}
               disabled={detecting}
-              className="w-14 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2 py-1.5 text-sm tabular-nums text-slate-800 dark:text-dark-text disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              className="w-16 min-h-11 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2 py-1.5 text-sm tabular-nums text-slate-800 dark:text-dark-text disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             />
             <button
               type="button"
               onClick={() => remove(r.id)}
               disabled={detecting}
               aria-label="Remove bookmark"
-              className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              className="min-h-11 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-red-600 disabled:opacity-50 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -197,7 +198,7 @@ export function Panel() {
           <ListTree className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" />
           <div className="flex-1">
             <Toggle label="Add a contents page" checked={contentsPage} onChange={setContentsPage} />
-            <p className="mt-1 text-xs text-slate-400 dark:text-dark-text-muted">
+            <p className="mt-1 text-xs text-slate-500 dark:text-dark-text-muted">
               Inserts a clickable Table of Contents at the front, nested by level.
             </p>
           </div>

@@ -122,7 +122,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 href={REPO_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-slate-400 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text transition-colors duration-200"
+                className="text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text transition-colors duration-200"
                 aria-label="View source on GitHub"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -190,7 +190,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <pre className="whitespace-pre-wrap text-xs bg-slate-50 dark:bg-dark-bg border border-slate-200 dark:border-dark-border rounded-lg p-3 text-slate-700 dark:text-dark-text font-mono overflow-x-auto thin-scrollbar max-h-40">
                 {error.message}
               </pre>
-              <p className="mt-2 text-tag text-slate-400 dark:text-dark-text-muted">
+              <p className="mt-2 text-tag text-slate-500 dark:text-dark-text-muted">
                 CloakPDF {__APP_VERSION__} · {new Date().toLocaleString()}
               </p>
             </section>
@@ -234,7 +234,7 @@ export class ErrorBoundary extends Component<Props, State> {
         </main>
 
         <footer className="border-t border-slate-200/60 dark:border-dark-border">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-center gap-2 flex-wrap text-tag text-slate-400 dark:text-dark-text-muted">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-center gap-2 flex-wrap text-tag text-slate-500 dark:text-dark-text-muted">
             <span>© {new Date().getFullYear()} CloakPDF by Sumit Sahoo</span>
             <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
               ·

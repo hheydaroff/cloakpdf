@@ -16,7 +16,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useEditorActions, useEditorRead } from "./EditorContext.tsx";
+import { useEditorActions, useEditorRead, useEditorView } from "./EditorContext.tsx";
 import { paintDestructiveMarks } from "./overlay-paint.ts";
 import {
   type InlineEditorDescriptor,
@@ -174,7 +174,8 @@ function InlineTextEditor({
 }
 
 export function PdfStage() {
-  const { doc, selectedPage, view } = useEditorRead();
+  const { doc, selectedPage } = useEditorRead();
+  const view = useEditorView();
   const { setView } = useEditorActions();
   const stageProps = useActiveStageProps();
   const inlineEditor = useActiveInlineEditor();
@@ -182,6 +183,7 @@ export function PdfStage() {
   // input) must not start a pan/draw/select; it only blurs (commits) the editor.
   const editorOpen = inlineEditor != null && inlineEditor.pageIndex === selectedPage;
 
+  const stageRef = useRef<HTMLDivElement>(null);
   const availRef = useRef<HTMLDivElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -204,10 +206,11 @@ export function PdfStage() {
 
   // Coalesce pan / pinch / wheel view updates into one setView per animation
   // frame. High-Hz pointermove/wheel events otherwise call setView many times a
-  // frame, and since `view` lives in the shared read-context every call re-renders
-  // the whole editor (top bar + properties/tool panel). Folding the queued
-  // updaters keeps both absolute (pan/pinch) and multiplicative (wheel) updates
-  // correct — the last absolute update wins, multiplicative ones accumulate.
+  // frame; `view` lives in its own ViewCtx so each setView re-renders only the
+  // stage / top bar / page grids (not every panel), and rAF folding keeps that to
+  // once per frame. Folding the queued updaters keeps both absolute (pan/pinch)
+  // and multiplicative (wheel) updates correct — the last absolute update wins,
+  // multiplicative ones accumulate.
   const frameRef = useRef<number | null>(null);
   const pendingRef = useRef<Array<(v: ViewState) => ViewState>>([]);
   const scheduleView = useCallback(
@@ -290,14 +293,26 @@ export function PdfStage() {
     stageProps.paintOverlay?.(ctx, width, height, selectedPage);
   }, [stageProps, selectedPage, doc?.objects]);
 
+  // Always call the freshest repaint without re-subscribing the observer.
+  const repaintRef = useRef(repaint);
+  repaintRef.current = repaint;
+
+  // (a) Repaint whenever the paint inputs change (draft box, tool overlay, marks).
   useEffect(() => {
     repaint();
+  }, [repaint]);
+
+  // (b) Observe the overlay wrap ONCE for the component's lifetime — keyed on
+  // nothing, so a new box / page switch / tool switch never tears down and
+  // recreates the ResizeObserver. It always fires the latest repaint via the ref,
+  // which reads wrap.getBoundingClientRect() fresh, preserving the zoom/DPR resync.
+  useEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
-    const ro = new ResizeObserver(repaint);
+    const ro = new ResizeObserver(() => repaintRef.current());
     ro.observe(wrap);
     return () => ro.disconnect();
-  }, [repaint]);
+  }, []);
 
   const toPoint = useCallback(
     (e: ReactPointerEvent<HTMLElement>): StagePoint => {
@@ -416,16 +431,23 @@ export function PdfStage() {
     [hasToolPointer, stageProps, toPoint],
   );
 
-  // Ctrl/Cmd + wheel zooms; clamped to a sane range.
-  const onWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Ctrl/Cmd + wheel zooms; clamped to a sane range. Attached as a NON-passive
+  // native listener — React's onWheel binds at the passive root, where
+  // preventDefault() is ignored, so the browser's own Ctrl/Cmd+wheel page-zoom
+  // would fire alongside ours. A native { passive: false } listener lets the
+  // preventDefault actually suppress it.
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
       scheduleView((prev) => ({ ...prev, zoom: Math.min(8, Math.max(0.2, prev.zoom * factor)) }));
-    },
-    [scheduleView],
-  );
+    };
+    el.addEventListener("wheel", handler, { passive: false });
+    return () => el.removeEventListener("wheel", handler);
+  }, [scheduleView]);
 
   if (!page) return <div className="flex min-h-0 flex-1" />;
 
@@ -437,8 +459,8 @@ export function PdfStage() {
 
   return (
     <div
+      ref={stageRef}
       className="relative flex min-h-0 flex-1 overflow-hidden bg-slate-100 dark:bg-dark-bg p-4 sm:p-8"
-      onWheel={onWheel}
     >
       <div ref={availRef} className="relative flex h-full w-full items-center justify-center">
         <div

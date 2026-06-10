@@ -317,58 +317,64 @@ export default function DigitalSignature() {
                   key={`sig-${sig.signerName || "unknown"}-${sig.date || "nodate"}-${sig.filter}-${sig.subFilter}`}
                   className="bg-primary-50/60 dark:bg-primary-900/10 rounded-xl border border-primary-200 dark:border-primary-700/40 p-4"
                 >
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-start gap-2 mb-3 min-w-0">
                     <ShieldCheck className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-                    <span className="text-sm font-semibold text-primary-700 dark:text-primary-300">
+                    <span className="text-sm font-semibold text-primary-700 dark:text-primary-300 min-w-0 break-words">
                       Signature {existingSignatures.length > 1 ? `#${idx + 1}` : ""}
                       {sig.signerName ? ` — ${sig.signerName}` : ""}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                     {sig.signerName && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5 min-w-0">
                         <User className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                         <span className="text-slate-500 dark:text-dark-text-muted">Signer:</span>
-                        <span className="text-slate-700 dark:text-dark-text font-medium">
+                        <span className="text-slate-700 dark:text-dark-text font-medium min-w-0 break-words">
                           {sig.signerName}
                         </span>
                       </div>
                     )}
                     {sig.date && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5 min-w-0">
                         <Clock className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                         <span className="text-slate-500 dark:text-dark-text-muted">Date:</span>
-                        <span className="text-slate-700 dark:text-dark-text">{sig.date}</span>
+                        <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
+                          {sig.date}
+                        </span>
                       </div>
                     )}
                     {sig.reason && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5 min-w-0">
                         <MessageSquareText className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                         <span className="text-slate-500 dark:text-dark-text-muted">Reason:</span>
-                        <span className="text-slate-700 dark:text-dark-text">{sig.reason}</span>
+                        <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
+                          {sig.reason}
+                        </span>
                       </div>
                     )}
                     {sig.location && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5 min-w-0">
                         <MapPin className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                         <span className="text-slate-500 dark:text-dark-text-muted">Location:</span>
-                        <span className="text-slate-700 dark:text-dark-text">{sig.location}</span>
+                        <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
+                          {sig.location}
+                        </span>
                       </div>
                     )}
                     {sig.contactInfo && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5 min-w-0">
                         <Mail className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                         <span className="text-slate-500 dark:text-dark-text-muted">Contact:</span>
-                        <span className="text-slate-700 dark:text-dark-text">
+                        <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                           {sig.contactInfo}
                         </span>
                       </div>
                     )}
                     {(sig.filter || sig.subFilter) && (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-start gap-1.5 min-w-0">
                         <ShieldCheck className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                         <span className="text-slate-500 dark:text-dark-text-muted">Standard:</span>
-                        <span className="text-slate-700 dark:text-dark-text">
+                        <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                           {formatSignatureStandard(sig.filter, sig.subFilter)}
                         </span>
                       </div>
@@ -382,27 +388,27 @@ export default function DigitalSignature() {
                         Certificate Details
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-start gap-1.5 min-w-0">
                           <User className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                           <span className="text-slate-500 dark:text-dark-text-muted">Name:</span>
-                          <span className="text-slate-700 dark:text-dark-text font-medium">
+                          <span className="text-slate-700 dark:text-dark-text font-medium min-w-0 break-words">
                             {sig.certDetails.commonName}
                           </span>
                         </div>
                         {sig.certDetails.organisation && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-start gap-1.5 min-w-0">
                             <Building2 className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                             <span className="text-slate-500 dark:text-dark-text-muted">Org:</span>
-                            <span className="text-slate-700 dark:text-dark-text">
+                            <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                               {sig.certDetails.organisation}
                             </span>
                           </div>
                         )}
                         {sig.certDetails.email && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-start gap-1.5 min-w-0">
                             <Mail className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                             <span className="text-slate-500 dark:text-dark-text-muted">Email:</span>
-                            <span className="text-slate-700 dark:text-dark-text">
+                            <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                               {sig.certDetails.email}
                             </span>
                           </div>
@@ -410,12 +416,12 @@ export default function DigitalSignature() {
                         {(sig.certDetails.country ||
                           sig.certDetails.state ||
                           sig.certDetails.locality) && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-start gap-1.5 min-w-0">
                             <Globe className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                             <span className="text-slate-500 dark:text-dark-text-muted">
                               Location:
                             </span>
-                            <span className="text-slate-700 dark:text-dark-text">
+                            <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                               {[
                                 sig.certDetails.locality,
                                 sig.certDetails.state,
@@ -426,10 +432,10 @@ export default function DigitalSignature() {
                             </span>
                           </div>
                         )}
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-start gap-1.5 min-w-0">
                           <ShieldQuestion className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                           <span className="text-slate-500 dark:text-dark-text-muted">Issuer:</span>
-                          <span className="text-slate-700 dark:text-dark-text">
+                          <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                             {sig.certDetails.issuer}
                             {sig.certDetails.issuerOrganisation &&
                               sig.certDetails.issuerOrganisation !== sig.certDetails.organisation &&
@@ -442,30 +448,30 @@ export default function DigitalSignature() {
                           )}
                         </div>
                         {sig.certDetails.serialNumber && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-start gap-1.5 min-w-0">
                             <Hash className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                             <span className="text-slate-500 dark:text-dark-text-muted">
                               Serial:
                             </span>
-                            <span className="text-slate-700 dark:text-dark-text font-mono text-xs">
+                            <span className="text-slate-700 dark:text-dark-text font-mono text-xs min-w-0 break-all">
                               {sig.certDetails.serialNumber}
                             </span>
                           </div>
                         )}
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-start gap-1.5 min-w-0">
                           <Calendar className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                           <span className="text-slate-500 dark:text-dark-text-muted">Valid:</span>
-                          <span className="text-slate-700 dark:text-dark-text">
+                          <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                             {sig.certDetails.validFrom} – {sig.certDetails.validTo}
                           </span>
                         </div>
                         {sig.certDetails.signatureAlgorithm && (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-start gap-1.5 min-w-0">
                             <Lock className="w-3.5 h-3.5 text-primary-400 dark:text-primary-500 shrink-0" />
                             <span className="text-slate-500 dark:text-dark-text-muted">
                               Algorithm:
                             </span>
-                            <span className="text-slate-700 dark:text-dark-text">
+                            <span className="text-slate-700 dark:text-dark-text min-w-0 break-words">
                               {sig.certDetails.signatureAlgorithm}
                             </span>
                           </div>
@@ -550,12 +556,12 @@ export default function DigitalSignature() {
                       value={certPassword}
                       onChange={(e) => setCertPassword(e.target.value)}
                       placeholder="Enter certificate password…"
-                      className="w-full px-3 py-2 pr-10 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
+                      className="w-full px-3 py-2 pr-12 rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-bg text-sm text-slate-800 dark:text-dark-text placeholder:text-slate-400 dark:placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:border-transparent transition-[transform,opacity,color,background-color,border-color,box-shadow]"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 dark:text-dark-text-muted hover:text-slate-600 dark:hover:text-dark-text transition-colors"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded text-slate-500 dark:text-dark-text-muted hover:text-slate-600 dark:hover:text-dark-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 transition-colors"
                       aria-label={showPassword ? "Hide password" : "Show password"}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -568,7 +574,7 @@ export default function DigitalSignature() {
                     type="button"
                     onClick={handleLoadCert}
                     disabled={certLoading || !certPassword}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
                     {certLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -617,7 +623,7 @@ export default function DigitalSignature() {
                       type="button"
                       onClick={handleGenerateCert}
                       disabled={certLoading || !commonName.trim()}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 text-sm font-medium rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     >
                       {certLoading ? (
                         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -689,7 +695,7 @@ export default function DigitalSignature() {
               <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted flex items-center gap-2">
                 <MessageSquareText className="w-4 h-4 text-primary-500" />
                 Signature Details
-                <span className="text-xs font-normal text-slate-400 dark:text-dark-text-muted">
+                <span className="text-xs font-normal text-slate-500 dark:text-dark-text-muted">
                   (optional)
                 </span>
               </h3>

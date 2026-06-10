@@ -187,7 +187,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
   return (
     <div className="relative" ref={popoverRef}>
       <div className="flex items-center gap-2.5">
-        <span className="text-xs text-slate-400 dark:text-dark-text-muted shrink-0">Color:</span>
+        <span className="text-xs text-slate-500 dark:text-dark-text-muted shrink-0">Color:</span>
 
         {colorPresets.map((p) => (
           <button
@@ -197,13 +197,18 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
               onChange(p.hex);
               setOpen(false);
             }}
-            className={`relative w-6 h-6 sm:w-5 sm:h-5 rounded-full border-2 touch-manipulation motion-safe:transition-transform ${
-              eqHex(value, p.hex)
-                ? "border-primary-500 scale-125"
-                : "border-slate-300 dark:border-dark-border hover:scale-110"
-            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2`}
-            style={{ backgroundColor: p.hex }}
-          />
+            className="relative -m-2 flex min-h-11 min-w-11 items-center justify-center rounded-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+          >
+            <span
+              className={`block w-6 h-6 sm:w-5 sm:h-5 rounded-full border-2 motion-safe:transition-transform ${
+                eqHex(value, p.hex)
+                  ? "border-primary-500 scale-125"
+                  : "border-slate-300 dark:border-dark-border"
+              }`}
+              style={{ backgroundColor: p.hex }}
+              aria-hidden="true"
+            />
+          </button>
         ))}
 
         {/* Custom colour trigger */}
@@ -211,25 +216,25 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
           aria-label={`Custom color${!isPreset ? ` (${value})` : ""}${open ? " — picker open" : ""}`}
           aria-expanded={open}
           onClick={toggleOpen}
-          className={`relative w-6 h-6 sm:w-5 sm:h-5 rounded-full border-2 touch-manipulation motion-safe:transition-transform flex items-center justify-center ${
-            open || !isPreset
-              ? "border-primary-500 scale-125"
-              : "border-slate-300 dark:border-dark-border hover:scale-110"
-          } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2`}
-          style={{
-            background: !isPreset
-              ? value
-              : "conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
-          }}
+          className="relative -m-2 flex min-h-11 min-w-11 items-center justify-center rounded-full touch-manipulation focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
         >
-          {isPreset && (
-            <span
-              className="text-white text-xxs font-bold drop-shadow-sm leading-none"
-              aria-hidden="true"
-            >
-              +
-            </span>
-          )}
+          <span
+            className={`flex items-center justify-center w-6 h-6 sm:w-5 sm:h-5 rounded-full border-2 motion-safe:transition-transform ${
+              open || !isPreset
+                ? "border-primary-500 scale-125"
+                : "border-slate-300 dark:border-dark-border"
+            }`}
+            style={{
+              background: !isPreset
+                ? value
+                : "conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)",
+            }}
+            aria-hidden="true"
+          >
+            {isPreset && (
+              <span className="text-white text-xxs font-bold drop-shadow-sm leading-none">+</span>
+            )}
+          </span>
         </button>
       </div>
 
@@ -291,7 +296,7 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
               maxLength={7}
               spellCheck={false}
               inputMode="text"
-              className="flex-1 min-w-0 px-2 py-1.5 text-sm sm:text-xs font-mono border border-slate-300 dark:border-dark-border dark:bg-dark-surface-alt dark:text-dark-text rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
+              className="flex-1 min-w-0 px-2 py-1.5 text-sm sm:text-card-desc font-mono border border-slate-300 dark:border-dark-border dark:bg-dark-surface-alt dark:text-dark-text rounded-md focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary-500"
             />
           </div>
         </div>

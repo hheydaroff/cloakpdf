@@ -12,7 +12,8 @@
  * consent read as one system.
  */
 import { Cpu, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFocusTrap } from "../utils/useFocusTrap";
 import { createPortal } from "react-dom";
 import type { ChatVariantId } from "../utils/ai-models.ts";
 import { ChatModelPicker } from "./ChatModelPicker.tsx";
@@ -57,12 +58,17 @@ export function ChatModelPickerModal({
     };
   }, [open, onCancel]);
 
+  // Trap Tab within the dialog + restore focus to the trigger on close.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
+
   if (!open) return null;
 
   const changed = pending !== current;
 
   return createPortal(
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-200 flex items-end sm:items-center justify-center sm:px-3 md:px-6"
       role="dialog"
       aria-modal="true"

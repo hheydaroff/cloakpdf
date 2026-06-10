@@ -64,7 +64,7 @@ export function Panel() {
       </p>
 
       {!counts ? (
-        <p className="text-sm text-slate-400 dark:text-dark-text-muted">
+        <p className="text-sm text-slate-500 dark:text-dark-text-muted">
           Scanning for hidden data…
         </p>
       ) : total === 0 ? (
@@ -84,13 +84,13 @@ export function Panel() {
                   className={
                     n > 0
                       ? "text-slate-700 dark:text-dark-text"
-                      : "text-slate-400 dark:text-dark-text-muted"
+                      : "text-slate-500 dark:text-dark-text-muted"
                   }
                 >
                   {LABELS[cat]}
                 </span>
                 <span
-                  className={`tabular-nums ${n > 0 ? "font-medium text-slate-800 dark:text-dark-text" : "text-slate-300 dark:text-dark-text-muted"}`}
+                  className={`tabular-nums ${n > 0 ? "font-medium text-slate-800 dark:text-dark-text" : "text-slate-500 dark:text-dark-text-muted"}`}
                 >
                   {n}
                 </span>

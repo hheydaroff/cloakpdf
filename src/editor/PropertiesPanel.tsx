@@ -54,7 +54,7 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
         ) : (
           <div className="text-sm text-slate-500 dark:text-dark-text-muted">
             <p>Pick a tool from the left to edit this PDF.</p>
-            <p className="mt-2 text-xs text-slate-400 dark:text-dark-text-muted">
+            <p className="mt-2 text-xs text-slate-500 dark:text-dark-text-muted">
               Switch to <span className="font-medium">Overview</span> to browse and rearrange pages.
             </p>
           </div>

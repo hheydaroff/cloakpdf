@@ -10,8 +10,10 @@
 //   • ActionsCtx    — stable callbacks; identity never changes after mount.
 //   • ToolStateCtx  — the namespaced per-tool option slices (high-frequency).
 //   • ActiveToolCtx — just the active tool id (flips only on tool switch).
-//   • ReadCtx       — doc, view, layout, history flags (infrequent).
-// `useEditor()` merges all four for convenience.
+//   • ViewCtx       — zoom/pan/page-grid view state (changes EVERY pan/zoom
+//                     frame; isolated so the ~20 ReadCtx consumers don't
+//                     re-render per frame — only the stage / top bar / grids do).
+//   • ReadCtx       — doc, layout, history flags (infrequent).
 
 import {
   createContext,
@@ -110,7 +112,6 @@ interface ReadValue {
   error: string | null;
   /** The dropped PDF is password-protected; the shell shows the unlock notice. */
   encryptedFile: File | null;
-  view: ViewState;
   viewMode: ViewMode;
   selectedPage: number;
   layout: Layout;
@@ -133,6 +134,10 @@ const ActionsCtx = createContext<ActionsValue | null>(null);
 const ReadCtx = createContext<ReadValue | null>(null);
 const ToolStateCtx = createContext<ToolStateValue | null>(null);
 const ActiveToolCtx = createContext<string | null>(null);
+// View (zoom/pan/page grid) lives in its own context because it changes on
+// every pan/zoom frame; isolating it keeps per-frame re-renders to the handful
+// of consumers that actually paint the viewport (stage, top bar, page grids).
+const ViewCtx = createContext<ViewState | null>(null);
 
 interface ProviderProps {
   initialFile?: File | null;
@@ -681,7 +686,6 @@ export function EditorProvider({
       busyLabel,
       error,
       encryptedFile,
-      view,
       viewMode,
       selectedPage,
       layout,
@@ -702,7 +706,6 @@ export function EditorProvider({
       busyLabel,
       error,
       encryptedFile,
-      view,
       viewMode,
       selectedPage,
       layout,
@@ -719,7 +722,9 @@ export function EditorProvider({
     <ActionsCtx.Provider value={actions}>
       <ToolStateCtx.Provider value={toolStateValue}>
         <ActiveToolCtx.Provider value={activeTool}>
-          <ReadCtx.Provider value={readValue}>{children}</ReadCtx.Provider>
+          <ViewCtx.Provider value={view}>
+            <ReadCtx.Provider value={readValue}>{children}</ReadCtx.Provider>
+          </ViewCtx.Provider>
         </ActiveToolCtx.Provider>
       </ToolStateCtx.Provider>
     </ActionsCtx.Provider>
@@ -740,6 +745,15 @@ export function useEditorRead(): ReadValue {
 
 export function useActiveTool(): string | null {
   return useContext(ActiveToolCtx);
+}
+
+/** The zoom/pan/page-grid view state. Separate from useEditorRead() so a
+ *  per-frame pan/zoom only re-renders the stage / top bar / page grids, not
+ *  every ReadCtx consumer. */
+export function useEditorView(): ViewState {
+  const v = useContext(ViewCtx);
+  if (!v) throw new Error("useEditorView must be used inside <EditorProvider />");
+  return v;
 }
 
 /** The namespaced option slice for one tool (empty object if unset). */

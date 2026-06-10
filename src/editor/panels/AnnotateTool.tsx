@@ -461,6 +461,22 @@ export function Stage() {
     y2: number;
   } | null>(null);
 
+  // Freehand pen: accumulate raw points in a ref and flush to draftPoints state
+  // at most once per animation frame. The old per-move `setDraftPoints(prev =>
+  // [...prev, pt])` was O(points) per raw event (so O(n²) over a stroke) AND put
+  // draftPoints in onPointerUp's deps, which re-registered the stage props on
+  // every pen move. The ref is the source of truth the commit reads from; state
+  // only drives the in-progress repaint.
+  const penBufferRef = useRef<{ x: number; y: number }[]>([]);
+  const penFrameRef = useRef<number | null>(null);
+  const flushPenFrame = useCallback(() => {
+    if (penFrameRef.current != null) {
+      cancelAnimationFrame(penFrameRef.current);
+      penFrameRef.current = null;
+    }
+  }, []);
+  useEffect(() => flushPenFrame, [flushPenFrame]);
+
   // Select-mode drag: original geometry + a local live-preview geometry so the
   // move never touches the doc until pointerup (one history entry, no chrome
   // re-render of the whole editor each frame — mirrors the draft* pattern).
@@ -861,7 +877,10 @@ export function Stage() {
       if (textMode) return; // placed on release (a tap)
       if (boxMode) setDraftBox({ x: p.xPct, y: p.yPct, w: 0, h: 0 });
       else if (lineMode) setDraftLine({ x1: p.xPct, y1: p.yPct, x2: p.xPct, y2: p.yPct });
-      else setDraftPoints([{ x: p.xPct, y: p.yPct }]);
+      else {
+        penBufferRef.current = [{ x: p.xPct, y: p.yPct }];
+        setDraftPoints([{ x: p.xPct, y: p.yPct }]);
+      }
     },
     [selectMode, boxMode, lineMode, textMode, doc, selectedPage, selectedId, patchToolState],
   );
@@ -894,7 +913,15 @@ export function Stage() {
       } else if (lineMode) {
         setDraftLine({ x1: s.x, y1: s.y, x2: p.xPct, y2: p.yPct });
       } else {
-        setDraftPoints((prev) => [...(prev ?? []), { x: p.xPct, y: p.yPct }]);
+        // Append to the ref every raw move (O(1)); flush a snapshot to state at
+        // most once per frame so the repaint coalesces instead of firing per event.
+        penBufferRef.current.push({ x: p.xPct, y: p.yPct });
+        if (penFrameRef.current == null) {
+          penFrameRef.current = requestAnimationFrame(() => {
+            penFrameRef.current = null;
+            setDraftPoints(penBufferRef.current.slice());
+          });
+        }
       }
     },
     [selectMode, boxMode, lineMode, textMode],
@@ -979,7 +1006,11 @@ export function Stage() {
           if (id) patchToolState(TOOL_ID, { mode: "select", selectedId: id });
         }
       } else {
-        const points = draftPoints ?? [];
+        // Read the authoritative point list from the ref (the rAF-flushed state
+        // can lag by a frame); cancel any pending flush before committing.
+        flushPenFrame();
+        const points = penBufferRef.current;
+        penBufferRef.current = [];
         setDraftPoints(null);
         if (points.length >= 2) {
           const id = addObject({
@@ -1012,7 +1043,7 @@ export function Stage() {
       addObject,
       moveObject,
       patchToolState,
-      draftPoints,
+      flushPenFrame,
       doc,
       pageHeightPt,
       openNewText,
@@ -1023,11 +1054,13 @@ export function Stage() {
   const onPointerCancel = useCallback(() => {
     startRef.current = null;
     dragStartRef.current = null;
+    flushPenFrame();
+    penBufferRef.current = [];
     setDragGeom(null);
     setDraftBox(null);
     setDraftLine(null);
     setDraftPoints(null);
-  }, []);
+  }, [flushPenFrame]);
 
   useStageProps({
     cursor: textMode ? "text" : selectMode ? "default" : "crosshair",
@@ -1437,7 +1470,7 @@ export function Panel() {
       >
         Apply annotations
       </button>
-      <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+      <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         {mode === "select"
           ? "Tap a mark to select, drag or use arrow keys to move (Shift = bigger step), Delete to remove. Double-click a label to edit it."
           : mode === "text"

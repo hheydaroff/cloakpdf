@@ -111,20 +111,36 @@ body,
   background: #f1f5f9;
 }
 
-/* Disable browser-level zoom gestures on phones. The viewport meta in
-   index.html turns off pinch-zoom; `touch-action: manipulation` here
-   suppresses the double-tap-to-zoom that historic Safari versions
-   ignored even with `user-scalable=no`. Tool surfaces that need pinch
-   gestures (PDF previews, signature pads) opt back in via
-   `touch-action: none` on their own container. */
+/* `touch-action: manipulation` suppresses double-tap-to-zoom and the
+   legacy 300ms tap delay WITHOUT blocking intentional pinch-zoom — pinch
+   stays enabled for accessibility (the viewport meta no longer sets
+   `user-scalable=no`/`maximum-scale`). Tool surfaces that need pinch
+   gestures (PDF previews, signature pads, the colour wheel) opt out via
+   `touch-action: none` on their own container, so page zoom never fights
+   them. `overflow-x: clip` is a safety net against accidental horizontal
+   overflow at narrow widths — `clip`, not `hidden`, so the sticky header
+   still pins. */
 html,
 body {
   touch-action: manipulation;
+  overflow-x: clip;
   /* Belt-and-suspenders: text-size-adjust prevents Safari's automatic
      font upscaling in landscape, which would otherwise break the
      pixel-tuned panel chrome. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+}
+
+/* iOS Safari auto-zooms any form control whose font-size is < 16px when it
+   gains focus. With pinch-zoom re-enabled (no `maximum-scale`), pin form
+   controls to 16px on coarse pointers so focusing a field never jumps the
+   viewport. Desktop keeps its pixel-tuned 13–14px chrome. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 @media (prefers-color-scheme: dark) {
   html,

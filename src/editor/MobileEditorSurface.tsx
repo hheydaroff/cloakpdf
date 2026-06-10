@@ -75,7 +75,7 @@ export function MobileEditorSurface() {
             <button
               type="button"
               onClick={cancel}
-              className="flex h-10 w-10 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              className="flex h-11 w-11 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               aria-label="Cancel"
             >
               <X className="h-4 w-4" />
@@ -83,7 +83,7 @@ export function MobileEditorSurface() {
             <button
               type="button"
               onClick={done}
-              className="flex h-10 w-10 items-center justify-center rounded-md bg-primary-600 text-white hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
+              className="flex h-11 w-11 items-center justify-center rounded-md bg-primary-600 text-white hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2"
               aria-label="Done"
             >
               <Check className="h-4 w-4" />

@@ -338,7 +338,7 @@ export function Panel() {
                 onClick={() => removeTerm(t)}
                 disabled={detecting}
                 aria-label={`Remove “${t}”`}
-                className="-mr-1 rounded-full p-1 hover:bg-slate-200 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                className="-mr-1.5 -my-1.5 rounded-full p-2 hover:bg-slate-200 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -371,7 +371,11 @@ export function Panel() {
           Reading scanned pages… ({ocr.done}/{ocr.total})
         </p>
       )}
-      {err && <p className="text-xs text-red-600">{err}</p>}
+      {err && (
+        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+          {err}
+        </p>
+      )}
 
       {scanned && matches.length > 0 && (
         <p className="rounded-lg bg-amber-50 dark:bg-amber-900/15 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
@@ -398,7 +402,7 @@ export function Panel() {
                   <button
                     type="button"
                     onClick={() => setAll(true)}
-                    className="text-primary-600 hover:underline"
+                    className="inline-flex min-h-11 items-center -mx-1 rounded px-2 text-xs text-primary-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
                     All
                   </button>
@@ -406,7 +410,7 @@ export function Panel() {
                   <button
                     type="button"
                     onClick={() => setAll(false)}
-                    className="text-primary-600 hover:underline"
+                    className="inline-flex min-h-11 items-center -mx-1 rounded px-2 text-xs text-primary-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
                     None
                   </button>
@@ -419,7 +423,7 @@ export function Panel() {
                     <button
                       type="button"
                       onClick={() => jump(pageIndex)}
-                      className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 hover:text-primary-600 focus-visible:outline-none"
+                      className="mb-1 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500 hover:text-primary-600 focus-visible:outline-none"
                     >
                       Page {pageIndex + 1}
                     </button>

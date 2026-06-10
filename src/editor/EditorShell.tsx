@@ -7,6 +7,7 @@
 // the growth axes is load-bearing.
 
 import { AlertTriangle, History, X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { EncryptedPdfNotice } from "../components/EncryptedPdfNotice.tsx";
 import { useActiveTool, useEditorActions, useEditorRead, useToolSlice } from "./EditorContext.tsx";
 import { EditorToolStage } from "./EditorToolStage.tsx";
@@ -141,20 +142,26 @@ export function EditorShell() {
         </div>
       )}
 
-      {busyLabel && (
-        <div
-          className="absolute inset-0 z-150 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
-          aria-busy="true"
-          aria-live="polite"
-        >
-          <div className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-dark-border bg-white/95 dark:bg-dark-surface/95 px-5 py-4 shadow-xl">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-200 border-t-primary-600" />
-            <span className="text-card-desc font-medium text-slate-700 dark:text-dark-text">
-              {busyLabel}
-            </span>
-          </div>
-        </div>
-      )}
+      {/* Busy overlay is portaled to <body> at z-250 so a long-running op (export
+          / render) always paints ABOVE the export modal (z-200) — the editor
+          <main> is a z-100 stacking context, so an in-tree overlay would sit
+          behind a modal whose close lagged the busy state by a frame. */}
+      {busyLabel &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-250 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm"
+            aria-busy="true"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 dark:border-dark-border bg-white/95 dark:bg-dark-surface/95 px-5 py-4 shadow-xl">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary-200 border-t-primary-600" />
+              <span className="text-card-desc font-medium text-slate-700 dark:text-dark-text">
+                {busyLabel}
+              </span>
+            </div>
+          </div>,
+          document.body,
+        )}
     </main>
   );
 }

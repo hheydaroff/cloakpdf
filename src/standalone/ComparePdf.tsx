@@ -214,8 +214,7 @@ async function comparePdfs(
 
 /** Badge colour based on diff percentage. */
 function diffBadgeClass(pct: number): string {
-  if (pct === 0)
-    return "bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300";
+  if (pct === 0) return "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300";
   if (pct < 5) return "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
   return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
 }
@@ -372,7 +371,7 @@ export default function ComparePdf() {
                     setFileA(null);
                     setComparisons([]);
                   }}
-                  className="text-sm text-primary-600 hover:text-primary-700 shrink-0 ml-2"
+                  className="inline-flex items-center min-h-11 px-2 -mx-2 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 shrink-0 ml-2"
                 >
                   Change
                 </button>
@@ -410,7 +409,7 @@ export default function ComparePdf() {
                     setFileB(null);
                     setComparisons([]);
                   }}
-                  className="text-sm text-primary-600 hover:text-primary-700 shrink-0 ml-2"
+                  className="inline-flex items-center min-h-11 px-2 -mx-2 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 shrink-0 ml-2"
                 >
                   Change
                 </button>
@@ -469,7 +468,7 @@ export default function ComparePdf() {
                 page{summary.total !== 1 && "s"} compared
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium tabular-nums bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300">
                   {summary.identical} identical
                 </span>
                 {summary.changed > 0 && (
@@ -482,7 +481,7 @@ export default function ComparePdf() {
             <button
               type="button"
               onClick={reset}
-              className="text-sm text-primary-600 hover:text-primary-700"
+              className="inline-flex items-center min-h-11 px-2 -mx-2 rounded text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               New comparison
             </button>
@@ -536,7 +535,7 @@ export default function ComparePdf() {
           </div>
 
           {viewMode === "side-by-side" ? (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* File A */}
               <div className="space-y-1.5">
                 <p className="text-xs font-medium text-slate-500 dark:text-dark-text-muted flex items-center gap-1.5">
@@ -590,7 +589,7 @@ export default function ComparePdf() {
                 <button
                   type="button"
                   onClick={() => setShowDiffOverlay((v) => !v)}
-                  className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text transition-colors"
+                  className="flex items-center gap-1.5 min-h-11 px-2 -mx-2 rounded text-xs font-medium text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text active:text-slate-800 dark:active:text-dark-text transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                 >
                   {showDiffOverlay ? (
                     <Eye className="w-3.5 h-3.5" />

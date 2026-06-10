@@ -22,7 +22,8 @@
  * which element should scroll.
  */
 import { AlertTriangle, HardDrive, MemoryStick, ShieldCheck, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useFocusTrap } from "../utils/useFocusTrap";
 import { createPortal } from "react-dom";
 import { type AiModelInfo, formatApproxSize } from "../utils/ai-models.ts";
 import { ModelCard } from "./ModelCard.tsx";
@@ -116,6 +117,10 @@ export function AiModelDetailsModal({
     };
   }, [open, onClose]);
 
+  // Trap Tab within the dialog + restore focus to the trigger on close.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
+
   if (!open) return null;
 
   const totalBytes = models.reduce((sum, m) => sum + m.approxSizeBytes, 0);
@@ -161,6 +166,7 @@ export function AiModelDetailsModal({
 
   return createPortal(
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-200 flex items-end sm:items-center justify-center sm:px-3 md:px-6"
       role="dialog"
       aria-modal="true"

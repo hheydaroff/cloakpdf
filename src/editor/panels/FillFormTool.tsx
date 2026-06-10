@@ -104,7 +104,7 @@ export function Panel() {
   }, [doc]);
 
   if (!fields) {
-    return <p className="text-sm text-slate-400 dark:text-dark-text-muted">Reading form fields…</p>;
+    return <p className="text-sm text-slate-500 dark:text-dark-text-muted">Reading form fields…</p>;
   }
 
   if (fields.length === 0) {

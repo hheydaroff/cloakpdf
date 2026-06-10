@@ -9,7 +9,7 @@
 // placement class, sibling of the overlay-object class).
 
 import { Copy, Upload } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ColorPicker } from "../../components/ColorPicker.tsx";
 import { SignaturePad } from "../../components/SignaturePad.tsx";
 import { addSignature } from "../../utils/pdf-operations.ts";
@@ -53,6 +53,25 @@ export function Stage() {
     }
     return img.complete && img.naturalWidth ? img : null;
   }, []);
+
+  // Drop every decoded image on unmount so nothing lingers past the tool's life.
+  useEffect(() => () => imgCache.current.clear(), []);
+
+  // Prune the cache down to URLs still referenced by a live signature object,
+  // plus the currently-staged pad data-URL (read by the place handler for its
+  // aspect ratio — it must NOT be evicted even before it's placed).
+  useEffect(() => {
+    const live = new Set<string>();
+    for (const o of doc?.objects ?? []) {
+      if (o.kind !== "signature") continue;
+      const url = (o.payload as SigPayload | undefined)?.dataUrl;
+      if (url) live.add(url);
+    }
+    if (dataUrl) live.add(dataUrl);
+    for (const key of imgCache.current.keys()) {
+      if (!live.has(key)) imgCache.current.delete(key);
+    }
+  }, [doc, dataUrl]);
 
   const dragRef = useRef<{ id: string; dx: number; dy: number; moved: boolean } | null>(null);
 
@@ -349,7 +368,7 @@ export function Panel() {
       >
         Apply signature{count === 1 ? "" : "s"}
       </button>
-      <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+      <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         Signatures embed as images — the page text underneath stays selectable.
       </p>
     </div>

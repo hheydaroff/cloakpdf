@@ -63,7 +63,7 @@ function NupPreview({ layout }: { layout: NupLayout }) {
         </div>
       </div>
       {sheets > 0 && (
-        <p className="mt-1.5 text-xs text-slate-400 dark:text-dark-text-muted tabular-nums">
+        <p className="mt-1.5 text-xs text-slate-500 dark:text-dark-text-muted tabular-nums">
           {pages.length} {pages.length === 1 ? "page" : "pages"} → {sheets}{" "}
           {sheets === 1 ? "sheet" : "sheets"} ({perSheet} per sheet)
         </p>

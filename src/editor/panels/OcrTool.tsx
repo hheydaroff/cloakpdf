@@ -271,7 +271,7 @@ export function Panel() {
           {progress}
         </p>
       )}
-      <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+      <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         Digital pages read instantly. Scanned pages download a one-time OCR engine (~10–15 MB), then
         recognise on-device — nothing leaves your browser.
       </p>

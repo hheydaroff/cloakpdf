@@ -14,7 +14,7 @@ export const ToolRail = memo(function ToolRail() {
   const groups = editorToolGroups();
 
   return (
-    <div className="no-scrollbar flex w-18 shrink-0 flex-col overflow-y-auto border-r border-slate-200/70 dark:border-dark-border px-1 py-2">
+    <div className="thin-scrollbar flex w-18 shrink-0 flex-col overflow-y-auto border-r border-slate-200/70 dark:border-dark-border px-1 py-2">
       {groups.map((group, gi) => (
         <div key={group.group} className="flex flex-col">
           {gi > 0 && <div className="mx-3 my-1.5 h-px bg-slate-200/70 dark:bg-dark-border" />}
@@ -44,7 +44,7 @@ export const ToolRail = memo(function ToolRail() {
                 }`}
               >
                 <Icon className="h-[18px] w-[18px]" />
-                <span className="max-w-full truncate px-0.5 text-[9px] font-medium leading-none">
+                <span className="max-w-full truncate px-0.5 text-xxs font-medium leading-none">
                   {tool.name.split(" ")[0]}
                 </span>
                 {active && (

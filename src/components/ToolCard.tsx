@@ -60,7 +60,7 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
             </span>
           )}
         </h3>
-        <p className="text-card-desc leading-normal text-slate-500 dark:text-dark-text-muted">
+        <p className="pr-5 text-card-desc leading-normal text-slate-500 dark:text-dark-text-muted">
           {tool.description}
         </p>
 
@@ -68,14 +68,14 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
           // Subtle hint line — calmer than the description but still
           // visible. Same field drives the in-tool callout, so users
           // see the *same* number on the card as inside the tool.
-          <p className="mt-0.5 inline-flex items-start gap-1.5 text-tag font-medium text-slate-400 dark:text-dark-text-muted leading-snug">
+          <p className="mt-0.5 inline-flex items-start gap-1.5 pr-5 text-tag font-medium text-slate-500 dark:text-dark-text-muted leading-snug">
             <MemoryStick className="w-3 h-3 mt-0.5 shrink-0" aria-hidden="true" />
             <span>{tool.requirements}</span>
           </p>
         )}
 
         <ArrowRight
-          className="absolute bottom-1 right-1 sm:bottom-0 sm:right-0 w-4 h-4 text-slate-400 dark:text-dark-text-muted opacity-0 -translate-x-1 transition-[transform,opacity,color] duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-active:opacity-100 group-active:translate-x-0 group-active:text-primary-600 dark:group-active:text-primary-400"
+          className="absolute bottom-1 right-1 sm:bottom-0 sm:right-0 w-4 h-4 text-slate-400 dark:text-dark-text-muted opacity-0 -translate-x-1 pointer-coarse:opacity-50 pointer-coarse:translate-x-0 transition-[transform,opacity,color] duration-200 group-hover:opacity-100 group-hover:translate-x-0 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-active:opacity-100 group-active:translate-x-0 group-active:text-primary-600 dark:group-active:text-primary-400"
           aria-hidden="true"
         />
       </div>

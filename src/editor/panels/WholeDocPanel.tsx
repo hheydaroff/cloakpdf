@@ -50,7 +50,7 @@ export function WholeDocPanel({
       >
         {busy ? "Working…" : applyLabel}
       </button>
-      {note && <p className="text-xs text-slate-400 dark:text-dark-text-muted">{note}</p>}
+      {note && <p className="text-xs text-slate-500 dark:text-dark-text-muted">{note}</p>}
     </div>
   );
 }
@@ -75,7 +75,7 @@ export function Segmented<T extends string>({
             type="button"
             onClick={() => onChange(o.value)}
             aria-pressed={on}
-            className={`flex flex-col items-center rounded-md px-2 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+            className={`flex flex-col items-center justify-center rounded-md px-2 py-1.5 pointer-coarse:min-h-11 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
               on
                 ? "bg-primary-600 text-white"
                 : "text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
@@ -84,7 +84,7 @@ export function Segmented<T extends string>({
             {o.label}
             {o.sub && (
               <span
-                className={`text-xxs ${on ? "text-white/80" : "text-slate-400 dark:text-dark-text-muted"}`}
+                className={`text-xxs ${on ? "text-white/80" : "text-slate-500 dark:text-dark-text-muted"}`}
               >
                 {o.sub}
               </span>

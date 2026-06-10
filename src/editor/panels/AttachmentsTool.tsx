@@ -65,9 +65,9 @@ export function Panel() {
       </p>
 
       {items === null ? (
-        <p className="text-sm text-slate-400 dark:text-dark-text-muted">Reading attachments…</p>
+        <p className="text-sm text-slate-500 dark:text-dark-text-muted">Reading attachments…</p>
       ) : items.length === 0 ? (
-        <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-3 text-center text-xs text-slate-400 dark:text-dark-text-muted">
+        <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-3 text-center text-xs text-slate-500 dark:text-dark-text-muted">
           No files attached yet.
         </p>
       ) : (
@@ -81,7 +81,7 @@ export function Panel() {
               <span className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-dark-text">
                 {a.name}
               </span>
-              <span className="shrink-0 text-xs tabular-nums text-slate-400 dark:text-dark-text-muted">
+              <span className="shrink-0 text-xs tabular-nums text-slate-500 dark:text-dark-text-muted">
                 {formatFileSize(a.size)}
               </span>
               <button

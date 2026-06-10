@@ -12,12 +12,12 @@
 // All working state lives in the namespaced tool slice so the Board (center)
 // and Panel (right) share it and it survives re-selection. See REDESIGN.md.
 
-import { FileX, Repeat2, RotateCw, Trash2, Undo2 } from "lucide-react";
+import { ChevronDown, ChevronUp, FileX, Repeat2, RotateCw, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { assemblePdf, type AssembleOp } from "../../utils/pdf-operations.ts";
 import { renderThumbnailsAndScores, revokeThumbnails } from "../../utils/pdf-renderer.ts";
 import { type CanvasObject, docToFile } from "../doc.ts";
-import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
+import { useEditorActions, useEditorRead, useEditorView, useToolSlice } from "../EditorContext.tsx";
 
 export const ORGANIZE_ID = "organize-pages";
 
@@ -57,10 +57,12 @@ function readState(slice: Record<string, unknown>, pageCount: number): OrganizeS
 // ── Board (center, overview mode) ────────────────────────────────────
 
 export function Board() {
-  const { doc, view } = useEditorRead();
+  const { doc } = useEditorRead();
+  const view = useEditorView();
   const { patchToolState } = useEditorActions();
   const slice = useToolSlice(ORGANIZE_ID);
   const dragFrom = useRef<number | null>(null);
+  const coarse = useRef(window.matchMedia("(pointer: coarse)").matches);
 
   const pageCount = doc?.pageCount ?? 0;
   const state = readState(slice, pageCount);
@@ -147,12 +149,32 @@ export function Board() {
                 <span className="text-xs font-medium tabular-nums text-slate-500 dark:text-dark-text-muted">
                   {origIdx + 1}
                 </span>
-                <div className="flex items-center gap-0.5">
+                <div className="flex items-center gap-0.5 pointer-coarse:gap-2">
+                  {coarse.current && pos > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => reorder(pos, pos - 1)}
+                      aria-label={`Move page ${origIdx + 1} up`}
+                      className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-dark-surface-alt pointer-coarse:min-h-11 pointer-coarse:min-w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {coarse.current && pos < state.order.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => reorder(pos, pos + 1)}
+                      aria-label={`Move page ${origIdx + 1} down`}
+                      className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-dark-surface-alt pointer-coarse:min-h-11 pointer-coarse:min-w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => rotate(origIdx)}
                     aria-label={`Rotate page ${origIdx + 1}`}
-                    className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-dark-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    className="flex h-6 w-6 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-dark-surface-alt pointer-coarse:min-h-11 pointer-coarse:min-w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                   >
                     <RotateCw className="h-3.5 w-3.5" />
                   </button>
@@ -161,7 +183,7 @@ export function Board() {
                     onClick={() => toggleDelete(origIdx)}
                     aria-label={`${del ? "Restore" : "Delete"} page ${origIdx + 1}`}
                     aria-pressed={del}
-                    className={`flex h-6 w-6 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                    className={`flex h-6 w-6 items-center justify-center rounded pointer-coarse:min-h-11 pointer-coarse:min-w-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                       del
                         ? "text-primary-600"
                         : "text-slate-400 hover:bg-slate-100 hover:text-red-600 dark:hover:bg-dark-surface-alt"
@@ -198,7 +220,7 @@ function QuickAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 text-xs font-medium text-slate-600 dark:text-dark-text-muted hover:border-primary-300 hover:text-primary-700 disabled:opacity-40 disabled:hover:border-slate-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface px-2.5 py-2 text-xs font-medium text-slate-600 dark:text-dark-text-muted hover:border-primary-300 hover:text-primary-700 disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:dark:border-dark-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
     >
       <Icon className="h-3.5 w-3.5" />
       {label}
@@ -300,8 +322,8 @@ export function Panel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-slate-500 dark:text-dark-text-muted">
-        Drag pages to reorder, rotate, or mark for deletion. Changes preview live and apply all at
-        once.
+        Drag pages (or use the arrows on touch) to reorder, rotate, or delete. Changes preview live
+        and apply all at once.
       </p>
 
       <div className="rounded-xl border border-slate-200 dark:border-dark-border bg-white/70 dark:bg-dark-surface p-3 text-sm text-slate-600 dark:text-dark-text-muted">
@@ -349,7 +371,7 @@ export function Panel() {
             onClick={markBlanks}
           />
         )}
-        <p className="text-tag text-slate-400 dark:text-dark-text-muted">
+        <p className="text-tag text-slate-500 dark:text-dark-text-muted">
           To keep only a few pages, “Delete all” then restore the ones you want.
         </p>
       </div>

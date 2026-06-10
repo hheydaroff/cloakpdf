@@ -324,7 +324,7 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
 
         {searchQuery && (
           <p
-            className="text-center text-sm text-slate-400 dark:text-dark-text-muted mt-3 animate-fade-in-up"
+            className="text-center text-sm text-slate-600 dark:text-dark-text-muted mt-3 animate-fade-in-up"
             aria-live="polite"
           >
             {filteredTools.length} {filteredTools.length === 1 ? "tool" : "tools"} found
@@ -341,7 +341,7 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
           <h3 className="text-lg font-semibold text-slate-600 dark:text-dark-text mb-2">
             No tools found
           </h3>
-          <p className="text-sm text-slate-400 dark:text-dark-text-muted max-w-md mx-auto">
+          <p className="text-sm text-slate-600 dark:text-dark-text-muted max-w-md mx-auto">
             Try a different search term like &ldquo;merge&rdquo;, &ldquo;sign&rdquo;, or
             &ldquo;compress&rdquo;
           </p>

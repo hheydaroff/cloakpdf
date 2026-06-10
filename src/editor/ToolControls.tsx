@@ -14,7 +14,7 @@ export function ToolPlaceholder({ toolId }: { toolId: string }) {
   return (
     <div className="rounded-xl border border-dashed border-slate-300 dark:border-dark-border bg-slate-50/60 dark:bg-dark-bg/40 p-4 text-center">
       <p className="text-sm font-medium text-slate-600 dark:text-dark-text">{tool.name}</p>
-      <p className="mt-1 text-xs text-slate-400 dark:text-dark-text-muted">
+      <p className="mt-1 text-xs text-slate-500 dark:text-dark-text-muted">
         This tool moves into the editor in a later milestone.
       </p>
     </div>

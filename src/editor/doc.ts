@@ -67,8 +67,11 @@ export interface RedactionPayload {
 
 /** Default redaction box look: a solid black bar with a red border — the
  *  recognisable, conventional redaction look. The single source of truth the
- *  Redact tool seeds its colour pickers from, so the preview and burn agree. */
-export const DEFAULT_REDACTION_FILL: RgbColor = { r: 0, g: 0, b: 0 };
+ *  Redact tool seeds its colour pickers from, so the preview and burn agree.
+ *  The fill matches the "Black" colour-picker preset (#1E293B / slate-800) so
+ *  the swatch reads as selected at rest; over a page this is visually black and
+ *  the box is destructive, fully covering the content beneath either way. */
+export const DEFAULT_REDACTION_FILL: RgbColor = { r: 30, g: 41, b: 59 };
 export const DEFAULT_REDACTION_BORDER: RgbColor = { r: 220, g: 38, b: 38 };
 
 /** CSS `rgb(...)` string for a colour (for canvas fillStyle / strokeStyle). */
@@ -195,6 +198,13 @@ const DESTRUCTIVE_KINDS = new Set<CanvasObjectKind>(["redaction", "erase"]);
 /** Any pending redaction / erase marks still waiting to be burned in? */
 export function hasPendingDestructive(doc: CanvasDoc | null): boolean {
   return !!doc && doc.objects.some((o) => DESTRUCTIVE_KINDS.has(o.kind));
+}
+
+/** How many redaction / erase marks are still waiting to be burned in — drives
+ *  the persistent "N marks pending" indicator so the un-applied destructive
+ *  state is visible regardless of which tool is active. */
+export function countPendingDestructive(doc: CanvasDoc | null): number {
+  return doc ? doc.objects.filter((o) => DESTRUCTIVE_KINDS.has(o.kind)).length : 0;
 }
 
 /** The object list minus every destructive mark — used once they've been

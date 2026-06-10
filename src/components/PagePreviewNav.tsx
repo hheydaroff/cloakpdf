@@ -73,7 +73,7 @@ export function PagePreviewNav({
   const chevronClass = bordered ? "w-4 h-4 text-slate-600 dark:text-dark-text-muted" : "w-4 h-4";
   const countClass = bordered
     ? "text-sm font-medium text-slate-700 dark:text-dark-text tabular-nums min-w-20 text-center"
-    : "text-xs text-slate-400 dark:text-dark-text-muted tabular-nums px-1";
+    : "text-xs text-slate-500 dark:text-dark-text-muted tabular-nums px-1";
 
   return (
     <div className={`flex items-center ${bordered ? "gap-2" : "gap-0.5"}`}>

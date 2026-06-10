@@ -139,7 +139,7 @@ export function Panel() {
   }, [doc]);
 
   if (!fields) {
-    return <p className="text-sm text-slate-400 dark:text-dark-text-muted">Reading metadata…</p>;
+    return <p className="text-sm text-slate-500 dark:text-dark-text-muted">Reading metadata…</p>;
   }
 
   const set = (key: keyof PdfMetadata, value: string) => setFields({ ...fields, [key]: value });
@@ -234,7 +234,7 @@ export function Panel() {
         <button
           type="button"
           onClick={() => setFields({ ...EMPTY })}
-          className="text-xs text-slate-500 hover:text-red-600 dark:text-dark-text-muted"
+          className="self-start rounded px-1 py-0.5 text-xs text-slate-500 hover:text-red-600 dark:text-dark-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
         >
           Clear all fields
         </button>

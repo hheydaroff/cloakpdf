@@ -10,7 +10,7 @@
 // the standalone RedactPdf tool proved. See REDESIGN.md (destructive-drag class).
 
 import { Loader2, ScanSearch, Search, Trash2 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   detectPiiRects,
   extractTextGeometry,
@@ -26,7 +26,7 @@ import {
 } from "../doc.ts";
 import { useEditorActions, useEditorRead, useToolSlice } from "../EditorContext.tsx";
 import { drawRedactionMark } from "../overlay-paint.ts";
-import { useStageProps } from "../stage.tsx";
+import { type StagePoint, useStageProps } from "../stage.tsx";
 import type { FractionRect } from "../types.ts";
 import { ColorRow, Labeled, type Rgb } from "./controls.tsx";
 
@@ -54,6 +54,29 @@ export function Stage() {
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const [box, setBox] = useState<FractionRect | null>(null);
 
+  // rAF-coalesce the in-progress drag box: a 120Hz pointer stream otherwise
+  // fires setBox (→ a Stage re-render → an overlay repaint) on every raw move.
+  // Buffer the latest rect in a ref and flush at most once per frame — mirrors
+  // PdfStage's scheduleView idiom.
+  const pendingRef = useRef<FractionRect | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const scheduleBox = useCallback((r: FractionRect) => {
+    pendingRef.current = r;
+    if (frameRef.current != null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      if (pendingRef.current) setBox(pendingRef.current);
+    });
+  }, []);
+  const cancelFrame = useCallback(() => {
+    if (frameRef.current != null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingRef.current = null;
+  }, []);
+  useEffect(() => cancelFrame, [cancelFrame]);
+
   // Committed redaction boxes paint as the PdfStage base layer (always visible);
   // here we draw only the in-progress drag box, in the current chosen colours.
   const paintOverlay = useCallback(
@@ -63,25 +86,31 @@ export function Stage() {
     [box, fillColor, borderColor],
   );
 
-  useStageProps({
-    cursor: "crosshair",
-    paintOverlay,
-    onPointerDown: (p) => {
-      startRef.current = { x: p.xPct, y: p.yPct };
-    },
-    onPointerMove: (p) => {
+  // Memoised handlers so the stage-props registration shallow-bails on renders
+  // that don't change the draft box (keeps the overlay from re-registering per
+  // frame). The final rect is recomputed from startRef + the up-point, so it
+  // never depends on the throttled draft state.
+  const onPointerDown = useCallback((p: StagePoint) => {
+    startRef.current = { x: p.xPct, y: p.yPct };
+  }, []);
+  const onPointerMove = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       if (!s) return;
-      setBox({
+      scheduleBox({
         xPct: Math.min(s.x, p.xPct),
         yPct: Math.min(s.y, p.yPct),
         wPct: Math.abs(p.xPct - s.x),
         hPct: Math.abs(p.yPct - s.y),
       });
     },
-    onPointerUp: (p) => {
+    [scheduleBox],
+  );
+  const onPointerUp = useCallback(
+    (p: StagePoint) => {
       const s = startRef.current;
       startRef.current = null;
+      cancelFrame();
       setBox(null);
       if (!s) return;
       const rect: FractionRect = {
@@ -99,10 +128,21 @@ export function Stage() {
         });
       }
     },
-    onPointerCancel: () => {
-      startRef.current = null;
-      setBox(null);
-    },
+    [addObject, selectedPage, fillColor, borderColor, cancelFrame],
+  );
+  const onPointerCancel = useCallback(() => {
+    startRef.current = null;
+    cancelFrame();
+    setBox(null);
+  }, [cancelFrame]);
+
+  useStageProps({
+    cursor: "crosshair",
+    paintOverlay,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
   });
 
   return null;
@@ -246,7 +286,7 @@ export function Panel() {
                 onClick={() => toggle(t)}
                 disabled={detecting}
                 aria-pressed={on}
-                className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                className={`rounded-full px-2.5 py-1 pointer-coarse:min-h-11 text-xs font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   on
                     ? "bg-primary-600 text-white"
                     : "border border-slate-200 dark:border-dark-border bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted"
@@ -400,7 +440,7 @@ export function Panel() {
           </ul>
         )}
       </div>
-      <p className="text-xs text-slate-400 dark:text-dark-text-muted">
+      <p className="text-xs text-slate-500 dark:text-dark-text-muted">
         Redactions stay editable — your text remains searchable — and are burned into the pages
         permanently when you export.
       </p>

@@ -66,7 +66,7 @@ export function SegmentedControl<T extends string | number | boolean>({
           fullWidth ? "flex-1" : ""
         } ${
           active
-            ? "font-semibold text-white bg-primary-600 shadow-sm"
+            ? "font-semibold text-white bg-primary-600"
             : "font-medium text-slate-500 dark:text-dark-text-muted hover:text-slate-700 dark:hover:text-dark-text hover:bg-white/60 dark:hover:bg-dark-surface-alt"
         }`;
         return (

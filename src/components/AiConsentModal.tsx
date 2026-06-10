@@ -38,7 +38,8 @@
  * is being downloaded then.
  */
 import { AlertCircle, ArrowDown, Check, Cpu, Loader2, ShieldCheck, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { useFocusTrap } from "../utils/useFocusTrap";
 import { createPortal } from "react-dom";
 import type { AiModelStatus } from "../hooks/useAiModel.ts";
 import type { AiModelInfo } from "../utils/ai-models.ts";
@@ -119,6 +120,10 @@ export function AiConsentModal({
     };
   }, [open, onCancel]);
 
+  // Trap Tab within the dialog + restore focus to the trigger on close.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, open);
+
   if (!open) return null;
 
   // Backdrop click closes the dialog *unless* a download or warm-load
@@ -132,6 +137,7 @@ export function AiConsentModal({
 
   return createPortal(
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-200 flex items-end sm:items-center justify-center sm:px-3 md:px-6"
       role="dialog"
       aria-modal="true"
@@ -566,7 +572,7 @@ function ModelProgressCard({
       </span>
     );
   } else {
-    tail = <span className="text-slate-400 dark:text-dark-text-muted">Waiting</span>;
+    tail = <span className="text-slate-500 dark:text-dark-text-muted">Waiting</span>;
   }
 
   // Sub-tail under the bar: byte counter while downloading (the
@@ -602,7 +608,7 @@ function ModelProgressCard({
           style={{ width: `${barPercent}%` }}
         />
       </div>
-      <p className="mt-1.5 text-xxs tabular-nums text-slate-400 dark:text-dark-text-muted">
+      <p className="mt-1.5 text-xxs tabular-nums text-slate-500 dark:text-dark-text-muted">
         {subTail}
       </p>
     </div>
