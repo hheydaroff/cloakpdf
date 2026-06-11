@@ -348,13 +348,9 @@ export default function ComparePdf() {
   const current = comparisons[currentPage] as PageComparison | undefined;
 
   // ── Upload screen (no files, or files loaded but not yet compared / still comparing) ──
-  // Capped (left-aligned, flush with the ToolView header above): two ~440px
-  // drop zones read focused; at the full xl shell they'd be ~670px voids.
-  // The results screen below stays full-width on purpose — side-by-side page
-  // review is the shell-widening's biggest beneficiary.
   if (!fileA || !fileB || comparisons.length === 0 || loading) {
     return (
-      <div className="max-w-4xl space-y-6">
+      <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* File A */}
           <div className="space-y-2">

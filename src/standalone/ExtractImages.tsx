@@ -314,24 +314,16 @@ export default function ExtractImages() {
   return (
     <div className="space-y-6">
       {!file ? (
-        // The empty state stays a focused block, left-aligned flush with the
-        // ToolView header; only the image grid earns the full xl shell width.
-        // The error AlertBox shares the cap — a load failure lands back here
-        // (usePdfFile clears the file), and the banner must not outrun the
-        // drop zone it sits under.
-        <div className="max-w-3xl space-y-6">
-          <FileDropZone
-            glowColor={categoryGlow.transform}
-            iconColor={categoryAccent.transform}
-            accept=".pdf,application/pdf"
-            onFiles={pdf.onFiles}
-            encryptedFile={pdf.encryptedFile}
-            onClearEncrypted={pdf.reset}
-            label="Drop a PDF file here"
-            hint="All embedded images will be extracted for download"
-          />
-          {error && <AlertBox message={error} />}
-        </div>
+        <FileDropZone
+          glowColor={categoryGlow.transform}
+          iconColor={categoryAccent.transform}
+          accept=".pdf,application/pdf"
+          onFiles={pdf.onFiles}
+          encryptedFile={pdf.encryptedFile}
+          onClearEncrypted={pdf.reset}
+          label="Drop a PDF file here"
+          hint="All embedded images will be extracted for download"
+        />
       ) : (
         <>
           <FileInfoBar
@@ -452,7 +444,7 @@ export default function ExtractImages() {
         </>
       )}
 
-      {file && error && <AlertBox message={error} />}
+      {error && <AlertBox message={error} />}
     </div>
   );
 }

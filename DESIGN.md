@@ -331,6 +331,10 @@ effects:
     thumb-light: "rgba(100,116,139,0.30)"
     thumb-dark:  "rgba(148,163,184,0.30)"
     track: "transparent"
+    visibility: >-
+      thumb rests transparent and surfaces only on container hover /
+      focus-within; the 8px gutter is always reserved so revealing it
+      never shifts layout
 
 iconography:
   library: "lucide-react"
@@ -351,9 +355,9 @@ components:
     typography: "{typography.body}"
     fontWeight: "500"
     rounded: "{radii.xl}"
-    padding: "12px 32px"
+    padding: "12px 20px (32px from sm) — labels never wrap, so phones get the slack"
     minWidth: "220px"
-    trailingIcon: "ArrowRight (continue) | Download (terminal) | none"
+    trailingIcon: "Download when the label contains it | none — every tool CTA is terminal"
     disabled: "opacity 0.5, cursor not-allowed"
   button-danger:
     backgroundColor: "{colors.danger}"
@@ -631,14 +635,15 @@ chrome so their edges never drift. Padding is `px-4` on phone,
 `sm:px-6` on tablet+. Vertical section rhythm is `space-y-10` to
 `space-y-12` (sm+) between tool categories — generous, never crowded.
 
-The wide shell is an offer, not a mandate: **each standalone tool
-declares the measure it actually needs** via `Tool.contentWidth`
-(applied around header + body together in `ToolView`). Forms sit
-narrow (`max-w-2xl` — PDF Password, Digital Signature), file lists
-and chat sit regular (`max-w-3xl` — Merge, Images→PDF, Ask PDF),
-and only preview/grid surfaces (Compare, Extract Images) span the
-full shell, capping their own pre-file sub-screens. Prose views
-self-cap the same way (Privacy Policy at `max-w-2xl`).
+**One container, uniform edges.** Every standalone tool spans the
+same responsive shell as the home page — no per-tool width caps, so
+the drop zones, panels, and grids of every view line up with the
+landing grid above them. (A per-tool "reading measure" variant was
+tried and rejected: tools at three different widths read as three
+different apps.) Width restraint lives at the *content* level
+instead: chat bubbles cap at `min(85%, 42rem)`, the Compare diff
+image at `max-w-4xl`, and prose views like the Privacy Policy
+self-cap at `max-w-2xl`.
 
 Inside cards, the icon tile is followed by a `mb-2` flush, then
 the title, then the body, with no hairline divider; the system
@@ -764,13 +769,14 @@ overshoot on entry. Footer row sits in a slate-50/55 wash with a
 hairline top border. The danger tone swaps the icon chip and CTA
 to red while keeping the same shape.
 
-**Action button** — primary-600 fill, primary-700 hover, 32 px
-horizontal padding, 12 px vertical, 16 px radius, full-width on
-phones and minimum 220 px on tablet+. Trailing icon adapts to
-context: an arrow when continuing through a workflow step, a
-download glyph on the terminal step or any single-tool button
-labelled with "Download". Disabled drops opacity to 50 % and
-cuts pointer events.
+**Action button** — primary-600 fill, primary-700 hover, 20 px
+horizontal padding (32 px from sm), 12 px vertical, 16 px radius,
+full-width on phones and minimum 220 px on tablet+. Labels never
+wrap and name the tool's terminal action with its count ("Merge 2
+files & Download", "Combine 4 images & Download", "Unlock &
+Download"); a trailing download glyph appears whenever the label
+contains "Download". Disabled drops opacity to 50 % and cuts
+pointer events.
 
 ## Closing Notes
 

@@ -29,7 +29,7 @@ export function ActionButton({
         onClick={onClick}
         disabled={disabled ?? processing}
         aria-busy={processing}
-        className={`inline-flex items-center justify-center gap-1.5 w-full sm:w-auto sm:min-w-55 ${color} text-white py-3 px-8 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg`}
+        className={`inline-flex items-center justify-center gap-1.5 w-full sm:w-auto sm:min-w-55 ${color} text-white py-3 px-5 sm:px-8 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-bg`}
       >
         {/* nowrap: a primary CTA must never wrap to two lines (320px guard). */}
         <span className="whitespace-nowrap">{processing ? processingLabel : label}</span>

@@ -373,7 +373,12 @@ body {
  * Thin, theme-aware scrollbar for in-modal / in-card overflow areas.
  * The default browser bar looks chunky and out of place against
  * translucent surfaces (modals, glass cards). This class swaps it for
- * a slim slate thumb.
+ * a slim slate thumb that rests INVISIBLE and surfaces only while the
+ * user interacts with the container (hover / keyboard focus inside) —
+ * styling ::-webkit-scrollbar otherwise forces a permanently painted
+ * bar even where the OS would overlay-hide it. The 8px gutter is
+ * always reserved, so revealing the thumb never shifts layout; touch
+ * devices ignore these rules and keep their native auto-hiding bars.
  *
  * Use sparingly: only on overflow containers inside surfaces, never on
  * the page itself — users expect their browser's default scrollbar at
@@ -382,6 +387,10 @@ body {
 .thin-scrollbar {
   /* Firefox */
   scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.thin-scrollbar:hover,
+.thin-scrollbar:focus-within {
   scrollbar-color: rgba(100, 116, 139, 0.35) transparent;
 }
 .thin-scrollbar::-webkit-scrollbar {
@@ -392,16 +401,23 @@ body {
   background: transparent;
 }
 .thin-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.3);
+  background: transparent;
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
+.thin-scrollbar:hover::-webkit-scrollbar-thumb,
+.thin-scrollbar:focus-within::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.3);
+  background-clip: padding-box;
+}
 @media (prefers-color-scheme: dark) {
-  .thin-scrollbar {
+  .thin-scrollbar:hover,
+  .thin-scrollbar:focus-within {
     scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
   }
-  .thin-scrollbar::-webkit-scrollbar-thumb {
+  .thin-scrollbar:hover::-webkit-scrollbar-thumb,
+  .thin-scrollbar:focus-within::-webkit-scrollbar-thumb {
     background: rgba(148, 163, 184, 0.3);
     background-clip: padding-box;
   }

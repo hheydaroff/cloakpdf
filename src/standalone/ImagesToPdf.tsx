@@ -19,8 +19,7 @@ import { TouchDragOverlay } from "../components/TouchDragOverlay.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { type SortableDrag, useSortableDrag } from "../hooks/useSortableDrag.ts";
-import { formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
-import { openEditorWithFile } from "../utils/nav.ts";
+import { downloadPdf, formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
 import { imagesToPdf } from "../utils/pdf-operations.ts";
 
 /** Internal representation of a queued image with its preview URL. */
@@ -176,8 +175,9 @@ export default function ImagesToPdf() {
         pageSize,
         (done, total) => setProgress({ done, total }),
       );
-      // Hand the assembled PDF straight to the editor (preview, arrange, export).
-      openEditorWithFile(new File([result.slice()], "images.pdf", { type: "application/pdf" }));
+      // Terminal flow: the tool's one job is convert → download. (An earlier
+      // workflow-era version handed the result to the editor instead.)
+      downloadPdf(result, "images.pdf");
     }, "Failed to create PDF from images. Please try again.");
   }, [displayedImages, pageSize, task]);
 
@@ -258,9 +258,7 @@ export default function ImagesToPdf() {
 
       {images.length > 0 && (
         <>
-          {/* max-w-md: keeps the three segments hand-sized — fullWidth is
-              for the phone layout, not for stretching across the column. */}
-          <div className="max-w-md">
+          <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
               Page Size
             </p>
@@ -325,7 +323,9 @@ export default function ImagesToPdf() {
             onClick={handleConvert}
             processing={task.processing}
             label={
-              images.length === 1 ? "Create PDF & edit" : `Combine ${images.length} images & edit`
+              images.length === 1
+                ? "Create PDF & Download"
+                : `Combine ${images.length} images & Download`
             }
             processingLabel="Creating PDF…"
           />

@@ -48,7 +48,7 @@ import {
 import { EDITOR_TOOL_IDS, EDITOR_TOOLS } from "./editor/tools.ts";
 import type { Tool } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
-import { NAVIGATE_TOOL_EVENT, OPEN_EDITOR_EVENT } from "./utils/nav.ts";
+import { NAVIGATE_TOOL_EVENT } from "./utils/nav.ts";
 // The canvas editor is the primary single-PDF surface (editor-first redesign).
 // Lazy-loaded so its pdf-lib / PDF.js graph stays off the home critical path,
 // and rendered full-screen outside <Layout> (it owns its own chrome).
@@ -83,29 +83,22 @@ interface ToolViewProps {
 }
 
 /**
- * Width classes for `Tool.contentWidth` — the tool's declared reading
- * measure inside the (xl-widened) app shell. Applied here, around both
- * the header and the body, so their left edges always align; tools
- * without the field span the full shell (and cap their own sub-screens).
- */
-const TOOL_CONTENT_WIDTH = {
-  narrow: "max-w-2xl mx-auto",
-  regular: "max-w-3xl mx-auto",
-} as const;
-
-/**
  * Renders the active tool's header (title + description) and its
  * lazily-loaded component wrapped in a `Suspense` boundary. For
  * `desktopOnly` tools on a mobile UA, renders a placeholder explaining
  * why the tool isn't available instead of mounting it — the home grid
  * already hides the card, but a saved URL / shared link could still
  * land a phone user here directly.
+ *
+ * No width wrapper here: every tool spans the same responsive shell as
+ * the home page (one container, uniform edges). Content-intrinsic caps
+ * (chat-bubble measure, diff-image width) live inside the tools.
  */
 function ToolView({ tool, Component }: ToolViewProps) {
   const Icon = tool.icon;
   const blockedOnMobile = tool.desktopOnly && isMobileDevice();
   return (
-    <div className={tool.contentWidth ? TOOL_CONTENT_WIDTH[tool.contentWidth] : undefined}>
+    <div>
       <div className="flex items-center gap-4 mb-6">
         <div className="w-12 h-12 bg-slate-100 dark:bg-dark-surface-alt rounded-xl flex items-center justify-center shrink-0">
           <Icon className="w-6 h-6 text-slate-700 dark:text-dark-text" />
@@ -748,17 +741,9 @@ export function App() {
       const id = (event as CustomEvent<ToolId>).detail;
       if (findTool(id)) setView({ kind: "tool", toolId: id });
     }
-    // A multi-file constructor (Merge / Images-to-PDF) finished and handed its
-    // output PDF to the editor.
-    function onOpenEditor(event: Event) {
-      const file = (event as CustomEvent<File>).detail;
-      setView({ kind: "editor", file, tool: null });
-    }
     window.addEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
-    window.addEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
     return () => {
       window.removeEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
-      window.removeEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
     };
   }, []);
 
