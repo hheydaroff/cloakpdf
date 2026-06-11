@@ -8,8 +8,8 @@
  * via Organize). Only tools that can't be a single-PDF "edit then export" flow
  * stay as cards here — the multi-input constructors (merge, images→PDF), the
  * dual-input compare, terminal-output extract-images, the security flows
- * (password, digital signature), the read-only inspector, and on-device AI
- * chat. See `Tool.standaloneOnly`.
+ * (password, digital signature), and on-device AI chat. See
+ * `Tool.standaloneOnly`.
  *
  * Tool order within each category encodes importance / frequency of use — the
  * home grid displays them in this order.
@@ -41,23 +41,24 @@ const AskPdf = lazy(() => import("../standalone/AskPdf.tsx"));
 // ── Tool metadata ────────────────────────────────────────────────
 
 export const tools = [
-  // ── Organise & Edit ──────────────────────────────────────
+  // ── Combine & Convert ────────────────────────────────────
+  // Multi-file constructors + format conversion — the jobs the single-PDF
+  // editor can't do (it edits one document, these build one from many or
+  // convert between PDF and images).
   {
     id: "merge",
     title: "Merge PDFs",
     description: "Combine multiple PDF files into one document",
     icon: GitMerge,
-    category: "organise",
+    category: "combine",
     standaloneOnly: true, // multi-input constructor (then hands off to the editor)
   },
-
-  // ── Transform & Convert ──────────────────────────────────
   {
     id: "images-to-pdf",
     title: "Images to PDF",
     description: "Convert images into a PDF document",
     icon: Images,
-    category: "transform",
+    category: "combine",
     standaloneOnly: true, // multi-input constructor (then hands off to the editor)
   },
   {
@@ -65,11 +66,11 @@ export const tools = [
     title: "Extract Images",
     description: "Pull all embedded images from a PDF and download as PNG or ZIP",
     icon: ImageDown,
-    category: "transform",
+    category: "combine",
     standaloneOnly: true, // terminal output (embedded images → PNG/ZIP), not a PDF edit
   },
 
-  // ── Security & Properties ────────────────────────────────
+  // ── Secure & Sign ────────────────────────────────────────
   {
     id: "pdf-password",
     title: "PDF Password",
@@ -95,7 +96,7 @@ export const tools = [
     standaloneOnly: true, // security flow (cert signing), not a single-PDF edit step
   },
 
-  // ── AI (on-device) ───────────────────────────────────────
+  // ── On-device AI ─────────────────────────────────────────
   {
     id: "ask-pdf",
     title: "Ask your PDF",
@@ -158,26 +159,26 @@ export const toolComponents: Record<string, React.LazyExoticComponent<React.Comp
 
 // ── Category definitions for the home screen ─────────────────────
 
+// Categories cover only the standalone home cards — the jobs that can't be a
+// single-PDF "edit then export" editor flow. Page management, compress,
+// metadata, watermarking, etc. moved into the unified editor, so the old
+// "Organise & Edit" / "Transform & Convert" / "Security & Properties" buckets
+// no longer describe what's left here. These three do.
 export const categories = [
   {
-    key: "organise",
-    label: "Organise & Edit",
-    description: "Rearrange, combine, and manage your PDF pages",
-  },
-  {
-    key: "transform",
-    label: "Transform & Convert",
-    description: "Compress, convert, and extract content",
+    key: "combine",
+    label: "Combine & Convert",
+    description: "Build a PDF from several files, or pull its contents out",
   },
   {
     key: "security",
-    label: "Security & Properties",
-    description: "Protect your PDFs and manage metadata",
+    label: "Secure & Sign",
+    description: "Protect, sign, and compare your documents",
   },
   {
     key: "ai",
-    label: "AI Tools",
-    description: "On-device AI features — downloaded once, then run entirely in your browser",
+    label: "On-device AI",
+    description: "Chat with your PDF, right in your browser",
   },
 ];
 

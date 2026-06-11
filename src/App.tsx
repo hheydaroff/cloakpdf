@@ -343,7 +343,7 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
           </h3>
           <p className="text-sm text-slate-600 dark:text-dark-text-muted max-w-md mx-auto">
             Try a different search term like &ldquo;merge&rdquo;, &ldquo;sign&rdquo;, or
-            &ldquo;compress&rdquo;
+            &ldquo;compare&rdquo;
           </p>
         </div>
       ) : (

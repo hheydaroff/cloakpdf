@@ -23,16 +23,20 @@
 
 ## ✨ What it does
 
-Drop a PDF and it opens in a single, canvas-based **editor** — annotate, sign, fill forms, redact, crop, OCR, reorganise pages, add stamps and page numbers, and more. A few **standalone tools** cover jobs that need more than one file (merge, images → PDF, compare) or special inputs (password, certificate signing). And **Ask your PDF** answers questions about a document using a small AI model that runs on your device.
+Drop a PDF and it opens in a single, canvas-based **editor** — a Photoshop-like workspace for one document at a time:
 
-- **✏️ Edit & annotate** — draw, highlight, shapes, text, signatures, fill forms
-- **📄 Pages** — reorder, rotate, delete, crop, N-up, split, contact sheet
-- **🔒 Privacy** — redact (burned into the page), scrub hidden data, strip metadata
-- **🔄 Convert** — compress, grayscale, flatten, OCR, PDF ⇄ images
-- **🔑 Secure** — password & permissions, certificate signing, compare two PDFs
-- **🤖 AI (on-device)** — chat with your PDF; no API key, no server
+- **✏️ Annotate & sign** — draw, highlight, shapes, text, signatures, fill & flatten forms
+- **📄 Pages** — reorder, rotate, delete, crop, N-up, OCR, plus split / extract / contact-sheet on export
+- **🔒 Privacy** — redact (burned into the page), find & box text, scrub hidden data, edit or strip metadata
+- **🏷️ Stamps & numbering** — watermarks, page numbers, headers & footers, Bates numbering, bookmarks
 
 Export to PDF, images (ZIP), a contact sheet, or split pages — with optional compress / grayscale / flatten / repair / strip-metadata.
+
+A few **standalone tools** cover the jobs the single-PDF editor can't — these mirror the categories on the home screen:
+
+- **🧩 Combine & Convert** — merge PDFs, build a PDF from images, or extract embedded images
+- **🔑 Secure & Sign** — add a password & permissions, sign with a certificate, or compare two PDFs
+- **🤖 On-device AI** — _Ask your PDF_: chat with a document using a small model that runs entirely in your browser, no API key or server
 
 ---
 

@@ -83,9 +83,9 @@ export interface Tool {
    * (plus PDF→image / contact-sheet / split via its Export menu). Only
    * tools that can't be a single-PDF "edit then export" flow stay as
    * cards: multi-input constructors (merge, images→PDF), the dual-input
-   * compare, and special single-input tools (AI chat, read-only
-   * inspector, image extraction, security cert/password). Tools without
-   * this flag are not shown as cards — they live inside the editor.
+   * compare, and special single-input tools (AI chat, image extraction,
+   * security cert/password). Tools without this flag are not shown as
+   * cards — they live inside the editor.
    */
   standaloneOnly?: boolean;
 }
