@@ -10,26 +10,27 @@
  */
 
 import {
+  CloudOff,
   Code2,
   Cpu,
+  FileArchive,
+  FileImage,
   GitFork,
-  Lock,
   MonitorSmartphone,
   Rocket,
-  LayoutGrid,
+  ScanSearch,
+  Scissors,
   Search,
   ShieldCheck,
   UserRoundCheck,
   WifiOff,
   EyeOff,
   X,
-  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileDropZone } from "./components/FileDropZone.tsx";
 import { Layout } from "./components/Layout.tsx";
-import { useRevealOnScroll } from "./hooks/useRevealOnScroll.ts";
 import { OrientationLock } from "./components/OrientationLock.tsx";
 import { PrivacyPolicy } from "./components/PrivacyPolicy.tsx";
 import { ReloadPrompt } from "./components/ReloadPrompt.tsx";
@@ -43,8 +44,8 @@ import {
   tools,
   type ToolId,
 } from "./config/tool-registry.ts";
-// Plain id set (no editor component graph) — safe on the home critical path.
-import { EDITOR_TOOL_IDS } from "./editor/tools.ts";
+// Plain metadata (no editor component graph) — safe on the home critical path.
+import { EDITOR_TOOL_IDS, EDITOR_TOOLS } from "./editor/tools.ts";
 import type { Tool } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
 import { NAVIGATE_TOOL_EVENT, OPEN_EDITOR_EVENT } from "./utils/nav.ts";
@@ -152,6 +153,52 @@ function DesktopOnlyNotice({ tool }: { tool: Tool }) {
   );
 }
 
+// ── Home search index ────────────────────────────────────────────
+
+/**
+ * Editor tools mapped to the home-card shape so the ⌘K search reaches the
+ * whole product, not just the 7 standalone cards. Clicking one routes through
+ * the existing editor path in `handleSelectTool` (opens the editor with the
+ * tool preselected). Derived from the same `EDITOR_TOOLS` constant the
+ * editor's rail renders from, so search can never drift from the product.
+ */
+const EDITOR_SEARCH_CARDS: Tool[] = EDITOR_TOOLS.filter((t) => t.status === "ready").map((t) => ({
+  id: t.id,
+  title: t.name,
+  description: t.description,
+  icon: t.icon,
+}));
+
+/**
+ * Export-menu flows (compress / split / PDF→images) live in the editor's
+ * Export modal, not in `EDITOR_TOOLS` — without these aliases, "compress"
+ * and "split" would still dead-end in search. Their ids carry an `export-`
+ * prefix; clicking one opens the editor plain (the Export menu isn't
+ * tool-addressable).
+ */
+const EXPORT_FLOW_CARDS: Tool[] = [
+  {
+    id: "export-compress",
+    title: "Compress PDF",
+    description: "Shrink the file size — open the editor and export with compression",
+    icon: FileArchive,
+  },
+  {
+    id: "export-split",
+    title: "Split PDF",
+    description: "Split into separate PDFs — via the editor's Export menu",
+    icon: Scissors,
+  },
+  {
+    id: "export-images",
+    title: "PDF to images",
+    description: "Export pages as PNG or JPEG images — via the editor's Export menu",
+    icon: FileImage,
+  },
+];
+
+const EDITOR_SEARCH_INDEX: Tool[] = [...EDITOR_SEARCH_CARDS, ...EXPORT_FLOW_CARDS];
+
 // ── HomeScreen ───────────────────────────────────────────────────
 
 interface HomeScreenProps {
@@ -209,6 +256,30 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
     );
   }, [searchQuery]);
 
+  /**
+   * Editor tools + export flows matching the query — rendered as an extra
+   * "In the editor" section below the standalone results. Empty until the
+   * user types (the resting grid shows only the standalone cards; the
+   * editor's 18 tools are reached by dropping a PDF).
+   */
+  const editorMatches = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return EDITOR_SEARCH_INDEX.filter(
+      (t) => t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
+    );
+  }, [searchQuery]);
+
+  /** Route a search-result card: `export-*` aliases open the editor plain;
+   *  everything else goes through the normal tool routing. */
+  const handleResultSelect = useCallback(
+    (id: ToolId) => {
+      if (id.startsWith("export-")) onOpenEditor();
+      else onSelectTool(id);
+    },
+    [onOpenEditor, onSelectTool],
+  );
+
   return (
     <div>
       {/* ── Hero — editor-first, asymmetric two-column. Copy + trust features
@@ -221,20 +292,30 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
           <div className="grid items-center gap-y-9 lg:grid-cols-2 lg:grid-rows-[auto_auto] lg:gap-x-12 xl:gap-x-16">
             {/* Copy */}
             <div className="order-1 max-w-xl lg:col-start-1 lg:row-start-1">
+              {/* The privacy clause carries colour, not italics — the same
+                  coloured-ink move as the wordmark's "PDF" suffix, so the
+                  brand emphasis reads hand-set without an italic header. */}
               <h1 className="text-[32px] sm:text-[40px] lg:text-[46px] xl:text-[52px] font-semibold text-slate-900 dark:text-dark-text tracking-[-0.03em] leading-[1.05] m-0 text-balance animate-fade-in-up">
                 PDF tools that{" "}
-                <em className="font-serif italic font-normal text-primary-600 dark:text-primary-400">
-                  stay on your device
-                </em>
-                .
+                <span className="text-primary-600 dark:text-primary-400">stay on your device</span>.
               </h1>
 
               <p
                 className="mt-5 max-w-lg text-slate-500 dark:text-dark-text-muted text-card-title sm:text-[17px] leading-[1.55] text-pretty animate-fade-in-up"
                 style={{ animationDelay: "120ms" }}
               >
-                Edit, merge, sign, secure &amp; convert PDFs entirely in your browser — no uploads,
-                no accounts, no tracking.
+                Edit, merge, sign, redact &amp; convert PDFs — entirely in your browser.
+              </p>
+
+              {/* The honest zero: the only marketing-flavoured number on the
+                  page is a zero, and the counts are derived from the tool
+                  registries so they can never drift from the product. */}
+              <p
+                className="mt-4 text-meta text-slate-400 dark:text-dark-text-muted tabular-nums animate-fade-in-up"
+                style={{ animationDelay: "160ms" }}
+              >
+                {EDITOR_TOOL_IDS.size} editor tools · {tools.length} utilities ·{" "}
+                <span className="font-semibold text-slate-600 dark:text-dark-text">0 uploads</span>
               </p>
             </div>
 
@@ -255,22 +336,25 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
               />
             </div>
 
-            {/* Trust features — under the copy on desktop, after the drop zone
-                on mobile. Stack on phones, three across from sm up. */}
+            {/* Mechanism trio — under the copy on desktop, after the drop zone
+                on mobile. Stack on phones, three across from sm up. The h1 and
+                header chip already carry the privacy promise, so these three
+                carry mechanisms: no upload step, live offline proof, and the
+                open-source receipt. */}
             <div
-              className="order-3 grid grid-cols-1 gap-x-5 gap-y-4 animate-fade-in-up sm:grid-cols-3 lg:col-start-1 lg:row-start-2"
+              className="order-3 grid grid-cols-1 gap-x-5 gap-y-4 animate-fade-in-up sm:grid-cols-3 lg:gap-x-3 xl:gap-x-5 lg:col-start-1 lg:row-start-2"
               style={{ animationDelay: "200ms" }}
             >
               <HeroFeature
-                icon={Lock}
-                title="100% Private"
-                description="Everything stays on your device."
+                icon={CloudOff}
+                title="No upload step"
+                description="Files never leave your device — nothing to wait for."
               />
-              <HeroFeature icon={Zap} title="Blazing Fast" description="No servers, no waiting." />
+              <OfflineProof />
               <HeroFeature
                 icon={Code2}
-                title="Open Source"
-                description="Transparent & community-driven."
+                title="Open source"
+                description="MIT-licensed — audit every line on GitHub."
               />
             </div>
           </div>
@@ -341,13 +425,14 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
             className="text-center text-sm text-slate-600 dark:text-dark-text-muted mt-3 animate-fade-in-up"
             aria-live="polite"
           >
-            {filteredTools.length} {filteredTools.length === 1 ? "tool" : "tools"} found
+            {filteredTools.length + editorMatches.length}{" "}
+            {filteredTools.length + editorMatches.length === 1 ? "tool" : "tools"} found
           </p>
         )}
       </div>
 
       {/* ── Tool Grid / Empty State ─────────────────────── */}
-      {filteredTools.length === 0 ? (
+      {filteredTools.length === 0 && editorMatches.length === 0 ? (
         <div className="text-center py-16 animate-fade-in-up">
           <div className="w-16 h-16 bg-slate-100 dark:bg-dark-surface rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Search className="w-8 h-8 text-slate-400 dark:text-dark-text-muted" />
@@ -356,8 +441,8 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
             No tools found
           </h3>
           <p className="text-sm text-slate-600 dark:text-dark-text-muted max-w-md mx-auto">
-            Try a different search term like &ldquo;merge&rdquo;, &ldquo;sign&rdquo;, or
-            &ldquo;compare&rdquo;
+            Try a different search term like &ldquo;redact&rdquo;, &ldquo;watermark&rdquo;, or
+            &ldquo;merge&rdquo;
           </p>
         </div>
       ) : (
@@ -401,6 +486,38 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
             );
           })}
 
+          {/* ── "In the editor" search results — the 18 single-PDF tools +
+              export flows live in the editor, so they only surface when the
+              user is searching. Same rail anatomy as the category sections;
+              clicking opens the editor with the tool preselected. ── */}
+          {searchQuery && editorMatches.length > 0 && (
+            <section className="grid gap-x-8 gap-y-5 animate-fade-in-up lg:grid-cols-12 lg:items-start lg:gap-x-10">
+              <div className="lg:col-span-4 xl:col-span-3">
+                <div className="text-tag font-semibold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400 mb-2">
+                  In the editor
+                  <span className="ml-2 text-slate-400 dark:text-dark-text-muted font-medium tracking-normal normal-case">
+                    · {editorMatches.length}
+                  </span>
+                </div>
+                {/* "Keep going", not "with the tool ready" — the export-*
+                    aliases open the editor plain (Export menu isn't
+                    tool-addressable), so the head must be true for both. */}
+                <h2 className="text-[22px] sm:text-[26px] font-semibold tracking-[-0.02em] leading-[1.2] text-slate-900 dark:text-dark-text m-0 text-balance">
+                  Keep going in the canvas editor.
+                </h2>
+              </div>
+              <div
+                className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-8 xl:col-span-9 ${
+                  editorMatches.length === 1 ? "" : "2xl:grid-cols-3"
+                }`}
+              >
+                {editorMatches.map((tool) => (
+                  <ToolCard key={tool.id} tool={tool} onSelect={handleResultSelect} />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* ── Why CloakPDF — feature grid ── */}
           {!searchQuery && <WhyCloakPdfSection />}
         </div>
@@ -409,53 +526,50 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
   );
 }
 
+/**
+ * "Why CloakPDF" — left-aligned into the same 4/8 rail rhythm as the category
+ * sections (the centered-head + uniform grid shape was the page's most
+ * templated block). Renders statically: the first-paint cascade is the page's
+ * one entrance; a second scroll-triggered reveal here was motion for its own
+ * sake. Eight claims, each concrete and checkable — the privacy thesis is
+ * stated in the hero and mechanised here, not repeated.
+ */
 function WhyCloakPdfSection() {
-  const { ref, revealed } = useRevealOnScroll<HTMLElement>();
   return (
-    <section
-      ref={ref}
-      className={`pt-6 sm:pt-10 motion-safe:transition-[opacity,transform] motion-safe:duration-700 ${
-        revealed ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
-      }`}
-    >
-      <div className="text-center mb-8 sm:mb-12">
-        <div className="text-tag font-semibold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400 mb-2.5">
+    <section className="grid gap-x-8 gap-y-6 pt-6 sm:pt-10 lg:grid-cols-12 lg:items-start lg:gap-x-10">
+      <div className="lg:col-span-4 xl:col-span-3">
+        <div className="text-tag font-semibold uppercase tracking-[0.12em] text-primary-600 dark:text-primary-400 mb-2">
           Why CloakPDF
         </div>
-        <h2 className="text-[24px] sm:text-[30px] md:text-[36px] font-semibold tracking-[-0.02em] leading-[1.15] text-slate-900 dark:text-dark-text m-0 text-balance">
-          Everything you need, nothing you don&rsquo;t.
+        <h2 className="text-[22px] sm:text-[26px] font-semibold tracking-[-0.02em] leading-[1.2] text-slate-900 dark:text-dark-text m-0 text-balance">
+          {tools.length} utilities, one editor, nothing uploaded.
         </h2>
-        <p className="text-slate-500 dark:text-dark-text-muted text-[14px] sm:text-[15.5px] leading-[1.55] max-w-140 mx-auto mt-3">
-          A modern PDF toolkit that respects your privacy — built for people who care about their
-          data and their craft.
+        <p className="mt-3 text-slate-500 dark:text-dark-text-muted text-card-title leading-[1.55] text-pretty">
+          Open the Network tab while you edit: the app downloads its own code, but your files never
+          go up. It&rsquo;s all public if you&rsquo;d rather read than watch.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-7 sm:gap-y-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-7 sm:gap-y-8 lg:col-span-8 xl:col-span-9">
         <FeatureItem
           icon={<UserRoundCheck className="w-5 h-5" />}
           title="No sign-up"
           description="No accounts, no email, no passwords. Start using the moment the page loads."
         />
         <FeatureItem
-          icon={<EyeOff className="w-5 h-5" />}
-          title="No tracking"
-          description="Zero analytics, zero telemetry, zero third-party scripts. You stay anonymous."
-        />
-        <FeatureItem
           icon={<ShieldCheck className="w-5 h-5" />}
-          title="Local-first"
-          description="Every byte stays in your browser. Nothing is ever uploaded to any server."
+          title="Local-first, no tracking"
+          description="Every byte stays in your browser — and there's no analytics script watching you work."
         />
         <FeatureItem
-          icon={<WifiOff className="w-5 h-5" />}
-          title="Works offline"
-          description="Once cached, keep editing and exporting without a connection — flights, trains, anywhere."
+          icon={<EyeOff className="w-5 h-5" />}
+          title="Redaction that deletes"
+          description="Redacted pages are rebuilt as pixels, so the text underneath is gone — not hidden under a black box."
         />
         <FeatureItem
           icon={<Rocket className="w-5 h-5" />}
-          title="Installable as a PWA"
-          description="Add CloakPDF to your home screen for a full-screen, app-like experience that launches in one tap."
+          title="Installable, works offline"
+          description="Add it to your home screen as a PWA — once cached, keep editing and exporting without a connection."
         />
         <FeatureItem
           icon={<MonitorSmartphone className="w-5 h-5" />}
@@ -463,9 +577,9 @@ function WhyCloakPdfSection() {
           description="Every tool adapts fluidly across screen sizes — edit on the go, finalise at your desk."
         />
         <FeatureItem
-          icon={<LayoutGrid className="w-5 h-5" />}
-          title={`${tools.length} tools + a unified editor`}
-          description="Seven focused utilities for multi-file and signing jobs, plus an intuitive all-in-one editor — redact, annotate, sign, OCR, organise and far more in one workspace."
+          icon={<ScanSearch className="w-5 h-5" />}
+          title="PII detection built in"
+          description="Redact spots emails, phone and card numbers, SSNs, IBANs and more on the page — and boxes them for you."
         />
         <FeatureItem
           icon={<Cpu className="w-5 h-5" />}
@@ -507,6 +621,37 @@ function FeatureItem({ icon, title, description }: FeatureItemProps) {
           {description}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Live trust chip: invites the user to flip on airplane mode, then proves the
+ * offline claim the moment the browser actually disconnects (real
+ * `online`/`offline` events — the page demonstrates instead of asserting).
+ * The offline copy claims only the editor: AI model weights and OCR language
+ * data are runtime-cached on first use, so "everything" would overclaim on a
+ * cold cache. `aria-atomic` makes the title + line announce as one phrase.
+ */
+function OfflineProof() {
+  const [online, setOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  useEffect(() => {
+    const onOnline = () => setOnline(true);
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, []);
+  return (
+    <div aria-live="polite" aria-atomic="true">
+      <HeroFeature
+        icon={WifiOff}
+        title={online ? "Works offline" : "You're offline"}
+        description={online ? "Flip on airplane mode. We'll wait." : "The editor still works."}
+      />
     </div>
   );
 }

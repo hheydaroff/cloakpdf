@@ -43,11 +43,14 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
       />
 
       <div className="relative z-10 flex flex-col gap-2">
-        <span className="w-11 h-11 rounded-xl grid place-items-center bg-slate-100 dark:bg-dark-surface-alt text-slate-700 dark:text-dark-text mb-2 transition-[transform,background-color,color] duration-200 group-hover:-translate-y-px group-hover:scale-105 group-hover:bg-primary-50 dark:group-hover:bg-primary-900/30 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-active:bg-primary-50 dark:group-active:bg-primary-900/30 group-active:text-primary-600 dark:group-active:text-primary-400">
+        {/* Hover budget: the card wakes as ONE unit (border + lift + shadow +
+            spotlight + chevron). The icon tile only swaps colour — no scale or
+            counter-translate — and the title holds still. */}
+        <span className="w-11 h-11 rounded-xl grid place-items-center bg-slate-100 dark:bg-dark-surface-alt text-slate-700 dark:text-dark-text mb-2 transition-[background-color,color] duration-200 group-hover:bg-primary-50 dark:group-hover:bg-primary-900/30 group-hover:text-primary-600 dark:group-hover:text-primary-400 group-active:bg-primary-50 dark:group-active:bg-primary-900/30 group-active:text-primary-600 dark:group-active:text-primary-400">
           <Icon className="w-5 h-5" />
         </span>
 
-        <h3 className="text-card-title font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text transition-transform duration-200 group-hover:translate-x-0.5 group-active:translate-x-0.5 inline-flex items-center gap-2 flex-wrap">
+        <h3 className="text-card-title font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text inline-flex items-center gap-2 flex-wrap">
           {tool.title}
           {tool.beta && (
             // Small uppercase pill, surfaces as part of the title for

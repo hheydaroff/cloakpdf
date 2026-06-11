@@ -122,7 +122,7 @@ export function FileDropZone({
       {...glowHandlers}
       style={{ touchAction: "manipulation" }}
       className={`group relative w-full overflow-hidden border-2 border-dashed text-center cursor-pointer
-        ${hero ? "rounded-3xl p-12 sm:p-16" : "rounded-xl p-10"}
+        ${hero ? "rounded-3xl p-8 sm:p-16" : "rounded-xl p-10"}
         transition-[border-color,background-color,transform] duration-200
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2
         ${
@@ -159,17 +159,21 @@ export function FileDropZone({
               : "bg-slate-100 dark:bg-dark-surface group-hover:bg-primary-50 dark:group-hover:bg-primary-900/30"
           }`}
       >
+        {/* Rests at full opacity in a muted slate (a dimmed icon reads
+            disabled on the page's primary CTA); the accent colour arrives on
+            hover/drag via a CSS variable so the inline `iconColor` doesn't
+            override the resting class. */}
         <FileUp
-          className={`${hero ? "w-10 h-10" : "w-8 h-8"} transition-[color,opacity] duration-200 ${
-            iconColor
-              ? isDragOver
-                ? "opacity-100"
-                : "opacity-50 group-hover:opacity-100"
-              : isDragOver
-                ? "text-primary-500"
-                : "text-slate-400 dark:text-dark-text-muted group-hover:text-primary-400"
+          className={`${hero ? "w-10 h-10" : "w-8 h-8"} transition-colors duration-200 ${
+            isDragOver
+              ? iconColor
+                ? "text-(--dz-accent)"
+                : "text-primary-500"
+              : `text-slate-400 dark:text-dark-text-muted ${
+                  iconColor ? "group-hover:text-(--dz-accent)" : "group-hover:text-primary-400"
+                }`
           }`}
-          style={iconColor ? { color: iconColor } : undefined}
+          style={iconColor ? ({ "--dz-accent": iconColor } as React.CSSProperties) : undefined}
           strokeWidth={1.5}
         />
       </div>

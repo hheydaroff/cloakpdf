@@ -440,15 +440,14 @@ export default function PdfPassword() {
         </div>
       )}
 
-      {/* Action button */}
+      {/* Action button. Labels budgeted for the 320px CTA (ActionButton
+          labels never wrap): "Remove Password & Download" overflowed the pill. */}
       {(pdfState === "unencrypted" || pdfState === "encrypted") && (
         <ActionButton
           onClick={pdfState === "unencrypted" ? handleAddPassword : handleRemovePassword}
           processing={processing}
           disabled={pdfState === "unencrypted" ? !canSubmitAdd : !canSubmitRemove}
-          label={
-            pdfState === "unencrypted" ? "Protect PDF & Download" : "Remove Password & Download"
-          }
+          label={pdfState === "unencrypted" ? "Protect & Download" : "Unlock & Download"}
           processingLabel={pdfState === "unencrypted" ? "Protecting…" : "Unlocking…"}
         />
       )}

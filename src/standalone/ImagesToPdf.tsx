@@ -324,7 +324,9 @@ export default function ImagesToPdf() {
           <ActionButton
             onClick={handleConvert}
             processing={task.processing}
-            label={`Create PDF from ${images.length} image${images.length > 1 ? "s" : ""} & edit`}
+            label={
+              images.length === 1 ? "Create PDF & edit" : `Combine ${images.length} images & edit`
+            }
             processingLabel="Creating PDF…"
           />
         </>

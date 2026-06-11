@@ -137,14 +137,15 @@ typography:
     moz: grayscale
   hero:
     fontFamily: "Inter"
-    fontSize: "clamp(34px, 5vw, 58px)"
+    fontSize: "32px / 40px (sm) / 46px (lg) / 52px (xl) — stepped, not clamp"
     fontWeight: "600"
     lineHeight: "1.05"
     letterSpacing: "-0.03em"
     notes: >-
-      Italic phrase ("stay on your device") swaps to system serif,
-      400 weight, primary-600/400, to feel editorial against the
-      geometric sans.
+      The privacy clause ("stay on your device") carries primary-600/400
+      colour at the same weight — roman, same family. It echoes the
+      wordmark's coloured "PDF" suffix; the earlier italic-serif
+      treatment was retired (italic display is an AI-landing tell).
   display:
     fontFamily: "Inter"
     fontSize: "clamp(24px, 3.4vw, 36px)"
@@ -295,7 +296,7 @@ motion:
     popover/fade/slide/error/warning pulses drop to instant. Layout
     transitions still resolve in ≤200ms.
   hover-lift:    "translateY(-2px) on cards / CTAs"
-  hover-shift-x: "translateX(2px) on card titles + chevrons"
+  hover-shift-x: "translateX(4px) on card chevrons (-translate-x-1 → 0; titles hold still)"
 
 effects:
   grainient:                       # WebGL shader — src/config/grainient.ts + components/Grainient.tsx
@@ -313,7 +314,6 @@ effects:
       Safari samples the viewport, so its URL bar tints to a calm near-grey.
   spotlight:
     radius: "320px"     # ToolCard
-    radius-hero: "420px" # WorkflowHero
     radius-drop: "300px" # FileDropZone
     color: "{colors.glow-primary}"
     falloff: "transparent at 70%"
@@ -340,7 +340,7 @@ iconography:
   size-md: "20px"   # card icons, button icons
   size-lg: "24px"   # tool-page header icons
   tile-size: "44px" # 11×11 in 4px grid; rounded-xl, slate-100 bg
-  tile-hover: "primary-50 bg / primary-600 fg + scale(1.05) + -1px lift"
+  tile-hover: "primary-50 bg / primary-600 fg colour wash (no scale, no lift)"
   brand-mark: "shield + folded-corner document with redaction lines"
 
 components:
@@ -399,15 +399,9 @@ components:
     title: "{typography.card-title}"
     body:  "{typography.body-sm}"
     hover: "translateY(-2px) + shadow-md + spotlight glow + chevron slide-in"
-  workflow-hero-card:
-    extends: "tool-card"
-    layout: "horizontal"
-    eyebrow: "WORKFLOWS"
-    badge: "NEW (primary-50 pill, primary-600 text)"
-    glow-radius: "420px"
   feature-item:
     layout: "icon + title + description, gap-3.5"
-    iconTile: "40px rounded-lg, color-mix(<feature> 14%, transparent)"
+    iconTile: "40px rounded-lg, bg-primary-50 / text-primary-600 (monochrome, one-accent rule)"
     title: "14.5px / 600 / slate-800"
     body:  "13.5px / 400 / slate-500"
   file-drop-zone:
@@ -415,7 +409,7 @@ components:
     border: "2px dashed {colors.slate-200}"
     borderActive: "2px dashed {colors.primary-400}"
     rounded: "{radii.2xl}"
-    icon: "FileUp · primary-tinted"
+    icon: "FileUp · slate-400 at rest, accent on hover/drag (--dz-accent CSS var)"
     spotlightRadius: "300px"
   alert-error:
     backgroundColor: "{colors.danger-bg}"
@@ -496,9 +490,9 @@ breakpoints:
   container-max: "1152px below xl; 1408px (88rem) from xl"
 
 grid:
-  hero: "12-col, 7 / 5 split (lg+); single column below"
+  hero: "2-col (lg+), copy + trust row left / drop zone right; single column below"
   tools: "1 / 2 / 3 columns at base / sm / 2xl, inside the category rail's 8–9-col span"
-  features: "1 / 2 / 3 columns at sm / md / lg breakpoints"
+  features: "1 / 2 columns at base / sm, inside the Why rail's 8–9-col span"
   bento-footer: "12-col, 7 / 5 split (sm+); stacks below"
 
 a11y:
@@ -519,19 +513,20 @@ CloakPDF is a privacy-first toolbox for editing, merging, signing,
 redacting, and converting PDFs entirely in the browser. The design
 system has to communicate two things at the same time: **calm
 confidence** ("nothing leaves your device") and **technical
-breadth** (35+ tools without feeling like a control panel). Ocean
+breadth** (25 tools without feeling like a control panel). Ocean
 Blue is the load-bearing visual idea — a single accent doing the
 work that lesser systems split across category colours.
 
 ## Brand & Voice
 
 The product personality is **quiet, modern, and deliberate**. The
-hero pairs a tight geometric sans with one editorial italic clause
-("*stay on your device*") to make the privacy promise feel
-hand-set rather than templated. The wordmark renders the "PDF"
-suffix in primary-600 against a slate-900 "Cloak" — same family,
-different ink — so the brand reads as a single word with a coloured
-emphasis rather than a logo+tag.
+hero sets its privacy clause ("stay on your device") in primary-600
+ink — roman, same family, same weight — the identical coloured-ink
+move the wordmark makes by rendering the "PDF" suffix in primary-600
+against a slate-900 "Cloak". One emphasis device, used twice, so the
+brand reads as a single word with a coloured emphasis rather than a
+logo+tag. (An earlier italic-serif hero clause was retired: italic
+display type is one of the most recognised generated-landing tells.)
 
 The shield-and-document logo carries a vertical primary-500 →
 primary-700 gradient. Three short redacted bars sit on the page
@@ -597,15 +592,17 @@ text becomes primary-400 to maintain AA contrast.
 ## Typography
 
 The system runs on **Inter Variable** (self-hosted, weights 100-900)
-with the platform sans stack as fallback. One serif accent is
-permitted — a single italic phrase in the hero — and uses the
-default `font-serif` system stack so it inherits the user's
-operating-system serif rather than shipping another font.
+with the platform sans stack as fallback. Display type is always
+roman — no italic headings anywhere. Emphasis inside a heading is
+carried by primary-600 ink at the same weight (the wordmark move).
+The `font-serif` token remains defined for body-copy use, but no
+display surface uses it.
 
 Hierarchy:
 
-- **Hero (34–58 px / 600 / -0.03em / 1.05)** — the only place
-  size goes above 30 px. Animated in via `fade-in-up` 80 ms
+- **Hero (32–52 px / 600 / -0.03em / 1.05)** — the only place
+  size goes above 30 px. Stepped per breakpoint (32 / 40 / 46 / 52
+  at base / sm / lg / xl). Animated in via `fade-in-up` 80 ms
   staggered after the page paints.
 - **Section headline (22–26 px / 600 / -0.02em / 1.2)** — used
   once per category; always paired with an 11 px uppercase eyebrow
@@ -646,18 +643,17 @@ self-cap the same way (Privacy Policy at `max-w-2xl`).
 Inside cards, the icon tile is followed by a `mb-2` flush, then
 the title, then the body, with no hairline divider; the system
 relies on whitespace and the soft slate-200 outer border to
-contain the block. Hero columns use a 7 / 5 lg-grid split so the
-headline gets visual primacy and the workflow promo card balances
-the right edge.
+contain the block. The hero is a 2-col lg-grid: copy, the derived
+stat line, and the mechanism trio anchor the left; the editor drop
+zone — the single primary entry — balances the right edge.
 
 ## Shape Language
 
 Three radii do almost all the work:
 
-- **`rounded-2xl` (16 px)** on tool cards, the workflow hero card,
-  the search bar, the file drop zone, modal surfaces, and primary
-  CTAs. This is the "page" radius — it carries the soft, modern
-  silhouette.
+- **`rounded-2xl` (16 px)** on tool cards, the search bar, the
+  file drop zone, modal surfaces, and primary CTAs. This is the
+  "page" radius — it carries the soft, modern silhouette.
 - **`rounded-xl` (12 px)** on icon tiles and ghost buttons.
 - **`rounded-full`** on eyebrow chips, the "NEW" pill, the step
   circles in the footer, and the kbd background.
@@ -702,9 +698,11 @@ unit.
 
 Motion is **calm, layered, and short** by default. The home page
 has a fade-in-up choreography on first paint: hero h1 at 0 ms,
-subhead at 80 ms, workflow card at 120 ms, search at 160 ms, then
-each tool category at `index × 80 ms`. The cumulative effect is a
-gentle cascade rather than a slam-dunk reveal.
+subhead at 120 ms, stat line + drop zone + search at 160 ms, the
+trust trio at 200 ms, then each tool category at `index × 80 ms`.
+It is the page's only entrance — sections render statically after
+it. The cumulative effect is a gentle cascade rather than a
+slam-dunk reveal.
 
 Two **looping pulses** carry status:
 
@@ -727,8 +725,8 @@ All glyphs come from **Lucide** at default 2-weight stroke, except
 the home-page search icon which uses 2.25 to read confidently
 inside the chunky search bar. Standard sizes are 16 / 20 / 24 px,
 each riding inside a slate-100 rounded-xl tile (40–48 px) which
-swaps to a primary-50 / primary-600 wash on hover with a 1 px lift
-and a 1.05× scale.
+swaps to a primary-50 / primary-600 colour wash on hover — no
+scale, no lift; the card wakes as one unit.
 
 ## Components
 
@@ -739,11 +737,6 @@ that surfaces on hover. The cursor-tracking spotlight reads the
 mouse position via `getBoundingClientRect` and paints a 320 px
 radial gradient that follows; the same handler accepts touch
 events so the effect works on phones and tablets.
-
-**Workflow hero card** — same body as the tool card but laid out
-horizontally, prefixed by an uppercase "WORKFLOWS" eyebrow and a
-"NEW" pill in primary tints. The spotlight goes a touch larger
-(420 px) to suit the wider footprint.
 
 **Search bar** — 56 px tall, 16 px radius, white-90 surface with a
 subtle backdrop blur. A leading slate-700 magnifier and a trailing
@@ -782,7 +775,7 @@ cuts pointer events.
 ## Closing Notes
 
 The single hardest decision in this system is *not* using
-per-category colour. Every design that splits 35 tools by domain
+per-category colour. Every design that splits 25 tools by domain
 ends up looking like a control panel; the unified ocean-blue
 accent reads as one calm app instead. The Grainient field absorbs the
 chromatic energy; the chrome stays monochromatic; the user's eye
@@ -791,7 +784,7 @@ follows hierarchy and motion, not hue.
 Two invariants to preserve in any future revision:
 
 1. **One accent.** Per-tool / per-category colour stays out of
-   interactive surfaces. Two sanctioned exceptions: the nine
+   interactive surfaces. Two sanctioned exceptions: the eight
    illustrative chips in the "Why CloakPDF" grid (which appear
    once, below the fold), and **destructive primary actions**,
    which may use `bg-red-600 / hover:bg-red-700` (e.g. the Delete

@@ -219,14 +219,14 @@ export function Layout({ children, onHome, showBack, onPrivacy }: LayoutProps) {
                     {[
                       {
                         n: 1,
-                        title: "Pick a tool",
-                        description: `Browse ${tools.length}+ PDF utilities organised by what you want to do — all in one place.`,
+                        title: "Drop a PDF — or pick a utility",
+                        description: `PDFs open in the canvas editor; ${tools.length} focused cards cover multi-file, security, and AI jobs.`,
                       },
                       {
                         n: 2,
-                        title: "Drop your PDF",
+                        title: "Make your edits",
                         description:
-                          "Files are processed entirely in your browser. Nothing ever leaves your device.",
+                          "Annotate, redact, organise, OCR — everything runs on your device.",
                       },
                       {
                         n: 3,
@@ -302,7 +302,7 @@ export function Layout({ children, onHome, showBack, onPrivacy }: LayoutProps) {
 
             <div className="border-t border-slate-200/60 dark:border-dark-border pt-5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-meta text-slate-500 dark:text-dark-text-muted">
               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                <span>Built with care by</span>
+                <span>Built by</span>
                 <a
                   href={AUTHOR_URL}
                   target="_blank"

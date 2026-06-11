@@ -437,13 +437,14 @@ export default function ExtractImages() {
                 </div>
               )}
 
+              {/* "N as ZIP", not "N Images as ZIP" — the summary card above
+                  already says "N images selected", and the longer form
+                  overflows the no-wrap CTA at 320px. */}
               <ActionButton
                 onClick={handleDownload}
                 processing={downloading}
                 disabled={downloading || selected.size === 0}
-                label={
-                  selected.size === 1 ? "Download Image" : `Download ${selected.size} Images as ZIP`
-                }
+                label={selected.size === 1 ? "Download Image" : `Download ${selected.size} as ZIP`}
                 processingLabel="Preparing download…"
               />
             </>
