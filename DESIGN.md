@@ -659,9 +659,12 @@ the drop zones, panels, and grids of every view line up with the
 landing grid above them. (A per-tool "reading measure" variant was
 tried and rejected: tools at three different widths read as three
 different apps.) Width restraint lives at the *content* level
-instead: chat bubbles cap at `min(85%, 42rem)`, the Compare diff
-image at `max-w-4xl`, and prose views like the Privacy Policy
-self-cap at `max-w-2xl`.
+instead: chat bubbles cap at `min(85%, 42rem)` and the Compare
+diff image at `max-w-4xl`. The Privacy Policy spans the shell via
+the same 4/8 rail as the home sections — title and overview in the
+left rail, the policy sections in a two-column grid on the right,
+so each prose column keeps a readable measure without a page-level
+cap.
 
 Inside cards, the icon tile is followed by a `mb-2` flush, then
 the title, then the body, with no hairline divider; the system
