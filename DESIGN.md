@@ -352,13 +352,31 @@ components:
     backgroundColor: "{colors.primary-600}"
     backgroundColorHover: "{colors.primary-700}"
     textColor: "#ffffff"
-    typography: "{typography.body}"
+    fontSize: "14px"
     fontWeight: "500"
     rounded: "{radii.xl}"
     padding: "12px 20px (32px from sm) — labels never wrap, so phones get the slack"
     minWidth: "220px"
     trailingIcon: "Download when the label contains it | none — every tool CTA is terminal"
     disabled: "opacity 0.5, cursor not-allowed"
+  button-secondary:
+    backgroundColor: "{colors.surface}"
+    border: "1px solid {colors.slate-200}"
+    borderHover: "1px solid {colors.primary-300}"
+    textColor: "{colors.slate-700}"
+    textColorHover: "{colors.primary-700}"
+    fontSize: "14px"
+    rounded: "{radii.xl}"
+    padding: "matches button-primary (12px 20px, 32px from sm)"
+    trailingIcon: "SquarePen — the continue-in-editor affordance"
+    pairWidth: >-
+      equal to the primary — the pair renders in a 2-column 1fr grid that
+      shrink-wraps to the widest label, so both buttons always match.
+    usage: >-
+      the optional "& edit" action beside a tool's primary CTA: runs the
+      same operation but hands the output PDF to the unified editor
+      instead of downloading (Merge, Images→PDF, PDF Password unlock).
+      Stacks under the primary on phones; sits to its right from sm.
   button-danger:
     backgroundColor: "{colors.danger}"
     backgroundColorHover: "#b91c1c"
@@ -652,6 +670,14 @@ contain the block. The hero is a 2-col lg-grid: copy, the derived
 stat line, and the mechanism trio anchor the left; the editor drop
 zone — the single primary entry — balances the right edge.
 
+The hero trio and the "Why CloakPDF" grid split one rule: each
+claim appears on the page exactly once. The trio owns no upload
+step, works offline, and open source; the Why grid carries
+everything else (free/no sign-up, no tracking, destructive
+redaction, PWA install, responsive, PII detection, on-device AI,
+OCR). A claim that earns a hero slot leaves the grid — repeating
+it below reads as padding.
+
 ## Shape Language
 
 Three radii do almost all the work:
@@ -771,12 +797,23 @@ to red while keeping the same shape.
 
 **Action button** — primary-600 fill, primary-700 hover, 20 px
 horizontal padding (32 px from sm), 12 px vertical, 16 px radius,
-full-width on phones and minimum 220 px on tablet+. Labels never
-wrap and name the tool's terminal action with its count ("Merge 2
-files & Download", "Combine 4 images & Download", "Unlock &
-Download"); a trailing download glyph appears whenever the label
-contains "Download". Disabled drops opacity to 50 % and cuts
-pointer events.
+14 px / 500 label, full-width on phones and minimum 220 px on
+tablet+. Labels never wrap and name the tool's terminal action with
+its count ("Merge 2 files & Download", "Combine 4 images &
+Download", "Unlock & Download"); a trailing download glyph appears
+whenever the label contains "Download". Disabled drops opacity to
+50 % and cuts pointer events.
+
+Tools whose output is a single editable PDF pair the primary with a
+**secondary "& edit" button** (white surface, slate-200 border,
+SquarePen glyph): same operation, but the result opens in the
+unified editor instead of downloading — no download-and-re-upload
+round trip. The pair sits in a two-column 1fr grid that shrink-wraps
+to the widest label, so both buttons always render at the same
+width. The spinner follows whichever button started the run.
+Deliberate omissions: Digital Signature (editing a signed PDF would
+invalidate the signature) and PDF Password's protect path (the
+output is encrypted, which the editor can't open).
 
 ## Closing Notes
 

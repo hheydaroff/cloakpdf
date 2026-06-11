@@ -20,6 +20,7 @@ import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { type SortableDrag, useSortableDrag } from "../hooks/useSortableDrag.ts";
 import { downloadPdf, formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
+import { openEditorWithFile } from "../utils/nav.ts";
 import { imagesToPdf } from "../utils/pdf-operations.ts";
 
 /** Internal representation of a queued image with its preview URL. */
@@ -166,20 +167,36 @@ export default function ImagesToPdf() {
 
   const drag = useSortableDrag(handleMove);
 
-  const handleConvert = useCallback(async () => {
-    if (displayedImages.length === 0) return;
-    setProgress({ done: 0, total: displayedImages.length });
-    await task.run(async () => {
-      const result = await imagesToPdf(
-        displayedImages.map((i) => i.file),
-        pageSize,
-        (done, total) => setProgress({ done, total }),
-      );
-      // Terminal flow: the tool's one job is convert → download. (An earlier
-      // workflow-era version handed the result to the editor instead.)
-      downloadPdf(result, "images.pdf");
-    }, "Failed to create PDF from images. Please try again.");
-  }, [displayedImages, pageSize, task]);
+  /** Build the PDF, then hand the bytes to the chosen delivery (download
+   *  for the primary CTA, the unified editor for the secondary "& edit"). */
+  const runConvert = useCallback(
+    async (deliver: (bytes: Uint8Array) => void) => {
+      if (displayedImages.length === 0) return;
+      setProgress({ done: 0, total: displayedImages.length });
+      await task.run(async () => {
+        const result = await imagesToPdf(
+          displayedImages.map((i) => i.file),
+          pageSize,
+          (done, total) => setProgress({ done, total }),
+        );
+        deliver(result);
+      }, "Failed to create PDF from images. Please try again.");
+    },
+    [displayedImages, pageSize, task],
+  );
+
+  const handleConvert = useCallback(
+    () => runConvert((b) => downloadPdf(b, "images.pdf")),
+    [runConvert],
+  );
+
+  const handleConvertAndEdit = useCallback(
+    () =>
+      runConvert((b) =>
+        openEditorWithFile(new File([b.slice()], "images.pdf", { type: "application/pdf" })),
+      ),
+    [runConvert],
+  );
 
   const isDragging = drag.dragIndex !== null;
   const dragged = drag.dragIndex !== null ? displayedImages[drag.dragIndex] : null;
@@ -327,6 +344,8 @@ export default function ImagesToPdf() {
                 ? "Create PDF & Download"
                 : `Combine ${images.length} images & Download`
             }
+            secondaryLabel={images.length === 1 ? "Create & edit" : "Combine & edit"}
+            onSecondaryClick={handleConvertAndEdit}
             processingLabel="Creating PDF…"
           />
         </>

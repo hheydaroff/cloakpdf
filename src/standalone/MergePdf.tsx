@@ -15,6 +15,7 @@ import { type SortMode, SortByNameButton } from "../components/SortByNameButton.
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { downloadPdf, formatFileSize, naturalCompare } from "../utils/file-helpers.ts";
+import { openEditorWithFile } from "../utils/nav.ts";
 import { mergePdfs } from "../utils/pdf-operations.ts";
 import { isPdfEncrypted } from "../utils/pdf-security.ts";
 
@@ -80,15 +81,28 @@ export default function MergePdf() {
     [isSortActive],
   );
 
-  const handleMerge = useCallback(async () => {
-    if (displayedFiles.length < 2) return;
-    await task.run(async () => {
-      const result = await mergePdfs(displayedFiles.map((f) => f.file));
-      // Terminal flow: the tool's one job is merge → download. (An earlier
-      // workflow-era version handed the result to the editor instead.)
-      downloadPdf(result, "merged.pdf");
-    }, "Failed to merge PDFs. Please check your files and try again.");
-  }, [displayedFiles, task]);
+  /** Run the merge, then hand the bytes to the chosen delivery (download
+   *  for the primary CTA, the unified editor for the secondary "& edit"). */
+  const runMerge = useCallback(
+    async (deliver: (bytes: Uint8Array) => void) => {
+      if (displayedFiles.length < 2) return;
+      await task.run(async () => {
+        const result = await mergePdfs(displayedFiles.map((f) => f.file));
+        deliver(result);
+      }, "Failed to merge PDFs. Please check your files and try again.");
+    },
+    [displayedFiles, task],
+  );
+
+  const handleMerge = useCallback(() => runMerge((b) => downloadPdf(b, "merged.pdf")), [runMerge]);
+
+  const handleMergeAndEdit = useCallback(
+    () =>
+      runMerge((b) =>
+        openEditorWithFile(new File([b.slice()], "merged.pdf", { type: "application/pdf" })),
+      ),
+    [runMerge],
+  );
 
   return (
     <div className="space-y-6">
@@ -168,6 +182,8 @@ export default function MergePdf() {
           processing={task.processing}
           label={`Merge ${displayedFiles.length} files & Download`}
           processingLabel="Merging…"
+          secondaryLabel="Merge & edit"
+          onSecondaryClick={handleMergeAndEdit}
         />
       )}
 

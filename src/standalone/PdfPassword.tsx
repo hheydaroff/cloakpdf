@@ -34,6 +34,7 @@ import { InfoCallout } from "../components/InfoCallout.tsx";
 import { categoryAccent, categoryGlow } from "../config/theme.ts";
 import { useAsyncProcess } from "../hooks/useAsyncProcess.ts";
 import { downloadPdf, errorMessage, formatFileSize, pdfFilename } from "../utils/file-helpers.ts";
+import { openEditorWithFile } from "../utils/nav.ts";
 import { isPdfEncrypted, protectPdf, unlockPdf } from "../utils/pdf-security.ts";
 
 type PdfState = "idle" | "detecting" | "unencrypted" | "encrypted";
@@ -250,29 +251,58 @@ export default function PdfPassword() {
     if (ok) setSuccess(true);
   }, [file, newPassword, confirmPassword, showPerms, permissions, task, setError]);
 
-  const handleRemovePassword = useCallback(async () => {
-    if (!file) return;
-    setSuccess(false);
-    // Don't use task.run here — this handler needs to rewrite the error
-    // message based on the failure mode (incorrect password vs. missing
-    // password vs. generic), which run()'s fallback-string contract can't
-    // express. Fall back to manual try/catch wiring through `task.setError`.
-    try {
-      const bytes = await unlockPdf(file, currentPassword);
-      downloadPdf(bytes, pdfFilename(file, "_unlocked"));
-      setSuccess(true);
-      setError(null);
-    } catch (e) {
-      const msg = errorMessage(e, "Failed to unlock PDF.");
-      if (msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("invalid")) {
-        setError("Incorrect password. Please check and try again.");
-      } else if (msg.toLowerCase().includes("password") || msg.toLowerCase().includes("encrypt")) {
-        setError("A password is required to open this PDF. Please enter the current password.");
-      } else {
-        setError(msg);
+  /**
+   * Unlock the PDF and hand the bytes to the chosen delivery (download for
+   * the primary CTA, the unified editor for the secondary "Unlock & edit").
+   * Doesn't use task.run — this handler needs to rewrite the error message
+   * based on the failure mode (incorrect password vs. missing password vs.
+   * generic), which run()'s fallback-string contract can't express.
+   */
+  const runUnlock = useCallback(
+    async (deliver: (bytes: Uint8Array) => void) => {
+      if (!file) return;
+      setSuccess(false);
+      try {
+        const bytes = await unlockPdf(file, currentPassword);
+        deliver(bytes);
+        setError(null);
+      } catch (e) {
+        const msg = errorMessage(e, "Failed to unlock PDF.");
+        if (msg.toLowerCase().includes("incorrect") || msg.toLowerCase().includes("invalid")) {
+          setError("Incorrect password. Please check and try again.");
+        } else if (
+          msg.toLowerCase().includes("password") ||
+          msg.toLowerCase().includes("encrypt")
+        ) {
+          setError("A password is required to open this PDF. Please enter the current password.");
+        } else {
+          setError(msg);
+        }
       }
-    }
-  }, [file, currentPassword, setError]);
+    },
+    [file, currentPassword, setError],
+  );
+
+  const handleRemovePassword = useCallback(
+    () =>
+      runUnlock((bytes) => {
+        if (!file) return;
+        downloadPdf(bytes, pdfFilename(file, "_unlocked"));
+        setSuccess(true);
+      }),
+    [runUnlock, file],
+  );
+
+  const handleUnlockAndEdit = useCallback(
+    () =>
+      runUnlock((bytes) => {
+        if (!file) return;
+        openEditorWithFile(
+          new File([bytes.slice()], pdfFilename(file, "_unlocked"), { type: "application/pdf" }),
+        );
+      }),
+    [runUnlock, file],
+  );
 
   const passwordsMatch = newPassword === confirmPassword;
   const canSubmitAdd = !!file && !!newPassword && passwordsMatch && !processing;
@@ -441,7 +471,9 @@ export default function PdfPassword() {
       )}
 
       {/* Action button. Labels budgeted for the 320px CTA (ActionButton
-          labels never wrap): "Remove Password & Download" overflowed the pill. */}
+          labels never wrap): "Remove Password & Download" overflowed the pill.
+          The secondary "& edit" exists only on the unlock path — the protect
+          path's output is encrypted, which the editor can't open. */}
       {(pdfState === "unencrypted" || pdfState === "encrypted") && (
         <ActionButton
           onClick={pdfState === "unencrypted" ? handleAddPassword : handleRemovePassword}
@@ -449,6 +481,8 @@ export default function PdfPassword() {
           disabled={pdfState === "unencrypted" ? !canSubmitAdd : !canSubmitRemove}
           label={pdfState === "unencrypted" ? "Protect & Download" : "Unlock & Download"}
           processingLabel={pdfState === "unencrypted" ? "Protecting…" : "Unlocking…"}
+          secondaryLabel={pdfState === "encrypted" ? "Unlock & edit" : undefined}
+          onSecondaryClick={pdfState === "encrypted" ? handleUnlockAndEdit : undefined}
         />
       )}
 

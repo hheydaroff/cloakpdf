@@ -15,10 +15,10 @@ import {
   Cpu,
   FileArchive,
   FileImage,
-  GitFork,
   MonitorSmartphone,
   Rocket,
   ScanSearch,
+  ScanText,
   Scissors,
   Search,
   ShieldCheck,
@@ -48,7 +48,7 @@ import {
 import { EDITOR_TOOL_IDS, EDITOR_TOOLS } from "./editor/tools.ts";
 import type { Tool } from "./types.ts";
 import { isMobileDevice } from "./utils/device-memory.ts";
-import { NAVIGATE_TOOL_EVENT } from "./utils/nav.ts";
+import { NAVIGATE_TOOL_EVENT, OPEN_EDITOR_EVENT } from "./utils/nav.ts";
 // The canvas editor is the primary single-PDF surface (editor-first redesign).
 // Lazy-loaded so its pdf-lib / PDF.js graph stays off the home critical path,
 // and rendered full-screen outside <Layout> (it owns its own chrome).
@@ -524,8 +524,9 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
  * sections (the centered-head + uniform grid shape was the page's most
  * templated block). Renders statically: the first-paint cascade is the page's
  * one entrance; a second scroll-triggered reveal here was motion for its own
- * sake. Eight claims, each concrete and checkable — the privacy thesis is
- * stated in the hero and mechanised here, not repeated.
+ * sake. Eight claims, each concrete and checkable — and none restating the
+ * hero trio (no upload step / works offline / open source): this section
+ * earns its scroll with claims the top of the page hasn't already made.
  */
 function WhyCloakPdfSection() {
   return (
@@ -546,13 +547,13 @@ function WhyCloakPdfSection() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-7 sm:gap-y-8 lg:col-span-8 xl:col-span-9">
         <FeatureItem
           icon={<UserRoundCheck className="w-5 h-5" />}
-          title="No sign-up"
-          description="No accounts, no email, no passwords. Start using the moment the page loads."
+          title="Free, no sign-up"
+          description="No accounts, no email, no paywalls. Start using the moment the page loads."
         />
         <FeatureItem
           icon={<ShieldCheck className="w-5 h-5" />}
-          title="Local-first, no tracking"
-          description="Every byte stays in your browser — and there's no analytics script watching you work."
+          title="No tracking"
+          description="No analytics script, no cookies, no telemetry — nothing watches you work."
         />
         <FeatureItem
           icon={<EyeOff className="w-5 h-5" />}
@@ -561,8 +562,8 @@ function WhyCloakPdfSection() {
         />
         <FeatureItem
           icon={<Rocket className="w-5 h-5" />}
-          title="Installable, works offline"
-          description="Add it to your home screen as a PWA — once cached, keep editing and exporting without a connection."
+          title="Install as an app"
+          description="Add it to your home screen or dock as a PWA — it opens in its own window, like a native app."
         />
         <FeatureItem
           icon={<MonitorSmartphone className="w-5 h-5" />}
@@ -580,9 +581,9 @@ function WhyCloakPdfSection() {
           description="Ask questions about your PDF with a chat model that runs entirely in your browser — no API key, no server round-trip."
         />
         <FeatureItem
-          icon={<GitFork className="w-5 h-5" />}
-          title="Free & open source"
-          description="MIT-licensed and on GitHub. Fork it, self-host it, or audit every byte — every line is public."
+          icon={<ScanText className="w-5 h-5" />}
+          title="OCR built in"
+          description="Make scanned PDFs searchable — text recognition runs on your device, phones included."
         />
       </div>
     </section>
@@ -741,9 +742,17 @@ export function App() {
       const id = (event as CustomEvent<ToolId>).detail;
       if (findTool(id)) setView({ kind: "tool", toolId: id });
     }
+    // A tool's secondary "& edit" action finished and handed its output PDF
+    // to the editor (Merge / Images-to-PDF / PDF Password unlock).
+    function onOpenEditor(event: Event) {
+      const file = (event as CustomEvent<File>).detail;
+      setView({ kind: "editor", file, tool: null });
+    }
     window.addEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
+    window.addEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
     return () => {
       window.removeEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
+      window.removeEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
     };
   }, []);
 
