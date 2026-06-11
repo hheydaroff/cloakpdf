@@ -348,9 +348,13 @@ export default function ComparePdf() {
   const current = comparisons[currentPage] as PageComparison | undefined;
 
   // ── Upload screen (no files, or files loaded but not yet compared / still comparing) ──
+  // Capped (left-aligned, flush with the ToolView header above): two ~440px
+  // drop zones read focused; at the full xl shell they'd be ~670px voids.
+  // The results screen below stays full-width on purpose — side-by-side page
+  // review is the shell-widening's biggest beneficiary.
   if (!fileA || !fileB || comparisons.length === 0 || loading) {
     return (
-      <div className="space-y-6">
+      <div className="max-w-4xl space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* File A */}
           <div className="space-y-2">
@@ -599,7 +603,7 @@ export default function ComparePdf() {
                   {showDiffOverlay ? "Diff on" : "Diff off"}
                 </button>
               </div>
-              <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface max-w-2xl mx-auto">
+              <div className="relative rounded-lg overflow-hidden border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface max-w-4xl mx-auto">
                 {current.thumbA ? (
                   <img
                     src={current.thumbA}
@@ -637,7 +641,7 @@ export default function ComparePdf() {
               type="button"
               key={comp.page}
               onClick={() => setCurrentPage(comp.page - 1)}
-              className={`relative shrink-0 w-14 rounded-md overflow-hidden border-2 transition-[border-color,box-shadow] ${
+              className={`relative shrink-0 w-14 xl:w-16 rounded-md overflow-hidden border-2 transition-[border-color,box-shadow] ${
                 comp.page - 1 === currentPage
                   ? "border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800"
                   : "border-slate-200 dark:border-dark-border hover:border-primary-300"

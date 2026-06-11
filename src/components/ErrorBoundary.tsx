@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, Copy, RefreshCw, ShieldCheck } from "lucide-react";
 import { Component, createRef, type ErrorInfo, type ReactNode } from "react";
+import { APP_CONTAINER } from "../config/theme.ts";
 
 declare const __APP_VERSION__: string;
 
@@ -88,7 +89,7 @@ export class ErrorBoundary extends Component<Props, State> {
         {/* Header — mirrors Layout.tsx so users stay oriented even mid-crash:
             border-b hairline + backdrop-blur, no resting shadow (DESIGN.md #2). */}
         <header className="bg-white/85 dark:bg-dark-surface/85 backdrop-blur-md border-b border-slate-200/80 dark:border-dark-border sticky top-0 z-50">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
+          <div className={`${APP_CONTAINER} mx-auto px-4 sm:px-6 py-3 flex items-center gap-3`}>
             <button
               type="button"
               onClick={this.handleReload}
@@ -234,7 +235,9 @@ export class ErrorBoundary extends Component<Props, State> {
         </main>
 
         <footer className="border-t border-slate-200/60 dark:border-dark-border">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-center gap-2 flex-wrap text-tag text-slate-500 dark:text-dark-text-muted">
+          <div
+            className={`${APP_CONTAINER} mx-auto px-4 sm:px-6 py-4 flex items-center justify-center gap-2 flex-wrap text-tag text-slate-500 dark:text-dark-text-muted`}
+          >
             <span>© {new Date().getFullYear()} CloakPDF by Sumit Sahoo</span>
             <span aria-hidden="true" className="text-slate-300 dark:text-slate-600">
               ·

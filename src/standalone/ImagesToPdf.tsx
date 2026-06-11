@@ -258,7 +258,9 @@ export default function ImagesToPdf() {
 
       {images.length > 0 && (
         <>
-          <div>
+          {/* max-w-md: keeps the three segments hand-sized — fullWidth is
+              for the phone layout, not for stretching across the column. */}
+          <div className="max-w-md">
             <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 dark:text-dark-text-muted mb-2">
               Page Size
             </p>

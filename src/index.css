@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
 /*
+ * Safelist for APP_CONTAINER (src/config/theme.ts) — the app-shell width
+ * classes live only in that string constant, so they'd silently vanish if
+ * source scanning were ever restricted (e.g. a future `@source` allowlist).
+ */
+@source inline("max-w-6xl");
+@source inline("xl:max-w-[88rem]");
+
+/*
  * Inter Variable — self-hosted (SIL Open Font License 1.1).
  * Source: https://rsms.me/inter — see public/fonts/LICENSE.txt.
  * Variable axis covers weights 100–900; italic file is loaded only when

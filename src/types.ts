@@ -88,6 +88,18 @@ export interface Tool {
    * cards — they live inside the editor.
    */
   standaloneOnly?: boolean;
+  /**
+   * Reading measure for the standalone tool view. The app shell widens
+   * to 1408px on xl+ screens (`APP_CONTAINER` in config/theme.ts), and
+   * each tool declares the column it actually needs — `ToolView` centres
+   * the header + body together so their edges always align:
+   *  - "narrow"  (max-w-2xl, 672px) — forms: password, cert signing.
+   *  - "regular" (max-w-3xl, 768px) — file lists and chat: merge,
+   *    images→PDF, Ask PDF.
+   *  - omitted — full shell width for preview/grid surfaces (compare,
+   *    extract images), which cap their own pre-file sub-screens.
+   */
+  contentWidth?: "narrow" | "regular";
 }
 
 /** Position of page numbers on the page. */

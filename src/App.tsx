@@ -82,6 +82,17 @@ interface ToolViewProps {
 }
 
 /**
+ * Width classes for `Tool.contentWidth` — the tool's declared reading
+ * measure inside the (xl-widened) app shell. Applied here, around both
+ * the header and the body, so their left edges always align; tools
+ * without the field span the full shell (and cap their own sub-screens).
+ */
+const TOOL_CONTENT_WIDTH = {
+  narrow: "max-w-2xl mx-auto",
+  regular: "max-w-3xl mx-auto",
+} as const;
+
+/**
  * Renders the active tool's header (title + description) and its
  * lazily-loaded component wrapped in a `Suspense` boundary. For
  * `desktopOnly` tools on a mobile UA, renders a placeholder explaining
@@ -93,7 +104,7 @@ function ToolView({ tool, Component }: ToolViewProps) {
   const Icon = tool.icon;
   const blockedOnMobile = tool.desktopOnly && isMobileDevice();
   return (
-    <div>
+    <div className={tool.contentWidth ? TOOL_CONTENT_WIDTH[tool.contentWidth] : undefined}>
       <div className="flex items-center gap-4 mb-6">
         <div className="w-12 h-12 bg-slate-100 dark:bg-dark-surface-alt rounded-xl flex items-center justify-center shrink-0">
           <Icon className="w-6 h-6 text-slate-700 dark:text-dark-text" />
@@ -268,7 +279,10 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
 
       {/* ── Search Bar ──────────────────────────────────── */}
       <div className="mb-10 sm:mb-12 animate-fade-in-up" style={{ animationDelay: "160ms" }}>
-        <div className="relative group">
+        {/* Capped + centered: an edge-to-edge text input reads stretched
+            once the shell widens past ~1100px — a search field is a
+            control, not a banner. */}
+        <div className="relative group max-w-3xl mx-auto">
           {/* Soft primary glow that intensifies on focus — gives the
               field presence without leaning on a heavy border. */}
           <div
@@ -371,7 +385,14 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
                     {cat.description}.
                   </h2>
                 </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-8 xl:col-span-9">
+                {/* 3-up at 2xl — except single-card categories (On-device
+                    AI, lone search hits), which keep the 2-col track so the
+                    one card reads half-width instead of a skinny orphan. */}
+                <div
+                  className={`grid grid-cols-1 gap-4 sm:grid-cols-2 lg:col-span-8 xl:col-span-9 ${
+                    catTools.length === 1 ? "" : "2xl:grid-cols-3"
+                  }`}
+                >
                   {catTools.map((tool) => (
                     <ToolCard key={tool.id} tool={tool} onSelect={onSelectTool} />
                   ))}

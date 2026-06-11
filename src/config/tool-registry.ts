@@ -52,6 +52,7 @@ export const tools = [
     icon: GitMerge,
     category: "combine",
     standaloneOnly: true, // multi-input constructor (then hands off to the editor)
+    contentWidth: "regular", // filename rows — a 1400px list is worse, not better
   },
   {
     id: "images-to-pdf",
@@ -60,6 +61,7 @@ export const tools = [
     icon: Images,
     category: "combine",
     standaloneOnly: true, // multi-input constructor (then hands off to the editor)
+    contentWidth: "regular", // 48px-thumb rows + page-size control — list measure
   },
   {
     id: "extract-images",
@@ -78,6 +80,7 @@ export const tools = [
     icon: Lock,
     category: "security",
     standaloneOnly: true, // security flow (encrypt/decrypt), not a single-PDF edit step
+    contentWidth: "narrow", // password form — full-width inputs degrade past ~640px
   },
   {
     id: "compare-pdf",
@@ -94,6 +97,7 @@ export const tools = [
     icon: FileKey2,
     category: "security",
     standaloneOnly: true, // security flow (cert signing), not a single-PDF edit step
+    contentWidth: "narrow", // cert forms — full-width inputs degrade past ~640px
   },
 
   // ── On-device AI ─────────────────────────────────────────
@@ -133,6 +137,7 @@ export const tools = [
     requirements: "Best on devices with ≥ 16 GB RAM — pick the Compact tier on lower-RAM machines",
     desktopOnly: true,
     standaloneOnly: true, // on-device AI chat, not a PDF edit-and-export flow
+    contentWidth: "regular", // chat column — bubbles past ~75ch are unreadable
   },
 ] as const satisfies readonly Tool[];
 

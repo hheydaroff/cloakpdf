@@ -314,16 +314,24 @@ export default function ExtractImages() {
   return (
     <div className="space-y-6">
       {!file ? (
-        <FileDropZone
-          glowColor={categoryGlow.transform}
-          iconColor={categoryAccent.transform}
-          accept=".pdf,application/pdf"
-          onFiles={pdf.onFiles}
-          encryptedFile={pdf.encryptedFile}
-          onClearEncrypted={pdf.reset}
-          label="Drop a PDF file here"
-          hint="All embedded images will be extracted for download"
-        />
+        // The empty state stays a focused block, left-aligned flush with the
+        // ToolView header; only the image grid earns the full xl shell width.
+        // The error AlertBox shares the cap — a load failure lands back here
+        // (usePdfFile clears the file), and the banner must not outrun the
+        // drop zone it sits under.
+        <div className="max-w-3xl space-y-6">
+          <FileDropZone
+            glowColor={categoryGlow.transform}
+            iconColor={categoryAccent.transform}
+            accept=".pdf,application/pdf"
+            onFiles={pdf.onFiles}
+            encryptedFile={pdf.encryptedFile}
+            onClearEncrypted={pdf.reset}
+            label="Drop a PDF file here"
+            hint="All embedded images will be extracted for download"
+          />
+          {error && <AlertBox message={error} />}
+        </div>
       ) : (
         <>
           <FileInfoBar
@@ -373,7 +381,11 @@ export default function ExtractImages() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {/* xl adds a column rather than growing cells — previews are
+                  rasterised at ≤200px, and 6-up at the shell's 1408px
+                  ceiling puts cells right at that native size. A 7th
+                  column would shrink thumbnails below it. */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                 {images.map((img, i) => (
                   <button
                     key={i}
@@ -439,7 +451,7 @@ export default function ExtractImages() {
         </>
       )}
 
-      {error && <AlertBox message={error} />}
+      {file && error && <AlertBox message={error} />}
     </div>
   );
 }

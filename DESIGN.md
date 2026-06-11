@@ -238,10 +238,10 @@ spacing:
   12:   48px
   14:   56px
   16:   64px
-  container: 1152px        # max-w-6xl, the main content frame
+  container: "1152px / 1408px at xl+"  # APP_CONTAINER (src/config/theme.ts): max-w-6xl xl:max-w-[88rem]
   gutter: 16px             # standard grid gap between cards
   gutter-lg: 24px          # gap between hero columns
-  section-y: 48px          # space-y-12 between tool categories
+  section-y: "40px / 48px at sm+"  # space-y-10 sm:space-y-12 between tool categories
   page-x: 16px             # phone padding (px-4)
   page-x-lg: 24px          # tablet+ padding (sm:px-6)
 
@@ -379,6 +379,7 @@ components:
     borderFocus: "1px solid {colors.primary-300}"
     rounded: "{radii.2xl}"
     height: "56px"
+    maxWidth: "768px (max-w-3xl), centred — a control, not a banner, in the wide shell"
     leadingIcon: "Search · slate-700 · 20px"
     trailingShortcut: "kbd ⌘K / CtrlK · slate-500 · 11px tabular"
     glow: "soft primary-500/20 outer halo on focus"
@@ -492,11 +493,11 @@ breakpoints:
   lg: "1024px"
   xl: "1280px"
   "2xl": "1536px"
-  container-max: "1152px"
+  container-max: "1152px below xl; 1408px (88rem) from xl"
 
 grid:
   hero: "12-col, 7 / 5 split (lg+); single column below"
-  tools: "1 / 2 / 3 columns at sm / md / lg breakpoints"
+  tools: "1 / 2 / 3 columns at base / sm / 2xl, inside the category rail's 8–9-col span"
   features: "1 / 2 / 3 columns at sm / md / lg breakpoints"
   bento-footer: "12-col, 7 / 5 split (sm+); stacks below"
 
@@ -625,10 +626,22 @@ geometric sans stays crisp against the blurred Grainient field.
 ## Spacing & Rhythm
 
 The grid is a **4 px base** with a strong cadence on multiples
-of 4: `4 / 8 / 12 / 16 / 24 / 32 / 48 / 64`. The container caps at
-`max-w-6xl` (1152 px) and uses `px-4` on phone, `sm:px-6` on
-tablet+. Vertical section rhythm is `space-y-12` to `space-y-14`
-between tool categories — generous, never crowded.
+of 4: `4 / 8 / 12 / 16 / 24 / 32 / 48 / 64`. The shell column caps
+at `max-w-6xl` (1152 px) below xl and `88rem` (1408 px) from xl up —
+one shared constant, `APP_CONTAINER` in `src/config/theme.ts`,
+consumed by the header, `<main>`, footer, and the ErrorBoundary
+chrome so their edges never drift. Padding is `px-4` on phone,
+`sm:px-6` on tablet+. Vertical section rhythm is `space-y-10` to
+`space-y-12` (sm+) between tool categories — generous, never crowded.
+
+The wide shell is an offer, not a mandate: **each standalone tool
+declares the measure it actually needs** via `Tool.contentWidth`
+(applied around header + body together in `ToolView`). Forms sit
+narrow (`max-w-2xl` — PDF Password, Digital Signature), file lists
+and chat sit regular (`max-w-3xl` — Merge, Images→PDF, Ask PDF),
+and only preview/grid surfaces (Compare, Extract Images) span the
+full shell, capping their own pre-file sub-screens. Prose views
+self-cap the same way (Privacy Policy at `max-w-2xl`).
 
 Inside cards, the icon tile is followed by a `mb-2` flush, then
 the title, then the body, with no hairline divider; the system
