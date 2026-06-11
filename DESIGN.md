@@ -818,6 +818,19 @@ Deliberate omissions: Digital Signature (editing a signed PDF would
 invalidate the signature) and PDF Password's protect path (the
 output is encrypted, which the editor can't open).
 
+**Full-width is a phone affordance, not a desktop one.** Now that
+every tool spans the whole shell, a button that fills its container
+stretches edge-to-edge on a 1408 px viewport and reads as a banner,
+not a control. So action buttons go full-width only up to `sm`, then
+shrink to their content: the page-level `ActionButton` centres
+(min 220 px); a CTA living inside a card or modal — the AskPdf
+model-gate "Download model" button, the consent-modal footer —
+right-aligns (`flex flex-col sm:flex-row sm:justify-end`), matching
+the form-submit convention so the same download intent reads the
+same across the gate card and the dialog it opens. The exception is
+genuinely narrow columns — the editor tool rail, where a full-width
+button is correct because the column itself is the measure.
+
 ## Closing Notes
 
 The single hardest decision in this system is *not* using
