@@ -33,7 +33,7 @@
  * without a browser.
  */
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
-import { getPdfJs } from "./pdf/raster.ts";
+import { clampScaleForCanvas, getPdfJs } from "./pdf/raster.ts";
 import { PDFJS_WASM_URL } from "./pdfjs-config.ts";
 import { detectPii, type PiiType } from "./pii.ts";
 
@@ -723,7 +723,13 @@ async function ocrScannedPages(
         if (!target || pageNumber < 1 || pageNumber > pdf.numPages) continue;
         const page = await pdf.getPage(pageNumber);
         try {
-          const viewport = page.getViewport({ scale });
+          // Cap oversized pages to the canvas limit (mobile browsers reject
+          // huge canvases — a poster-sized scan would render blank). Use the
+          // clamped scale for both the render and the bbox→point conversion.
+          const baseViewport = page.getViewport({ scale });
+          const pageScale = clampScaleForCanvas(baseViewport.width, baseViewport.height, scale);
+          const viewport =
+            pageScale === scale ? baseViewport : page.getViewport({ scale: pageScale });
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
@@ -753,11 +759,11 @@ async function ocrScannedPages(
                   const { x0, y0, x1, y1 } = word.bbox;
                   items.push({
                     text,
-                    x: x0 / scale,
-                    y: y0 / scale,
-                    width: (x1 - x0) / scale,
-                    height: (y1 - y0) / scale,
-                    fontSize: (y1 - y0) / scale,
+                    x: x0 / pageScale,
+                    y: y0 / pageScale,
+                    width: (x1 - x0) / pageScale,
+                    height: (y1 - y0) / pageScale,
+                    fontSize: (y1 - y0) / pageScale,
                   });
                 }
               }

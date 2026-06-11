@@ -87,6 +87,13 @@ export default function AskPdf() {
   // stream resolves, so the buffered tail is then dropped.
   const pendingDeltaRef = useRef("");
   const tokenRafRef = useRef<number | null>(null);
+  // Tracks live-mount so the async indexing task below never setState (or
+  // leaves a freshly-built chat session orphaned) after the user navigates
+  // away mid-index. A per-effect "cancelled" flag can't be used there: the
+  // indexing effect's deps churn while it runs (onIndexProgress flips
+  // `indexing`/`isIndexing`), so its own cleanup would false-fire on its own
+  // progress; a mount ref only flips on a real unmount.
+  const mountedRef = useRef(true);
 
   const pdf = usePdfFile({
     onReset: () => {
@@ -170,7 +177,9 @@ export default function AskPdf() {
    * writing into a component that's gone. interrupt() stops both at once.
    */
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       sessionRef.current?.interrupt();
       if (tokenRafRef.current !== null) {
         cancelAnimationFrame(tokenRafRef.current);
@@ -200,10 +209,18 @@ export default function AskPdf() {
           file,
           onIndexProgress: setIndexing,
         });
+        // Unmounted while indexing — don't touch state, and stop the freshly
+        // built session so its chat pipeline isn't left live in the background
+        // on a tool the user has already navigated away from.
+        if (!mountedRef.current) {
+          session.interrupt();
+          return;
+        }
         sessionRef.current = session;
         setSessionReady(true);
         setIndexing(null);
       } catch (e) {
+        if (!mountedRef.current) return;
         setIndexing(null);
         if (e instanceof Error && /no usable text/i.test(e.message)) {
           setScannedHint(true);
@@ -1031,7 +1048,7 @@ function Composer({
           type="button"
           onClick={onSubmit}
           disabled={disabled || !value.trim()}
-          className="inline-flex items-center gap-1.5 ml-auto px-4 py-2 rounded-lg text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-surface"
+          className="inline-flex items-center gap-1.5 ml-auto px-4 py-2 rounded-lg text-sm font-semibold bg-primary-600 hover:bg-primary-700 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-dark-surface"
         >
           {disabled ? (
             <>

@@ -236,8 +236,8 @@ export function Panel() {
       ) : (
         <>
           <p className="rounded-lg bg-slate-50 dark:bg-dark-bg px-3 py-2 text-xs text-slate-500 dark:text-dark-text-muted">
-            Recognised text is shown beside each page in the center. Step through to verify, then
-            embed it as a searchable layer.
+            Recognised text is shown with each page — side by side on wide screens, stacked on small
+            ones. Step through to verify, then embed it as a searchable layer.
           </p>
           <button
             type="button"

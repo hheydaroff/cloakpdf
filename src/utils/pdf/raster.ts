@@ -89,6 +89,38 @@ export function preprocessCanvasForOcr(canvas: HTMLCanvasElement): void {
 }
 
 /**
+ * Hard cap on a rendered canvas's longest side, in pixels.
+ *
+ * Mobile browsers reject (or silently mis-render) canvases far smaller than
+ * desktop does — iOS/Android cap a canvas at roughly 4096 px per side and by
+ * total area, where desktop allows up to 32767. OCR renders at 3× (~216 DPI),
+ * so a poster-sized scanned page (A1/A0) blows past the mobile ceiling: the
+ * render yields a blank canvas and OCR "reads" nothing, or the tab is killed
+ * for memory. Clamping the effective scale so the long edge never exceeds this
+ * keeps OCR working on phones (a deliberately-supported surface) — the only
+ * cost is slightly lower OCR DPI on unusually large pages, far better than a
+ * blank result. Normal Letter/A4/A3 pages at OCR scale stay well under the cap,
+ * so they're never touched.
+ */
+export const MAX_CANVAS_DIM = 4096;
+
+/**
+ * Reduce `scale` if rendering at it would produce a canvas whose longest side
+ * exceeds {@link MAX_CANVAS_DIM}. `scaledWidth`/`scaledHeight` are the viewport
+ * dimensions already computed at `scale`. Returns the original scale when it
+ * already fits.
+ */
+export function clampScaleForCanvas(
+  scaledWidth: number,
+  scaledHeight: number,
+  scale: number,
+): number {
+  const longest = Math.max(scaledWidth, scaledHeight);
+  if (longest <= MAX_CANVAS_DIM) return scale;
+  return scale * (MAX_CANVAS_DIM / longest);
+}
+
+/**
  * Render a single PDF page to a preprocessed canvas for OCR.
  * Extracted as a helper to avoid duplication between detect + recognize passes.
  */
@@ -98,7 +130,11 @@ export async function renderPageToCanvas(
   scale: number,
 ): Promise<HTMLCanvasElement> {
   const page = await pdfDoc.getPage(pageNum);
-  const viewport = page.getViewport({ scale });
+  let viewport = page.getViewport({ scale });
+  // Cap oversized pages so the canvas stays inside mobile limits (see
+  // MAX_CANVAS_DIM) — otherwise a poster-sized scan renders blank or OOMs.
+  const safeScale = clampScaleForCanvas(viewport.width, viewport.height, scale);
+  if (safeScale !== scale) viewport = page.getViewport({ scale: safeScale });
 
   const canvas = document.createElement("canvas");
   canvas.width = viewport.width;
