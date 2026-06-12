@@ -31,6 +31,7 @@ import type { LucideIcon } from "lucide-react";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FileDropZone } from "./components/FileDropZone.tsx";
 import { Layout } from "./components/Layout.tsx";
+import { AnimatePresence, m, variants } from "./components/motion.tsx";
 import { OrientationLock } from "./components/OrientationLock.tsx";
 import { PrivacyPolicy } from "./components/PrivacyPolicy.tsx";
 import { ReloadPrompt } from "./components/ReloadPrompt.tsx";
@@ -772,16 +773,30 @@ export function App() {
   }
 
   const showBack = view.kind !== "home";
+  // Key the view transition by identity — switching between two tools should
+  // cross-fade too, not just home↔tool. `initial={false}` suppresses the very
+  // first mount so the home hero's own entrance animation isn't doubled.
+  const viewKey = view.kind === "tool" ? `tool:${view.toolId}` : view.kind;
 
   return (
     <>
       <Layout onHome={goHome} showBack={showBack} onPrivacy={handlePrivacy}>
-        <ViewContent
-          view={view}
-          onSelectTool={handleSelectTool}
-          onOpenEditor={openEditor}
-          onGoHome={goHome}
-        />
+        <AnimatePresence mode="wait" initial={false}>
+          <m.div
+            key={viewKey}
+            variants={variants.view}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+          >
+            <ViewContent
+              view={view}
+              onSelectTool={handleSelectTool}
+              onOpenEditor={openEditor}
+              onGoHome={goHome}
+            />
+          </m.div>
+        </AnimatePresence>
       </Layout>
       <ReloadPrompt />
       <OrientationLock />
