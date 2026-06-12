@@ -5,7 +5,7 @@
 // disabled + relabelled while a transform is running so the user can't
 // double-fire it.
 
-import type { ReactNode } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { PrimaryAction } from "./PrimaryAction.tsx";
 
 interface Props {
@@ -44,7 +44,11 @@ export function WholeDocPanel({
   );
 }
 
-/** Compact segmented control shared by the option-bearing whole-doc tools. */
+/**
+ * Compact segmented control shared by the option-bearing whole-doc tools.
+ * Selection glides: a measured thumb slides under the active option (matching
+ * the editor's page-density toggle) instead of hard-swapping the highlight.
+ */
 export function Segmented<T extends string>({
   value,
   onChange,
@@ -54,33 +58,63 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
   options: { value: T; label: string; sub?: string }[];
 }) {
+  const activeIndex = options.findIndex((o) => o.value === value);
+  const listRef = useRef<HTMLDivElement>(null);
+  const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const btn = btnRefs.current[activeIndex];
+      setThumb(btn ? { left: btn.offsetLeft, width: btn.offsetWidth } : null);
+    };
+    measure();
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [activeIndex, options.length]);
+
   return (
-    <div className="grid grid-flow-col gap-1 rounded-lg border border-slate-200 dark:border-dark-border p-0.5">
-      {options.map((o) => {
-        const on = value === o.value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            onClick={() => onChange(o.value)}
-            aria-pressed={on}
-            className={`flex flex-col items-center justify-center rounded-md px-2 py-1.5 pointer-coarse:min-h-11 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
-              on
-                ? "bg-primary-600 text-white"
-                : "text-slate-600 dark:text-dark-text-muted hover:bg-slate-50 dark:hover:bg-dark-surface-alt"
-            }`}
-          >
-            {o.label}
-            {o.sub && (
-              <span
-                className={`text-xxs ${on ? "text-white/80" : "text-slate-500 dark:text-dark-text-muted"}`}
-              >
-                {o.sub}
-              </span>
-            )}
-          </button>
-        );
-      })}
+    <div className="rounded-lg border border-slate-200 dark:border-dark-border p-0.5">
+      <div ref={listRef} className="relative grid grid-flow-col gap-1">
+        {thumb && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute top-0 h-full rounded-md bg-primary-600 duration-200 ease-out motion-safe:transition-[transform,width]"
+            style={{ transform: `translateX(${thumb.left}px)`, width: thumb.width }}
+          />
+        )}
+        {options.map((o, i) => {
+          const on = value === o.value;
+          return (
+            <button
+              key={o.value}
+              ref={(el) => {
+                btnRefs.current[i] = el;
+              }}
+              type="button"
+              onClick={() => onChange(o.value)}
+              aria-pressed={on}
+              className={`relative z-10 flex flex-col items-center justify-center rounded-md px-2 py-1.5 pointer-coarse:min-h-11 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                on
+                  ? "text-white"
+                  : "text-slate-600 dark:text-dark-text-muted hover:text-slate-800 dark:hover:text-dark-text"
+              }`}
+            >
+              {o.label}
+              {o.sub && (
+                <span
+                  className={`text-xxs ${on ? "text-white/80" : "text-slate-500 dark:text-dark-text-muted"}`}
+                >
+                  {o.sub}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
