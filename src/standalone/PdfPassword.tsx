@@ -25,7 +25,7 @@ import {
   Pencil,
   Printer,
 } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ActionButton } from "../components/ActionButton.tsx";
 import { AlertBox } from "../components/AlertBox.tsx";
 import { FileDropZone } from "../components/FileDropZone.tsx";
@@ -196,6 +196,15 @@ export default function PdfPassword() {
   const setError = task.setError;
   const [success, setSuccess] = useState(false);
 
+  // The unlock path can't use task.run (it needs to rewrite the error message
+  // per failure mode), so it carries its own processing flag + re-entrancy
+  // guard — otherwise both unlock buttons stay enabled and spinner-less while
+  // a decrypt is in flight, letting a user fire "& Download" and "& edit"
+  // concurrently. `busy` folds both paths into one signal for the buttons.
+  const [unlocking, setUnlocking] = useState(false);
+  const unlockInFlight = useRef(false);
+  const busy = processing || unlocking;
+
   const handleFile = useCallback(
     async (files: File[]) => {
       const pdf = files[0];
@@ -261,6 +270,9 @@ export default function PdfPassword() {
   const runUnlock = useCallback(
     async (deliver: (bytes: Uint8Array) => void) => {
       if (!file) return;
+      if (unlockInFlight.current) return; // mirror task.run's double-click guard
+      unlockInFlight.current = true;
+      setUnlocking(true);
       setSuccess(false);
       try {
         const bytes = await unlockPdf(file, currentPassword);
@@ -278,6 +290,9 @@ export default function PdfPassword() {
         } else {
           setError(msg);
         }
+      } finally {
+        unlockInFlight.current = false;
+        setUnlocking(false);
       }
     },
     [file, currentPassword, setError],
@@ -305,8 +320,8 @@ export default function PdfPassword() {
   );
 
   const passwordsMatch = newPassword === confirmPassword;
-  const canSubmitAdd = !!file && !!newPassword && passwordsMatch && !processing;
-  const canSubmitRemove = !!file && !processing;
+  const canSubmitAdd = !!file && !!newPassword && passwordsMatch && !busy;
+  const canSubmitRemove = !!file && !busy;
 
   return (
     <div className="space-y-6">
@@ -477,7 +492,7 @@ export default function PdfPassword() {
       {(pdfState === "unencrypted" || pdfState === "encrypted") && (
         <ActionButton
           onClick={pdfState === "unencrypted" ? handleAddPassword : handleRemovePassword}
-          processing={processing}
+          processing={busy}
           disabled={pdfState === "unencrypted" ? !canSubmitAdd : !canSubmitRemove}
           label={pdfState === "unencrypted" ? "Protect & Download" : "Unlock & Download"}
           processingLabel={pdfState === "unencrypted" ? "Protecting…" : "Unlocking…"}
