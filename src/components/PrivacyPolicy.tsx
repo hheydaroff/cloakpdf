@@ -33,7 +33,7 @@ export function PrivacyPolicy() {
               Privacy Policy
             </h1>
             <p className="text-slate-500 dark:text-dark-text-muted mt-0.5">
-              Last updated: June 11, 2026
+              Last updated: June 12, 2026
             </p>
           </div>
         </div>
@@ -115,6 +115,23 @@ export function PrivacyPolicy() {
               github.com/cloakyard/cloakpdf
             </a>{" "}
             to verify these claims independently.
+          </p>
+        </section>
+
+        <section>
+          <SectionHeading>License &amp; Usage</SectionHeading>
+          <p>
+            CloakPDF is released under the{" "}
+            <a
+              href="https://github.com/cloakyard/cloakpdf/blob/main/LICENSE"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400/50 rounded-sm"
+            >
+              MIT License
+            </a>
+            . You’re free to use it for personal or commercial purposes, and you can self-host your
+            own copy — there are no licensing fees or restrictions.
           </p>
         </section>
 
