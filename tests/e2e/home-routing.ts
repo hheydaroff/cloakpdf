@@ -45,8 +45,12 @@ async function clickByText(page: Page, label: string): Promise<boolean> {
 }
 
 async function uploadInto(page: Page, ...fixtures: string[]): Promise<void> {
-  await page.waitForSelector("input[type=file]", { timeout: 15_000 });
-  const input = await page.$("input[type=file]");
+  // Multi-file uploads target the tool's `multiple` input directly: during the
+  // view transition the home's single hero input can still be mounted (mid
+  // exit), so a bare `input[type=file]` may resolve to the wrong one.
+  const sel = fixtures.length > 1 ? "input[type=file][multiple]" : "input[type=file]";
+  await page.waitForSelector(sel, { timeout: 15_000 });
+  const input = await page.$(sel);
   if (!input) fail("File input not found.");
   await (input as { uploadFile: (...p: string[]) => Promise<void> }).uploadFile(...fixtures);
 }
@@ -82,18 +86,20 @@ async function main() {
     await page.goto(DEV_URL, { waitUntil: "networkidle2" });
     if (!(await clickByText(page, "Merge PDFs"))) fail("'Merge PDFs' tool card not found.");
     await uploadInto(page, FIXTURE_A, FIXTURE_B);
+    // The secondary "Merge & edit" button is the one that hands off to the
+    // editor (the primary "Merge … & Download" just downloads).
     await page
       .waitForFunction(
         () =>
           Array.from(document.querySelectorAll("button")).some((b) =>
-            (b.textContent ?? "").includes("Merge 2 files"),
+            (b.textContent ?? "").includes("Merge & edit"),
           ),
         { timeout: 15_000 },
       )
-      .catch(() => fail("'Merge 2 files & edit' button did not appear after dropping 2 PDFs."));
+      .catch(() => fail("'Merge & edit' button did not appear after dropping 2 PDFs."));
     const clicked = await page.evaluate(() => {
       const b = Array.from(document.querySelectorAll("button")).find((x) =>
-        (x.textContent ?? "").includes("Merge 2 files"),
+        (x.textContent ?? "").includes("Merge & edit"),
       );
       if (!b) return false;
       (b as HTMLElement).click();
