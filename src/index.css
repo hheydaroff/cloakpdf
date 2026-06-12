@@ -132,15 +132,13 @@ html,
 body {
   touch-action: manipulation;
   overflow-x: clip;
-  /* Kill the elastic overscroll (macOS/iOS rubber-band, Android pull-to-
-     refresh) on the document scroller. Without this, pulling down at the
-     top drags the whole page — sticky header included — away from the
-     viewport top, exposing the --page-bg backdrop above the bar (the
-     "detached toolbar" bug). `none`, not `contain`, because we want the
-     bounce affordance itself gone, not just scroll-chaining. Bonus: it
-     also blocks the accidental pull-to-refresh that would discard an
-     in-browser edit. */
-  overscroll-behavior-y: none;
+  /* Native elastic overscroll (macOS/iOS rubber-band) is left ON by deliberate
+     choice — the soft bounce reads far better than the hard stop a lock gives.
+     The accepted trade-off: over-pulling the top of a sticky-header page briefly
+     exposes the backdrop above the bar (the old "detached toolbar" look), and
+     mobile pull-to-refresh comes back (the editor's IndexedDB draft autosave
+     restores any in-flight edit a refresh would otherwise drop). Do NOT re-add
+     `overscroll-behavior-y: none` here without revisiting that call. */
   /* Belt-and-suspenders: text-size-adjust prevents Safari's automatic
      font upscaling in landscape, which would otherwise break the
      pixel-tuned panel chrome. */

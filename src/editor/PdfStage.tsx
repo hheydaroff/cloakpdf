@@ -29,17 +29,6 @@ import type { ViewState } from "./types.ts";
 type Pt = { x: number; y: number };
 const distance = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
 
-// Elastic pan: the page tracks the finger 1:1 within its pan bounds, then
-// resists (×0.35) when dragged past them, and springs back on release — so the
-// page has a soft give instead of a hard stop. `rubberBand` is the live
-// resistance during a drag; `clampAbs` is the bound it settles back to.
-function rubberBand(v: number, bound: number): number {
-  if (v > bound) return bound + (v - bound) * 0.35;
-  if (v < -bound) return -bound + (v + bound) * 0.35;
-  return v;
-}
-const clampAbs = (v: number, bound: number): number => Math.max(-bound, Math.min(bound, v));
-
 // One reused offscreen 2d context for sizing the inline editor's input to its
 // content (native <input> doesn't auto-grow).
 let _measureCtx: CanvasRenderingContext2D | null = null;
@@ -214,12 +203,6 @@ export function PdfStage() {
   } | null>(null);
   const pinchActiveRef = useRef(false);
   const [fit, setFit] = useState<{ w: number; h: number } | null>(null);
-  // `gesturing` is true while a pan/pinch is live — it gates the elastic
-  // snap-back (off during the drag so it tracks 1:1). `settling` is true only
-  // for the brief spring-back after release, switching on the wrap's transform
-  // transition so the bounce is smooth (and nothing else — zoom stays crisp).
-  const [gesturing, setGesturing] = useState(false);
-  const [settling, setSettling] = useState(false);
 
   // Coalesce pan / pinch / wheel view updates into one setView per animation
   // frame. High-Hz pointermove/wheel events otherwise call setView many times a
@@ -251,21 +234,6 @@ export function PdfStage() {
   );
 
   const page = doc?.pages[selectedPage] ?? null;
-
-  // How far the (scaled) page may pan before its centre leaves the available
-  // area — zero when the page fits, so a fitted page always springs back to
-  // centre. Drives both the live rubber-band and the snap-back bound.
-  const panBoundsFor = useCallback(
-    (zoom: number): { x: number; y: number } => {
-      const avail = availRef.current;
-      if (!avail || !fit) return { x: 0, y: 0 };
-      return {
-        x: Math.max(0, (fit.w * zoom - avail.clientWidth) / 2),
-        y: Math.max(0, (fit.h * zoom - avail.clientHeight) / 2),
-      };
-    },
-    [fit],
-  );
 
   // Fit-contain: size the page box to the largest rect with the page's exact
   // aspect ratio that fits the available area — never stretches, in either
@@ -378,8 +346,6 @@ export function PdfStage() {
         // tool's onPointerUp won't fire — we end the pinch silently).
         stageProps.onPointerCancel?.();
         pinchActiveRef.current = true;
-        setGesturing(true);
-        setSettling(false);
         const [a, b] = [...pointersRef.current.values()];
         pinchRef.current = {
           dist: distance(a, b) || 1,
@@ -401,10 +367,8 @@ export function PdfStage() {
         stageProps.onPointerDown?.(toPoint(e), e);
         return;
       }
-      // No active tool → drag to pan (with elastic give past the bounds).
+      // No active tool → drag to pan.
       panStart.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY };
-      setGesturing(true);
-      setSettling(false);
     },
     [editorOpen, hasToolPointer, stageProps, toPoint, view.panX, view.panY, view.zoom],
   );
@@ -438,14 +402,13 @@ export function PdfStage() {
       }
       const p = panStart.current;
       if (!p) return;
-      const b = panBoundsFor(view.zoom);
       scheduleView((prev) => ({
         ...prev,
-        panX: rubberBand(p.panX + (e.clientX - p.x), b.x),
-        panY: rubberBand(p.panY + (e.clientY - p.y), b.y),
+        panX: p.panX + (e.clientX - p.x),
+        panY: p.panY + (e.clientY - p.y),
       }));
     },
-    [hasToolPointer, stageProps, toPoint, scheduleView, panBoundsFor, view.zoom],
+    [hasToolPointer, stageProps, toPoint, scheduleView],
   );
 
   const onPointerUp = useCallback(
@@ -453,9 +416,6 @@ export function PdfStage() {
       pointersRef.current.delete(e.pointerId);
       if (pointersRef.current.size < 2) pinchRef.current = null;
       if (pointersRef.current.size > 0) return; // gesture still in progress
-
-      // Gesture over → let the elastic snap-back effect ease the pan into bounds.
-      setGesturing(false);
 
       // Last finger up: end a pinch silently, otherwise finalise the tool/pan.
       if (pinchActiveRef.current) {
@@ -489,22 +449,6 @@ export function PdfStage() {
     return () => el.removeEventListener("wheel", handler);
   }, [scheduleView]);
 
-  // Elastic snap-back: once a gesture ends (or zoom/fit changes), ease the pan
-  // back inside bounds. Skipped while gesturing so the drag tracks 1:1; setting
-  // `settling` switches on the wrap's transform transition for a smooth spring.
-  useEffect(() => {
-    if (gesturing) return;
-    const b = panBoundsFor(view.zoom);
-    if (clampAbs(view.panX, b.x) !== view.panX || clampAbs(view.panY, b.y) !== view.panY) {
-      setSettling(true);
-      scheduleView((prev) => ({
-        ...prev,
-        panX: clampAbs(prev.panX, b.x),
-        panY: clampAbs(prev.panY, b.y),
-      }));
-    }
-  }, [gesturing, view.zoom, view.panX, view.panY, panBoundsFor, scheduleView]);
-
   if (!page) return <div className="flex min-h-0 flex-1" />;
 
   const cursor = hasToolPointer
@@ -521,17 +465,7 @@ export function PdfStage() {
       <div ref={availRef} className="relative flex h-full w-full items-center justify-center">
         <div
           ref={wrapRef}
-          // The transform transition is on ONLY during the post-release settle
-          // (`settling`), so the spring-back is smooth while live drag/pinch/zoom
-          // stay 1:1. Cleared when the transform transition finishes.
-          onTransitionEnd={(e) => {
-            if (e.propertyName === "transform") setSettling(false);
-          }}
-          className={`relative shadow-sm ring-1 ring-slate-200/70 dark:ring-dark-border touch-none select-none ${
-            settling
-              ? "motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out"
-              : ""
-          }`}
+          className="relative shadow-sm ring-1 ring-slate-200/70 dark:ring-dark-border touch-none select-none"
           style={{
             transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom})`,
             transformOrigin: "center center",
