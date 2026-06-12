@@ -123,7 +123,7 @@ export function Board() {
   const cols = layout === "mobile" ? Math.min(view.gridCols, 2) : view.gridCols;
 
   return (
-    <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
+    <div className="thin-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
       <div
         className="mx-auto grid max-w-5xl gap-3"
         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}

@@ -439,6 +439,39 @@ describe("layoutToPlainText", () => {
   it("returns an empty string when there is no text", () => {
     expect(layoutToPlainText([page({ items: [] })])).toBe("");
   });
+
+  it("reads two columns top-to-bottom each (not interleaved across the gutter)", () => {
+    const p = page({
+      width: 600,
+      height: 800,
+      items: [
+        item({ text: "Left one", x: 20, y: 100, width: 200, height: 11 }),
+        item({ text: "Right one", x: 340, y: 100, width: 200, height: 11 }),
+        item({ text: "Left two", x: 20, y: 130, width: 200, height: 11 }),
+        item({ text: "Right two", x: 340, y: 130, width: 200, height: 11 }),
+        item({ text: "Left three", x: 20, y: 160, width: 200, height: 11 }),
+        item({ text: "Right three", x: 340, y: 160, width: 200, height: 11 }),
+      ],
+    });
+    expect(layoutToPlainText([p])).toBe(
+      "Left one\nLeft two\nLeft three\nRight one\nRight two\nRight three\n",
+    );
+  });
+
+  it("keeps a single-column page in y-order (no false split)", () => {
+    const p = page({
+      width: 600,
+      height: 800,
+      items: [
+        item({ text: "First line of the paragraph", x: 20, y: 100, width: 400, height: 11 }),
+        item({ text: "Second line of the paragraph", x: 20, y: 130, width: 400, height: 11 }),
+        item({ text: "Third line of the paragraph", x: 20, y: 160, width: 400, height: 11 }),
+      ],
+    });
+    expect(layoutToPlainText([p])).toBe(
+      "First line of the paragraph\nSecond line of the paragraph\nThird line of the paragraph\n",
+    );
+  });
 });
 
 describe("layoutToMarkdown", () => {

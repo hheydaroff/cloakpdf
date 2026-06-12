@@ -417,7 +417,7 @@ export function Panel() {
                 </div>
               </div>
 
-              <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
+              <div className="thin-scrollbar max-h-64 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
                 {[...byPage.entries()].map(([pageIndex, list]) => (
                   <div key={pageIndex} className="p-2">
                     <button

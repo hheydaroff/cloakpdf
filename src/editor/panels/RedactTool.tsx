@@ -411,7 +411,7 @@ export function Panel() {
           )}
         </div>
         {count > 0 && (
-          <ul className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
+          <ul className="thin-scrollbar max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
             {redactions.map((r, i) => (
               <li
                 key={r.id}

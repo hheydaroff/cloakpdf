@@ -355,12 +355,13 @@ export function detectHeadings(
 // ── Reading-order reflow (plain-text / Markdown export) ────────────────────
 //
 // Turn extracted layout back into a clean, linear document for the editor's
-// "Export → Text / Markdown" formats. layoutToReadingOrderText already
-// reconstructs ONE page's multi-column reading order; these compose it across
-// pages and, for Markdown, promote detected heading rows to ATX (`#`/`##`/`###`)
-// headings reusing detectHeadings — so the export keeps the document's
-// structure. Pure — operate on extracted LayoutPages, so they unit-test
-// without a browser.
+// "Export → Text / Markdown" formats. Unlike layoutToReadingOrderText (which
+// reads strictly by y-baseline and so interleaves side-by-side columns), these
+// detect a two-column gutter and read each column top-to-bottom before moving
+// right — the reading order a human follows. They then compose pages and, for
+// Markdown, promote detected heading rows to ATX (`#`/`##`/`###`) headings
+// reusing detectHeadings. Pure — operate on extracted LayoutPages, so they
+// unit-test without a browser.
 
 /** Group a page's non-empty items into visual rows (y-baseline), each row's
  *  items left-to-right. The shared grouping behind the Markdown serialiser and
@@ -376,11 +377,83 @@ function groupRows(page: LayoutPage, rowTolerance: number): LayoutItem[][] {
   return rows.map((r) => [...r].sort((a, b) => a.x - b.x));
 }
 
+/** Group an arbitrary item list into y-baseline rows (x-sorted) — the column-
+ *  local counterpart of {@link groupRows}, run per detected column. */
+function rowsOfItems(items: LayoutItem[], rowTolerance: number): LayoutItem[][] {
+  const rows: LayoutItem[][] = [];
+  for (const item of [...items].sort((a, b) => a.y - b.y)) {
+    const row = rows[rows.length - 1];
+    if (row && Math.abs(row[0].y - item.y) <= rowTolerance) row.push(item);
+    else rows.push([item]);
+  }
+  return rows.map((r) => [...r].sort((a, b) => a.x - b.x));
+}
+
+/**
+ * Detect a single dominant two-column gutter on a page and return its x, or
+ * null for single-column. Heuristic: across visual rows, find each row's widest
+ * internal horizontal gap; if a gap ≥ 6% of page width recurs at a consistent x
+ * (away from the margins) on enough rows, that x is the column boundary. Robust
+ * to full-width headings/footers — those are single-run rows that simply don't
+ * vote. Pure; only two columns are detected (the overwhelmingly common case).
+ */
+function detectColumnSplit(rows: LayoutItem[][], pageWidth: number): number | null {
+  const W = pageWidth || 1;
+  const minGap = W * 0.06;
+  const gapXs: number[] = [];
+  for (const row of rows) {
+    if (row.length < 2) continue;
+    let bestGap = 0;
+    let bestMid = 0;
+    for (let i = 1; i < row.length; i++) {
+      const prevRight = row[i - 1].x + row[i - 1].width;
+      const gap = row[i].x - prevRight;
+      if (gap > bestGap) {
+        bestGap = gap;
+        bestMid = (prevRight + row[i].x) / 2;
+      }
+    }
+    if (bestGap >= minGap && bestMid > W * 0.2 && bestMid < W * 0.8) gapXs.push(bestMid);
+  }
+  // The gutter must recur — a one-off paragraph gap is not a column boundary.
+  if (gapXs.length < Math.max(3, rows.length * 0.3)) return null;
+  const sorted = [...gapXs].sort((a, b) => a - b);
+  const median = sorted[Math.floor(sorted.length / 2)];
+  // …and the votes must agree on roughly the same x.
+  const consistent = gapXs.filter((x) => Math.abs(x - median) <= W * 0.1).length;
+  if (consistent < Math.max(3, gapXs.length * 0.6)) return null;
+  return median;
+}
+
+/**
+ * A page's rows in true reading order: single-column pages group by y-baseline;
+ * two-column pages split at the detected gutter and read the left column fully
+ * before the right. Each row is one visual line within its column, x-sorted.
+ */
+function orderedRows(page: LayoutPage, rowTolerance: number): LayoutItem[][] {
+  const rows = groupRows(page, rowTolerance);
+  const split = detectColumnSplit(rows, page.width);
+  if (split == null) return rows;
+  const items = page.items.filter((i) => i.text.trim().length > 0);
+  const left: LayoutItem[] = [];
+  const right: LayoutItem[] = [];
+  for (const it of items) (it.x + it.width / 2 < split ? left : right).push(it);
+  return [...rowsOfItems(left, rowTolerance), ...rowsOfItems(right, rowTolerance)];
+}
+
+/** One page's reading-order text (column-aware), falling back to liteparse's
+ *  own page text when there are no positioned items. */
+function pageReadingText(page: LayoutPage, rowTolerance = 3): string {
+  const rows = orderedRows(page, rowTolerance);
+  if (rows.length === 0) return page.text.trim();
+  return rows.map(rowToText).filter(Boolean).join("\n").trim();
+}
+
 /** Join every page's reading-order text into one plain-text document, pages
  *  separated by a blank line. Trailing newline so the file ends cleanly. */
 export function layoutToPlainText(pages: LayoutPage[]): string {
   const body = pages
-    .map((p) => layoutToReadingOrderText(p).trim())
+    .map((p) => pageReadingText(p))
     .filter(Boolean)
     .join("\n\n")
     .trim();
@@ -424,7 +497,7 @@ export function layoutToMarkdown(pages: LayoutPage[], options: MarkdownOptions =
     if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
   };
   for (const page of pages) {
-    for (const row of groupRows(page, rowTolerance)) {
+    for (const row of orderedRows(page, rowTolerance)) {
       const text = rowToText(row);
       if (!text) continue;
       const level =

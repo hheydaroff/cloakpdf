@@ -197,7 +197,7 @@ export function Panel() {
               Clear all
             </button>
           </div>
-          <ul className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
+          <ul className="thin-scrollbar max-h-40 overflow-y-auto rounded-lg border border-slate-200 dark:border-dark-border divide-y divide-slate-100 dark:divide-dark-border">
             {regions.map((r, i) => {
               const m = (r.payload as Partial<ErasePayload> | undefined)?.mode ?? "fill";
               return (
