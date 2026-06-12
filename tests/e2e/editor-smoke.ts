@@ -204,6 +204,27 @@ async function main() {
     await page.waitForSelector('img[alt="Page 1"]', { timeout: 10_000 });
     console.log("  ✓ density control (single ↔ grid)");
 
+    // 1c. Strip furniture: scan the pristine doc for repeating headers / footers /
+    //     page numbers; if any are found, trim them by cropping (non-destructive,
+    //     page count unchanged — so the 40→39 organize assertion below still holds).
+    const stripBtn = await page.$('button[aria-label="Strip furniture"]');
+    if (!stripBtn) fail("Strip furniture rail tool not found.");
+    await stripBtn.click(); // focus mode
+    await waitForText(page, /repeat across pages/i, 5_000); // panel mounted
+    await waitForText(
+      page,
+      /No repeating|Trims \d+%|Select at least one|Running header|Running footer|Page numbers/i,
+      60_000,
+    ); // scan resolved
+    const canTrim = await page.evaluate(() => /Trims \d+%/i.test(document.body.innerText));
+    if (canTrim && (await clickByText(page, "Trim furniture"))) {
+      await waitForText(page, /Working/i, 10_000);
+      await page.waitForSelector('img[alt="Page 1"]', { timeout: 60_000 });
+      console.log("  ✓ strip furniture detect + trim (crop) apply");
+    } else {
+      console.log("  ✓ strip furniture detect + render (no trimmable furniture in fixture)");
+    }
+
     // 2. Redact: marks are now DEFERRED — burned at export / the next byte
     //    transform, NOT in-tool — so the text layer survives and you can keep
     //    searching + redacting. Prove it: find a word, draw a manual box, then
@@ -441,6 +462,24 @@ async function main() {
     const dl2 = await waitForFile(downloadDir, /_grayscale\.pdf$/i, 60_000);
     console.log(`  ✓ export modal · grayscale → ${dl2}`);
 
+    // 13c. Export · Text + Markdown — reconstruct reading-order text on-device
+    //      (digital fixture → liteparse text layer, no model weights) and write
+    //      .txt + .md. The Markdown branch also surfaces the Infer-headings switch.
+    if (!(await clickByText(page, "Export"))) fail("Export button not found (text).");
+    await page.waitForSelector('button[aria-label="Text (.txt)"]', { timeout: 5_000 });
+    await page.click('button[aria-label="Text (.txt)"]');
+    if (!(await clickByText(page, "Download"))) fail("Download button not found (text).");
+    const dlTxt = await waitForFile(downloadDir, /\.txt$/i, 60_000);
+    console.log(`  ✓ export modal · text → ${dlTxt}`);
+
+    if (!(await clickByText(page, "Export"))) fail("Export button not found (markdown).");
+    await page.waitForSelector('button[aria-label="Markdown (.md)"]', { timeout: 5_000 });
+    await page.click('button[aria-label="Markdown (.md)"]');
+    await waitForText(page, /Infer headings/i, 5_000); // markdown-only option rendered
+    if (!(await clickByText(page, "Download"))) fail("Download button not found (markdown).");
+    const dlMd = await waitForFile(downloadDir, /\.md$/i, 60_000);
+    console.log(`  ✓ export modal · markdown (+ infer-headings toggle) → ${dlMd}`);
+
     if (errors.length > 0) {
       console.error("✗ Console/page errors during smoke:");
       for (const e of errors) console.error(`   ${e}`);
@@ -448,7 +487,7 @@ async function main() {
     }
 
     console.log(
-      `✓ Editor smoke passed — redact (deferred), find & act, smart erase (deferred), annotate, crop, signature, organize (now ${pageButtons.length} pages), overview/focus, stamps, forms, bookmarks (+ contents page), attachments, OCR wired.`,
+      `✓ Editor smoke passed — strip furniture, redact (deferred), find & act, smart erase (deferred), annotate, crop, signature, organize (now ${pageButtons.length} pages), overview/focus, stamps, forms, bookmarks (+ contents page), attachments, OCR wired, export PDF/contact-sheet/text/markdown.`,
     );
   } catch (e) {
     console.error(`✗ Smoke failed: ${e instanceof Error ? e.message : String(e)}`);

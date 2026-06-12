@@ -352,6 +352,304 @@ export function detectHeadings(
     .map((c) => ({ text: c.text, pageNumber: c.page, level: levelOf(c.size) }));
 }
 
+// ── Reading-order reflow (plain-text / Markdown export) ────────────────────
+//
+// Turn extracted layout back into a clean, linear document for the editor's
+// "Export → Text / Markdown" formats. layoutToReadingOrderText already
+// reconstructs ONE page's multi-column reading order; these compose it across
+// pages and, for Markdown, promote detected heading rows to ATX (`#`/`##`/`###`)
+// headings reusing detectHeadings — so the export keeps the document's
+// structure. Pure — operate on extracted LayoutPages, so they unit-test
+// without a browser.
+
+/** Group a page's non-empty items into visual rows (y-baseline), each row's
+ *  items left-to-right. The shared grouping behind the Markdown serialiser and
+ *  furniture detection — same tolerance logic as layoutToReadingOrderText. */
+function groupRows(page: LayoutPage, rowTolerance: number): LayoutItem[][] {
+  const items = page.items.filter((i) => i.text.trim().length > 0);
+  const rows: LayoutItem[][] = [];
+  for (const item of [...items].sort((a, b) => a.y - b.y)) {
+    const row = rows[rows.length - 1];
+    if (row && Math.abs(row[0].y - item.y) <= rowTolerance) row.push(item);
+    else rows.push([item]);
+  }
+  return rows.map((r) => [...r].sort((a, b) => a.x - b.x));
+}
+
+/** Join every page's reading-order text into one plain-text document, pages
+ *  separated by a blank line. Trailing newline so the file ends cleanly. */
+export function layoutToPlainText(pages: LayoutPage[]): string {
+  const body = pages
+    .map((p) => layoutToReadingOrderText(p).trim())
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+  return body ? `${body}\n` : "";
+}
+
+export interface MarkdownOptions {
+  /** Promote heading rows to `#`/`##`/`###` (default true). Off → every line is
+   *  a plain paragraph: the escape hatch when font-size banding misfires. */
+  headings?: boolean;
+  /** Row-grouping tolerance in points (default 3, matching detectHeadings). */
+  rowTolerance?: number;
+}
+
+/**
+ * Serialise extracted layout to Markdown: reading-order body text with detected
+ * headings promoted to ATX headings by font-size band. Heading rows are matched
+ * to {@link detectHeadings} output by `(page, normalized text)`, so the two
+ * agree; everything else is emitted as body lines (soft-wrapped into paragraphs
+ * by Markdown). Pure — operates on the extracted {@link LayoutPage}s.
+ */
+// A row worth promoting to a heading has at least one real word (a run of ≥ 3
+// letters). This drops stray ligature glyphs ("fi", "fl") that some PDFs emit
+// as their own larger-set items — detectHeadings can't tell them from a real
+// short heading, but they make ugly `# fi` lines in the serialised output.
+const HEADING_WORD = /\p{L}{3,}/u;
+
+export function layoutToMarkdown(pages: LayoutPage[], options: MarkdownOptions = {}): string {
+  const useHeadings = options.headings !== false;
+  const rowTolerance = options.rowTolerance ?? 3;
+
+  const headingLevel = new Map<string, number>();
+  if (useHeadings) {
+    for (const h of detectHeadings(pages, { rowTolerance })) {
+      headingLevel.set(`${h.pageNumber} ${h.text.toLowerCase()}`, h.level);
+    }
+  }
+
+  const lines: string[] = [];
+  const pushBlank = () => {
+    if (lines.length > 0 && lines[lines.length - 1] !== "") lines.push("");
+  };
+  for (const page of pages) {
+    for (const row of groupRows(page, rowTolerance)) {
+      const text = rowToText(row);
+      if (!text) continue;
+      const level =
+        useHeadings && HEADING_WORD.test(text)
+          ? headingLevel.get(`${page.pageNumber} ${text.toLowerCase()}`)
+          : undefined;
+      if (level) {
+        pushBlank();
+        lines.push(`${"#".repeat(level)} ${text}`);
+        lines.push("");
+      } else {
+        lines.push(text);
+      }
+    }
+  }
+  const body = lines
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return body ? `${body}\n` : "";
+}
+
+// ── Running-furniture detection (Strip Furniture editor tool) ──────────────
+//
+// Headers, footers, page numbers, and leaked watermark lines are "page
+// furniture": short text that recurs at the SAME position across many pages.
+// Body text doesn't — so furniture can be found purely by positional
+// recurrence, with no model. The Strip Furniture tool removes detected bands by
+// cropping the top/bottom margin (non-destructive, reversible), so the detector
+// reports, per group, a safe margin fraction to trim — already clamped so a
+// crop never reaches into body text. Pure — runs on the trustworthy per-run
+// geometry from extractTextGeometry.
+
+/** A page-number-ish folio: a bare number / roman numeral, optionally prefixed
+ *  with "Page" or wrapped in dashes, optionally "X of Y" / "X / Y". */
+const PAGE_NUMBER_RE =
+  /^[\s.–—-]*(?:p(?:age|g)?\.?\s*)?[0-9ivxlcdm]+(?:\s*(?:of|\/|–|—|-)\s*[0-9ivxlcdm]+)?[\s.–—-]*$/i;
+
+export type FurnitureRegion = "top" | "bottom";
+
+/** One cluster of recurring page furniture, ready for the tool's checklist. */
+export interface FurnitureGroup {
+  /** Stable id for the UI checklist (region + slot). */
+  id: string;
+  region: FurnitureRegion;
+  /** Best-guess kind — drives the label only. */
+  kind: "header" | "footer" | "page-number";
+  /** A representative line of the recurring text (the running header itself). */
+  sampleText: string;
+  /** How many pages carry this furniture. */
+  pageCount: number;
+  /** Fraction (0–1) to trim from this group's page edge to remove it cleanly,
+   *  clamped so it never crosses into body text and never exceeds 30%. */
+  marginPct: number;
+}
+
+export interface FurnitureOptions {
+  /** A cluster counts as furniture once it appears on at least this fraction of
+   *  pages. Default 0.5. */
+  minPageFraction?: number;
+  /** How far from each edge (page-height fraction) to look for furniture.
+   *  Default 0.18 (top 18% / bottom 18%). */
+  marginBand?: number;
+  rowTolerance?: number;
+}
+
+/**
+ * Detect running headers, footers, and page numbers by positional recurrence.
+ *
+ * For each page we group margin-region rows, normalise their text (masking
+ * digit runs so "Page 3" and "Page 4" cluster), and bucket by
+ * `region · quantised-y · masked-text`. A bucket spanning enough pages is
+ * furniture. Body bounds are taken from every non-furniture row so the reported
+ * `marginPct` can be clamped to never clip body content. Needs ≥ 3 pages — with
+ * fewer there's no recurrence to distinguish furniture from body.
+ */
+export function detectRunningFurniture(
+  pages: LayoutPage[],
+  options: FurnitureOptions = {},
+): FurnitureGroup[] {
+  const minFraction = options.minPageFraction ?? 0.5;
+  const band = options.marginBand ?? 0.18;
+  const rowTolerance = options.rowTolerance ?? 3;
+  const n = pages.length;
+  if (n < 3) return [];
+
+  const Q = 0.04; // y-band quantisation (4% of page height)
+  interface MarginRow {
+    pageNumber: number;
+    text: string;
+    key: string;
+    region: FurnitureRegion;
+    yTopPct: number;
+    yBotPct: number;
+  }
+  const marginRows: MarginRow[] = [];
+  // Every row's bounds + (furniture key | null), to derive body bounds later.
+  const rowBounds: { yTopPct: number; yBotPct: number; key: string | null }[] = [];
+
+  for (const page of pages) {
+    const h = page.height || 1;
+    for (const row of groupRows(page, rowTolerance)) {
+      const text = rowToText(row);
+      if (!text) continue;
+      let yTop = Number.POSITIVE_INFINITY;
+      let yBot = Number.NEGATIVE_INFINITY;
+      for (const it of row) {
+        yTop = Math.min(yTop, it.y);
+        yBot = Math.max(yBot, it.y + (it.height || it.fontSize || 0));
+      }
+      const yTopPct = clamp01(yTop / h);
+      const yBotPct = clamp01(yBot / h);
+      const yMidPct = (yTopPct + yBotPct) / 2;
+      const region: FurnitureRegion | null =
+        yMidPct <= band ? "top" : yMidPct >= 1 - band ? "bottom" : null;
+      if (region) {
+        const key = `${region}|${Math.round(yMidPct / Q)}|${text.toLowerCase().replace(/\d+/g, "#")}`;
+        marginRows.push({ pageNumber: page.pageNumber, text, key, region, yTopPct, yBotPct });
+        rowBounds.push({ yTopPct, yBotPct, key });
+      } else {
+        rowBounds.push({ yTopPct, yBotPct, key: null });
+      }
+    }
+  }
+
+  // Cluster margin rows by key; a bucket spanning ≥ minPages distinct pages is
+  // furniture.
+  const buckets = new Map<
+    string,
+    { region: FurnitureRegion; rows: MarginRow[]; pages: Set<number> }
+  >();
+  for (const r of marginRows) {
+    let b = buckets.get(r.key);
+    if (!b) {
+      b = { region: r.region, rows: [], pages: new Set() };
+      buckets.set(r.key, b);
+    }
+    b.rows.push(r);
+    b.pages.add(r.pageNumber);
+  }
+  const minPages = Math.max(2, Math.ceil(minFraction * n));
+  const furnitureKeys = new Set<string>();
+  for (const [key, b] of buckets) if (b.pages.size >= minPages) furnitureKeys.add(key);
+  if (furnitureKeys.size === 0) return [];
+
+  // Body bounds from rows NOT classified as furniture, so a crop never clips it.
+  let bodyTop = 1;
+  let bodyBottom = 0;
+  let sawBody = false;
+  for (const r of rowBounds) {
+    if (r.key && furnitureKeys.has(r.key)) continue;
+    sawBody = true;
+    bodyTop = Math.min(bodyTop, r.yTopPct);
+    bodyBottom = Math.max(bodyBottom, r.yBotPct);
+  }
+
+  const PAD = 0.006; // clear the glyphs
+  const GAP = 0.004; // keep clear of body
+  const MAX = 0.3; // never trim more than 30% for furniture
+  const groups: FurnitureGroup[] = [];
+  let topIdx = 0;
+  let botIdx = 0;
+  for (const [key, b] of buckets) {
+    if (!furnitureKeys.has(key)) continue;
+
+    const counts = new Map<string, number>();
+    for (const r of b.rows) counts.set(r.text, (counts.get(r.text) ?? 0) + 1);
+    let sampleText = "";
+    let best = -1;
+    for (const [t, c] of counts) {
+      if (c > best) {
+        best = c;
+        sampleText = t;
+      }
+    }
+
+    const allNumeric = b.rows.every((r) => PAGE_NUMBER_RE.test(r.text));
+    const kind = allNumeric ? "page-number" : b.region === "top" ? "header" : "footer";
+
+    let marginPct: number;
+    if (b.region === "top") {
+      let cut = Math.max(...b.rows.map((r) => r.yBotPct)) + PAD;
+      if (sawBody) cut = Math.min(cut, Math.max(0, bodyTop - GAP));
+      marginPct = Math.min(MAX, Math.max(0, cut));
+    } else {
+      let keep = Math.min(...b.rows.map((r) => r.yTopPct)) - PAD;
+      if (sawBody) keep = Math.max(keep, bodyBottom + GAP);
+      marginPct = Math.min(MAX, Math.max(0, 1 - keep));
+    }
+
+    groups.push({
+      id: b.region === "top" ? `top-${topIdx++}` : `bottom-${botIdx++}`,
+      region: b.region,
+      kind,
+      sampleText,
+      pageCount: b.pages.size,
+      marginPct,
+    });
+  }
+
+  // Top groups first, then bottom; within a region the deeper trim leads.
+  groups.sort((a, z) =>
+    a.region === z.region ? z.marginPct - a.marginPct : a.region === "top" ? -1 : 1,
+  );
+  return groups;
+}
+
+/**
+ * Reduce a set of (selected) furniture groups to a single crop spec: the
+ * fraction to trim from the top and from the bottom of every page. Each edge
+ * takes the deepest selected band on that side. Pure.
+ */
+export function furnitureCropMargins(groups: FurnitureGroup[]): {
+  topPct: number;
+  bottomPct: number;
+} {
+  let topPct = 0;
+  let bottomPct = 0;
+  for (const g of groups) {
+    if (g.region === "top") topPct = Math.max(topPct, g.marginPct);
+    else bottomPct = Math.max(bottomPct, g.marginPct);
+  }
+  return { topPct, bottomPct };
+}
+
 /** A detected PII span resolved to a redaction rectangle on a specific page. */
 export interface PiiRect extends FractionRect {
   /** 0-based page index (matches RedactPdf's `pageIndex`). */

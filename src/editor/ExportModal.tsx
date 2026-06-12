@@ -21,13 +21,16 @@ import {
   Check,
   Contrast,
   Download,
+  FileCode2,
   FileText,
   FileX2,
+  Hash,
   Image as ImageIcon,
   Layers,
   type LucideIcon,
   LayoutGrid,
   Scissors,
+  Type,
   Wrench,
   X,
 } from "lucide-react";
@@ -36,6 +39,7 @@ import { useFocusTrap } from "../utils/useFocusTrap";
 import { createPortal } from "react-dom";
 import { AnimatePresence, m, variants } from "../components/motion.tsx";
 import { downloadBlob, downloadPdf, pdfFilename } from "../utils/file-helpers.ts";
+import { extractLayout, layoutToMarkdown, layoutToPlainText } from "../utils/layout-extract.ts";
 import {
   compressPdf,
   flattenPdf,
@@ -53,7 +57,7 @@ import { Segmented } from "./panels/WholeDocPanel.tsx";
 const IMAGE_DPI = 150;
 
 type Quality = "low" | "medium" | "high";
-type Format = "pdf" | "images" | "contact" | "split";
+type Format = "pdf" | "images" | "contact" | "split" | "text" | "markdown";
 
 const COMPRESS_INFO: Record<Quality, string> = {
   low: "Sharpest pages, modest size drop (1× render, JPEG 85%).",
@@ -66,6 +70,13 @@ const FORMATS: { value: Format; icon: LucideIcon; label: string; hint: string }[
   { value: "images", icon: ImageIcon, label: "Images (.zip)", hint: "Each page as PNG" },
   { value: "contact", icon: LayoutGrid, label: "Contact sheet", hint: "3×3 overview PDF" },
   { value: "split", icon: Scissors, label: "Split pages (.zip)", hint: "One PDF per page" },
+  { value: "text", icon: Type, label: "Text (.txt)", hint: "Reading-order plain text" },
+  {
+    value: "markdown",
+    icon: FileCode2,
+    label: "Markdown (.md)",
+    hint: "Headings + text, on-device",
+  },
 ];
 
 /** Selectable output-format card (single choice — radio semantics). */
@@ -214,6 +225,8 @@ export function ExportButton() {
   const [flatten, setFlatten] = useState(false);
   const [repair, setRepair] = useState(false);
   const [stripMeta, setStripMeta] = useState(false);
+  // Markdown export: infer headings from font-size bands (off → plain paragraphs).
+  const [mdHeadings, setMdHeadings] = useState(true);
 
   const busy = busyLabel !== null;
   const closeBtnRef = useRef<HTMLButtonElement>(null);
@@ -348,6 +361,27 @@ export function ExportButton() {
       return;
     }
 
+    // Text / Markdown — reconstruct reading-order text on-device (liteparse +
+    // Tesseract for scanned pages), then serialise. The wasm + OCR engine stay
+    // lazy inside extractLayout, so importing it costs nothing until used.
+    // Extracts from the FLATTENED bytes so any pending redaction is gone first.
+    if (format === "text" || format === "markdown") {
+      const isMd = format === "markdown";
+      void runTask(isMd ? "Building Markdown…" : "Extracting text…", async () => {
+        const pages = await extractLayout(await flattenedFile());
+        const content = isMd
+          ? layoutToMarkdown(pages, { headings: mdHeadings })
+          : layoutToPlainText(pages);
+        downloadBlob(
+          new Blob([content], {
+            type: isMd ? "text/markdown;charset=utf-8" : "text/plain;charset=utf-8",
+          }),
+          `${baseName}.${isMd ? "md" : "txt"}`,
+        );
+      });
+      return;
+    }
+
     // PDF — fast path when no modifiers are on AND nothing to burn in.
     if (!(compress || grayscale || flatten || repair || stripMeta)) {
       if (!hasPendingDestructive(doc)) {
@@ -372,6 +406,7 @@ export function ExportButton() {
     flatten,
     repair,
     stripMeta,
+    mdHeadings,
     baseName,
     runTask,
     buildPdf,
@@ -379,6 +414,7 @@ export function ExportButton() {
   ]);
 
   const isPdf = format === "pdf";
+  const isText = format === "text" || format === "markdown";
 
   return (
     <>
@@ -474,6 +510,26 @@ export function ExportButton() {
                       ))}
                     </div>
                   </div>
+
+                  {isText && (
+                    <p className="-mt-1 px-0.5 text-xs text-slate-500 dark:text-dark-text-muted">
+                      Reading order is reconstructed on-device. Scanned pages are read with OCR
+                      (one-time engine download) — nothing leaves your browser.
+                    </p>
+                  )}
+
+                  {format === "markdown" && (
+                    <div className="flex flex-col gap-2">
+                      <SectionLabel>Markdown</SectionLabel>
+                      <OptionRow
+                        icon={Hash}
+                        label="Infer headings"
+                        hint="Use font sizes to add #, ##, ### headings"
+                        checked={mdHeadings}
+                        onChange={setMdHeadings}
+                      />
+                    </div>
+                  )}
 
                   {isPdf && (
                     <div className="flex flex-col gap-2">

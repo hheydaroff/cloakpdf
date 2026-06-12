@@ -19,6 +19,7 @@ import * as Redact from "./panels/RedactTool.tsx";
 import * as Scrub from "./panels/ScrubTool.tsx";
 import * as Signature from "./panels/SignatureTool.tsx";
 import * as SmartErase from "./panels/SmartEraseTool.tsx";
+import * as StripFurniture from "./panels/StripFurnitureTool.tsx";
 import {
   BatesPanel,
   HeaderFooterPanel,
@@ -44,6 +45,9 @@ export const TOOL_IMPL: Record<string, ToolImpl> = {
   // Canvas-placement tools: a Stage to place/drag on the page + a Panel.
   signature: { Stage: Signature.Stage, Panel: Signature.Panel },
   "crop-pages": { Stage: Crop.Stage, Panel: Crop.Panel },
+  // Strip Furniture: a passive Stage that previews the trimmed margin bands + a
+  // detect-and-crop Panel.
+  "strip-furniture": { Stage: StripFurniture.Stage, Panel: StripFurniture.Panel },
   // Overview tools: their Board lives in OverviewMode (center), so no focus
   // Stage here — only the Panel. Organize now also absorbs reverse / extract /
   // remove-blank as in-panel quick actions.

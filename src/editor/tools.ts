@@ -17,6 +17,7 @@
 
 import {
   AlignCenter,
+  AlignVerticalSpaceAround,
   BookMarked,
   ClipboardList,
   Crop,
@@ -164,6 +165,15 @@ export const EDITOR_TOOLS = [
     name: "Crop",
     description: "Trim page margins to a custom area.",
     icon: Crop,
+    group: "transform",
+    mode: "focus",
+    status: "ready",
+  },
+  {
+    id: "strip-furniture",
+    name: "Strip furniture",
+    description: "Auto-detect and trim repeating headers, footers, and page numbers.",
+    icon: AlignVerticalSpaceAround,
     group: "transform",
     mode: "focus",
     status: "ready",

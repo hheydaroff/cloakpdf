@@ -319,6 +319,7 @@ async function main() {
       "Fill form",
       "Scrub",
       "Erase",
+      "Strip furniture",
       "N-up",
       "Stamp",
       "Header & footer",
