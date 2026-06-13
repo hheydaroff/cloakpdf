@@ -407,7 +407,11 @@ export function DateTimeInput({ id, value, onChange }: DateTimeInputProps) {
           <div
             ref={popoverRef}
             role="dialog"
-            aria-modal="true"
+            // No aria-modal: this is a non-modal anchored popover (no backdrop,
+            // no scroll lock, closes on outside click — Escape handled above).
+            // aria-modal="true" promised a focus trap this disclosure pattern
+            // deliberately doesn't have, so it's dropped to resolve the ARIA
+            // contradiction rather than trap focus in a scrim-less surface.
             aria-label="Date and time picker"
             style={popoverStyle}
             className={`${popoverAnimClass} z-900 w-72 p-3 bg-white dark:bg-dark-surface rounded-xl border border-slate-200 dark:border-dark-border shadow-xl space-y-2 overscroll-contain`}

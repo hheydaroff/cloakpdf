@@ -305,7 +305,7 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
                   page is a zero, and the counts are derived from the tool
                   registries so they can never drift from the product. */}
               <p
-                className="mt-4 text-meta text-slate-400 dark:text-dark-text-muted tabular-nums animate-fade-in-up"
+                className="mt-4 text-meta text-slate-500 dark:text-dark-text-muted tabular-nums animate-fade-in-up"
                 style={{ animationDelay: "160ms" }}
               >
                 {EDITOR_TOOL_IDS.size} editor tools · {tools.length} utilities ·{" "}
@@ -427,14 +427,14 @@ function HomeScreen({ onSelectTool, onOpenEditor }: HomeScreenProps) {
 
       {/* ── Tool Grid / Empty State ─────────────────────── */}
       {filteredTools.length === 0 && editorMatches.length === 0 ? (
-        <div className="text-center py-16 animate-fade-in-up">
-          <div className="w-16 h-16 bg-slate-100 dark:bg-dark-surface rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-slate-400 dark:text-dark-text-muted" />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-600 dark:text-dark-text mb-2">
+        // Left-aligned to sit on the same left spine the category headings
+        // establish — the old centred icon-tile block was the one
+        // "centred-everything" island on an otherwise left-biased page.
+        <div className="py-16 animate-fade-in-up">
+          <h3 className="text-lg font-semibold text-slate-900 dark:text-dark-text mb-2">
             No tools found
           </h3>
-          <p className="text-sm text-slate-600 dark:text-dark-text-muted max-w-md mx-auto">
+          <p className="text-sm text-slate-600 dark:text-dark-text-muted max-w-md">
             Try a different search term like &ldquo;redact&rdquo;, &ldquo;watermark&rdquo;, or
             &ldquo;merge&rdquo;
           </p>
@@ -712,28 +712,36 @@ type View =
 export function App() {
   const [view, setView] = useState<View>({ kind: "home" });
 
-  const goHome = useCallback(() => setView({ kind: "home" }), []);
+  // Every view transition routes through navigate() so scroll-to-top happens
+  // synchronously in the click/event path (before paint — no post-render scroll
+  // jump) instead of as a [view] effect that also re-ran on same-view setView.
+  const navigate = useCallback((next: View) => {
+    setView(next);
+    window.scrollTo(0, 0);
+  }, []);
+
+  const goHome = useCallback(() => navigate({ kind: "home" }), [navigate]);
 
   // Editor-first routing: single-PDF tools that live in the editor open it (with
   // that tool preselected); multi-file / terminal / AI surfaces stay standalone.
-  const handleSelectTool = useCallback((id: ToolId) => {
-    if (EDITOR_TOOL_IDS.has(id)) setView({ kind: "editor", file: null, tool: id });
-    else setView({ kind: "tool", toolId: id });
-  }, []);
+  const handleSelectTool = useCallback(
+    (id: ToolId) => {
+      if (EDITOR_TOOL_IDS.has(id)) navigate({ kind: "editor", file: null, tool: id });
+      else navigate({ kind: "tool", toolId: id });
+    },
+    [navigate],
+  );
 
-  const openEditor = useCallback((file: File | null = null, tool: string | null = null) => {
-    setView({ kind: "editor", file, tool });
-  }, []);
+  const openEditor = useCallback(
+    (file: File | null = null, tool: string | null = null) => {
+      navigate({ kind: "editor", file, tool });
+    },
+    [navigate],
+  );
 
   const handlePrivacy = useCallback(() => {
-    setView({ kind: "privacy" });
-  }, []);
-
-  /** Scroll to top whenever the view changes. */
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- view is intentionally the trigger; identity changes per setView call
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [view]);
+    navigate({ kind: "privacy" });
+  }, [navigate]);
 
   // Cross-component deep-link: a tool fires `navigateToTool(id)` and we
   // route to it. Currently used by the encrypted-PDF notice in
@@ -741,13 +749,13 @@ export function App() {
   useEffect(() => {
     function onNavigate(event: Event) {
       const id = (event as CustomEvent<ToolId>).detail;
-      if (findTool(id)) setView({ kind: "tool", toolId: id });
+      if (findTool(id)) navigate({ kind: "tool", toolId: id });
     }
     // A tool's secondary "& edit" action finished and handed its output PDF
     // to the editor (Merge / Images-to-PDF / PDF Password unlock).
     function onOpenEditor(event: Event) {
       const file = (event as CustomEvent<File>).detail;
-      setView({ kind: "editor", file, tool: null });
+      navigate({ kind: "editor", file, tool: null });
     }
     window.addEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
     window.addEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
@@ -755,7 +763,7 @@ export function App() {
       window.removeEventListener(NAVIGATE_TOOL_EVENT, onNavigate);
       window.removeEventListener(OPEN_EDITOR_EVENT, onOpenEditor);
     };
-  }, []);
+  }, [navigate]);
 
   // The editor owns the full viewport and its own chrome, so it renders
   // outside <Layout> (no centered max-width, no app header/footer). Orientation

@@ -19,7 +19,7 @@
 // trade-off was accepted deliberately (the standalone OCR card stays desktop-
 // only via its own `desktopOnly` flag).
 
-import { Loader2, ScanText } from "lucide-react";
+import { AlertTriangle, Loader2, ScanText } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Select } from "../../components/Select.tsx";
 import {
@@ -83,7 +83,7 @@ export function OcrPreview() {
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-slate-100 dark:bg-dark-bg p-4 sm:p-6">
       <div className="mx-auto mb-3 flex w-full max-w-5xl items-center justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+        <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-600 dark:text-dark-text-muted">
           Recognised text
         </span>
         {hasLayout && (
@@ -143,12 +143,17 @@ export function Panel() {
   const hasPreview = ocrHasPreview(slice, doc?.id);
   const [extracting, setExtracting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  // Separate from `progress` so a failure SURVIVES the `.finally()` that clears
+  // the transient status (previously the error was set into `progress` and
+  // immediately wiped, so it never rendered). Cleared at the next run start.
+  const [error, setError] = useState<string | null>(null);
   const busy = busyLabel !== null;
 
   const extract = () => {
     if (!doc) return;
     const docId = doc.id;
     setExtracting(true);
+    setError(null);
     setProgress("Analysing pages…");
     const lang = language === "auto" ? "eng" : language;
     void extractLayout(docToFile(doc), {
@@ -175,7 +180,7 @@ export function Panel() {
           );
           patchToolState(OCR_ID, { docId, layout: null, pageTexts: flat, previewMode: "text" });
         },
-        () => setProgress("Couldn't read this document."),
+        () => setError("Couldn't read this document. It may be corrupt or password-protected."),
       )
       .finally(() => {
         setExtracting(false);
@@ -197,7 +202,7 @@ export function Panel() {
 
   const langPicker = (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+      <span className="mb-1 block text-xs font-medium uppercase tracking-[0.12em] text-slate-600 dark:text-dark-text-muted">
         Language
       </span>
       <Select
@@ -260,6 +265,12 @@ export function Panel() {
       {progress && (
         <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">
           {progress}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="flex items-start gap-1.5 text-xs text-red-700 dark:text-red-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{error}</span>
         </p>
       )}
       <p className="text-xs text-slate-500 dark:text-dark-text-muted">

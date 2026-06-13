@@ -35,7 +35,7 @@
  *   }, [file, rotations, task]);
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage } from "../utils/file-helpers.ts";
 
 export interface UseAsyncProcessReturn {
@@ -78,6 +78,19 @@ export function useAsyncProcess(): UseAsyncProcessReturn {
   // would race on the same state.
   const inFlightRef = useRef(false);
 
+  // Guard state writes against a setState-after-unmount: these tools run heavy,
+  // multi-second PDF work, and a user can navigate home / to another tool
+  // mid-operation (a core flow). The work still runs to completion (no abort
+  // wired here — that's a larger change), but its result must not poke a
+  // component that's gone.
+  const mountedRef = useRef(true);
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   const run = useCallback(
     async (
       fn: () => Promise<void>,
@@ -91,11 +104,13 @@ export function useAsyncProcess(): UseAsyncProcessReturn {
         await fn();
         return true;
       } catch (e) {
-        setError(errorMessage(e, fallbackMessage));
+        if (mountedRef.current) setError(errorMessage(e, fallbackMessage));
         return false;
       } finally {
+        // inFlightRef is a ref, not state — always reset it so a remount can run
+        // again; only the setProcessing state write is unmount-guarded.
         inFlightRef.current = false;
-        setProcessing(false);
+        if (mountedRef.current) setProcessing(false);
       }
     },
     [],

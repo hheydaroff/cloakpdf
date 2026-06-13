@@ -41,7 +41,11 @@ const SIZE = {
   sm: {
     pad: "rounded-lg p-0.5",
     gap: "gap-0.5",
-    button: "px-2.5 py-1 text-xs rounded-md",
+    // pointer-coarse:min-h-11 floors the tap target to 44px on touch devices
+    // (the Sort toggle is reordered by finger on mobile) while leaving the
+    // pixel-tuned desktop resting visual identical — the variant is inert on
+    // fine pointers and the h-full thumb grows to match automatically.
+    button: "px-2.5 py-1 text-xs rounded-md pointer-coarse:min-h-11",
     thumb: "rounded-md",
     icon: "w-3.5 h-3.5",
   },

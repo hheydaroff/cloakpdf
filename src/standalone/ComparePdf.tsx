@@ -67,6 +67,12 @@ async function renderPageToCanvas(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error(`Failed to acquire 2D context for page ${pageNum}`);
   await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+  // Release this page's decoded fonts / operator list / images now, so a
+  // full-document compare doesn't pile every page's cache onto the proxy (both
+  // docs) until the final destroy() — peak-memory spike on large PDFs. Matches
+  // pdf-renderer.ts. The caller only uses the returned canvas, never re-reads
+  // the page proxy, so cleaning here is safe.
+  page.cleanup();
   return canvas;
 }
 
@@ -310,12 +316,18 @@ export default function ComparePdf() {
       const taskB = pdfjsLib.getDocument({ data: bufB, wasmUrl: PDFJS_WASM_URL });
       const [pdfA, pdfB] = await Promise.all([taskA.promise, taskB.promise]);
 
-      const results = await comparePdfs(pdfA, pdfB, 1.5, (done, total) =>
-        setProgress({ done, total }),
-      );
-
-      void taskA.destroy();
-      void taskB.destroy();
+      // Tear both documents down in a finally: comparePdfs renders every page of
+      // both at 1.5×, which is exactly when a decode/OOM throw is most likely —
+      // and a throw here used to skip the destroy() calls, leaking two
+      // PDFDocumentProxy (each pinning its worker transport + the full file
+      // ArrayBuffer) for the rest of the session. Mirrors ExtractImages.
+      let results: PageComparison[];
+      try {
+        results = await comparePdfs(pdfA, pdfB, 1.5, (done, total) => setProgress({ done, total }));
+      } finally {
+        void taskA.destroy();
+        void taskB.destroy();
+      }
 
       setComparisons(results);
     }, "Failed to compare PDFs. One of the files may be corrupted or password-protected.");
@@ -642,6 +654,7 @@ export default function ComparePdf() {
                   ? "border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800"
                   : "border-slate-200 dark:border-dark-border hover:border-primary-300"
               }`}
+              aria-current={comp.page - 1 === currentPage}
               aria-label={`Page ${comp.page}`}
             >
               <div className="aspect-3/4 bg-slate-50 dark:bg-dark-bg flex items-center justify-center">

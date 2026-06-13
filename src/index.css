@@ -193,6 +193,13 @@ body {
   }
 }
 
+/* Class form of the rotate cue (was an inline style on the OrientationLock
+   glyph). Lifting it off inline style lets the reduced-motion rule below win
+   the cascade and disable it. */
+.animate-rotate-hint {
+  animation: ci-rotate-hint 2.4s ease-in-out infinite;
+}
+
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -289,7 +296,15 @@ body {
   .animate-fade-in,
   .animate-fade-in-up,
   .animate-scale-in,
-  .animate-slide-up-in {
+  .animate-slide-up-in,
+  .animate-rotate-hint {
+    animation: none;
+  }
+  /* Tailwind's decorative pulse (streaming caret in Ask PDF, the "Detecting…"
+     hint in PDF Password) carries no information — silence it. animate-spin is
+     deliberately left running: loading spinners are essential status feedback
+     and are exempt under reduced-motion guidance. */
+  .animate-pulse {
     animation: none;
   }
 }
@@ -443,4 +458,20 @@ body {
   width: 0;
   height: 0;
   display: none;
+}
+
+/*
+ * .page-cell — applied to each page thumbnail cell in the unbounded page grids
+ * (editor Overview grid, Organize board). A PDF can carry hundreds–1000+ pages,
+ * so painting/laying-out every off-screen cell on entering overview janks the
+ * main thread. `content-visibility: auto` skips rendering work for cells that
+ * are off-screen; the `auto` keyword on contain-intrinsic-size makes the browser
+ * remember each cell's last real size, so the 240px estimate is only used before
+ * a cell has ever been on-screen (avoids scroll-length jumps with mixed page
+ * aspect ratios). Goes on the CELL, never on the .thin-scrollbar scroll
+ * container — the hidden-scrollbar design is untouched.
+ */
+.page-cell {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
 }

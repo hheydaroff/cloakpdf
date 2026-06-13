@@ -50,7 +50,7 @@ export const ToolCard = memo(function ToolCard({ tool, onSelect }: ToolCardProps
           <Icon className="w-5 h-5" />
         </span>
 
-        <h3 className="text-card-title font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text inline-flex items-center gap-2 flex-wrap">
+        <h3 className="text-card-title font-semibold tracking-[-0.005em] text-slate-800 dark:text-dark-text inline-flex items-center gap-2 flex-wrap wrap-break-word">
           {tool.title}
           {tool.beta && (
             // Small uppercase pill, surfaces as part of the title for

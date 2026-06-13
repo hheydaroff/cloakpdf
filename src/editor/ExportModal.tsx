@@ -86,12 +86,18 @@ function FormatCard({
   hint,
   selected,
   onSelect,
+  tabIndex,
+  cardRef,
 }: {
   icon: LucideIcon;
   label: string;
   hint: string;
   selected: boolean;
   onSelect: () => void;
+  /** Roving tabindex: 0 for the checked radio, -1 for the rest, so the group
+   *  is a single tab stop and arrow keys move between options. */
+  tabIndex: number;
+  cardRef: (el: HTMLButtonElement | null) => void;
 }) {
   return (
     <button
@@ -99,6 +105,8 @@ function FormatCard({
       role="radio"
       aria-checked={selected}
       aria-label={label}
+      tabIndex={tabIndex}
+      ref={cardRef}
       onClick={onSelect}
       className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-[color,background-color,border-color,transform] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
         selected
@@ -206,7 +214,7 @@ function OptionRow({
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-0.5 text-xxs font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+    <p className="px-0.5 text-xxs font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-dark-text-muted">
       {children}
     </p>
   );
@@ -233,6 +241,22 @@ export function ExportButton() {
   const dialogRef = useRef<HTMLDivElement>(null);
   // Trap Tab within the dialog + restore focus to the Export trigger on close.
   useFocusTrap(dialogRef, open);
+
+  // Roving-tabindex + arrow-key navigation for the format radiogroup, per the
+  // WAI-ARIA radio pattern the role advertises: one tab stop into the group,
+  // then Arrow/Home/End move selection. focus() is called only here (never on
+  // the click path), so mouse selection is unaffected.
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const moveFormat = useCallback(
+    (dir: 1 | -1 | "home" | "end") => {
+      const i = FORMATS.findIndex((f) => f.value === format);
+      const n = FORMATS.length;
+      const next = dir === "home" ? 0 : dir === "end" ? n - 1 : (i + dir + n) % n;
+      setFormat(FORMATS[next].value);
+      cardRefs.current[next]?.focus();
+    },
+    [format],
+  );
 
   // Scroll-lock + Escape while open. Mirrors the app's modal idiom.
   useEffect(() => {
@@ -367,8 +391,15 @@ export function ExportButton() {
     // Extracts from the FLATTENED bytes so any pending redaction is gone first.
     if (format === "text" || format === "markdown") {
       const isMd = format === "markdown";
-      void runTask(isMd ? "Building Markdown…" : "Extracting text…", async () => {
-        const pages = await extractLayout(await flattenedFile());
+      void runTask(isMd ? "Building Markdown…" : "Extracting text…", async (setLabel) => {
+        // Scanned pages run on-device OCR (one-time engine download) which can
+        // take many seconds; surface determinate progress in the overlay so a
+        // long extraction doesn't read as a hang. Wording matches OcrTool so the
+        // two surfaces read identically. Digital PDFs skip OCR and keep the
+        // static "Extracting text…" label.
+        const pages = await extractLayout(await flattenedFile(), {
+          onOcrPage: (done, total) => setLabel(`Recognising page ${done} / ${total}…`),
+        });
         const content = isMd
           ? layoutToMarkdown(pages, { headings: mdHeadings })
           : layoutToPlainText(pages);
@@ -497,8 +528,30 @@ export function ExportButton() {
                       role="radiogroup"
                       aria-label="Export format"
                       className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+                      onKeyDown={(e) => {
+                        switch (e.key) {
+                          case "ArrowDown":
+                          case "ArrowRight":
+                            e.preventDefault();
+                            moveFormat(1);
+                            break;
+                          case "ArrowUp":
+                          case "ArrowLeft":
+                            e.preventDefault();
+                            moveFormat(-1);
+                            break;
+                          case "Home":
+                            e.preventDefault();
+                            moveFormat("home");
+                            break;
+                          case "End":
+                            e.preventDefault();
+                            moveFormat("end");
+                            break;
+                        }
+                      }}
                     >
-                      {FORMATS.map((f) => (
+                      {FORMATS.map((f, i) => (
                         <FormatCard
                           key={f.value}
                           icon={f.icon}
@@ -506,6 +559,10 @@ export function ExportButton() {
                           hint={f.hint}
                           selected={format === f.value}
                           onSelect={() => setFormat(f.value)}
+                          tabIndex={format === f.value ? 0 : -1}
+                          cardRef={(el) => {
+                            cardRefs.current[i] = el;
+                          }}
                         />
                       ))}
                     </div>

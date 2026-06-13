@@ -62,7 +62,12 @@ export function Board() {
   const view = useEditorView();
   const { patchToolState } = useEditorActions();
   const slice = useToolSlice(ORGANIZE_ID);
-  const dragFrom = useRef<number | null>(null);
+  // Drag-to-reorder visual state: the cell being dragged (dim + shrink) and the
+  // cell currently hovered as the drop target (accent ring). State, not a ref,
+  // so the board re-renders to show the affordance during a desktop drag — the
+  // gesture was previously invisible (no grab cursor, no drop indicator).
+  const [fromPos, setFromPos] = useState<number | null>(null);
+  const [overPos, setOverPos] = useState<number | null>(null);
   // Show the Up/Down reorder buttons on touch — HTML5 drag-and-drop doesn't fire
   // for touch, so they're the only way to reorder on a phone. Reactive (not a
   // mount-time ref): a fine→coarse switch or a desktop→mobile resize now flips
@@ -137,17 +142,28 @@ export function Board() {
             <div
               key={origIdx}
               draggable
-              onDragStart={() => {
-                dragFrom.current = pos;
+              onDragStart={() => setFromPos(pos)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (fromPos !== null && pos !== fromPos) setOverPos(pos);
               }}
-              onDragOver={(e) => e.preventDefault()}
+              onDragLeave={() => setOverPos((p) => (p === pos ? null : p))}
               onDrop={() => {
-                if (dragFrom.current !== null) reorder(dragFrom.current, pos);
-                dragFrom.current = null;
+                if (fromPos !== null) reorder(fromPos, pos);
+                setFromPos(null);
+                setOverPos(null);
               }}
-              className={`group relative flex flex-col items-center gap-1.5 rounded-xl border bg-white dark:bg-dark-surface p-2 transition-opacity ${
-                del ? "opacity-40" : ""
-              } border-slate-200 dark:border-dark-border`}
+              onDragEnd={() => {
+                setFromPos(null);
+                setOverPos(null);
+              }}
+              className={`page-cell group relative flex cursor-grab flex-col items-center gap-1.5 rounded-xl border bg-white p-2 transition-[opacity,box-shadow,transform] active:cursor-grabbing dark:bg-dark-surface ${
+                del ? "opacity-40" : fromPos === pos ? "opacity-50 scale-[0.97]" : ""
+              } ${
+                overPos === pos
+                  ? "border-primary-300 ring-2 ring-primary-500"
+                  : "border-slate-200 dark:border-dark-border"
+              }`}
             >
               <div
                 className="flex w-full items-center justify-center overflow-hidden rounded-md ring-1 ring-slate-200/70 dark:ring-dark-border"
@@ -363,7 +379,7 @@ export function Panel() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+        <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-600 dark:text-dark-text-muted">
           Quick actions
         </p>
         <div className="grid grid-cols-2 gap-1.5">

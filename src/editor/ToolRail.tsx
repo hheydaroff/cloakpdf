@@ -45,7 +45,7 @@ export const ToolRail = memo(function ToolRail() {
               >
                 <Icon className="h-[18px] w-[18px]" />
                 <span className="max-w-full truncate px-0.5 text-xxs font-medium leading-none">
-                  {tool.name.split(" ")[0]}
+                  {tool.railLabel ?? tool.name.split(" ")[0]}
                 </span>
                 {active && (
                   <span

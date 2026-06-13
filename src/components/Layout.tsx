@@ -96,7 +96,7 @@ export function Layout({ children, onHome, showBack, onPrivacy }: LayoutProps) {
             of the viewport, sitting above the aurora. The wrapping
             <header> owns the bar visuals; the inner container constrains
             content to the page max-width. */}
-        <header className="sticky top-0 z-50 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10">
+        <header className="sticky top-0 z-50 bg-white/80 dark:bg-dark-surface/80 backdrop-blur-lg border-b border-slate-200/70 dark:border-white/10">
           <div className={`${APP_CONTAINER} mx-auto px-4 sm:px-6`}>
             <div className="py-3 flex items-center gap-2 sm:gap-3">
               {showBack && (

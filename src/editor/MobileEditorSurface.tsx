@@ -20,11 +20,11 @@
 // routed to the global ✓ in this header, which flushes the registered apply via
 // flushPendingApply, then closes the tool. ✗ rolls the tool back (cancel).
 
-import { Check, ChevronUp, Grid2x2, X } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { Check, ChevronUp, Grid2x2, RotateCcw, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useActiveTool, useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { ToolControls } from "./ToolControls.tsx";
-import { EDITOR_TOOLS, findEditorTool } from "./tools.ts";
+import { type EditorTool, EDITOR_TOOLS, findEditorTool } from "./tools.ts";
 
 /** What the body shows. Latched (held through the slide-down) so the content
  *  doesn't blank out as the tool deactivates on close. */
@@ -32,8 +32,9 @@ type SheetView = { kind: "picker" } | { kind: "tool"; id: string };
 
 export function MobileEditorSurface() {
   const activeTool = useActiveTool();
-  const { setActiveTool, setViewMode, cancelCurrentTool, flushPendingApply } = useEditorActions();
-  const { pendingApply } = useEditorRead();
+  const { setActiveTool, setViewMode, cancelCurrentTool, flushPendingApply, reset } =
+    useEditorActions();
+  const { pendingApply, canReset } = useEditorRead();
   const [pickerOpen, setPickerOpen] = useState(false);
   // Grey out ✓ only when the active tool registered a primary apply that isn't
   // ready (no input yet / busy) — parity with the desktop Apply button. Deferred
@@ -75,6 +76,16 @@ export function MobileEditorSurface() {
     void cancelCurrentTool();
   }, [cancelCurrentTool]);
 
+  // Mirror the desktop PropertiesPanel: when a tool activates, move focus onto
+  // the (pinned, non-scrolling) tool-name heading so keyboard/AT users land on
+  // the sheet that just became the primary surface instead of a removed picker
+  // button. The effect runs after the header swaps to the tool view, so focus
+  // lands on the live heading. preventScroll keeps the canvas from jumping.
+  const headingRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (activeTool) headingRef.current?.focus({ preventScroll: true });
+  }, [activeTool]);
+
   return (
     <div
       data-testid="mobile-tool-sheet"
@@ -88,7 +99,11 @@ export function MobileEditorSurface() {
         {tool ? (
           <div className="flex items-start justify-between gap-2 px-4 py-2.5">
             <div className="min-w-0">
-              <span className="block text-sm font-semibold text-slate-800 dark:text-dark-text">
+              <span
+                ref={headingRef}
+                tabIndex={-1}
+                className="block text-sm font-semibold text-slate-800 dark:text-dark-text focus-visible:outline-none"
+              >
                 {tool.name}
               </span>
               <span className="mt-0.5 block text-xs leading-snug text-slate-500 dark:text-dark-text-muted">
@@ -149,28 +164,56 @@ export function MobileEditorSurface() {
         {view.kind === "tool" ? (
           <ToolControls toolId={view.id} />
         ) : (
-          <div className="grid grid-cols-4 gap-x-1 gap-y-3 pt-1">
-            {EDITOR_TOOLS.map((t) => {
-              const Icon = t.icon;
-              const on = t.id === activeTool;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => pick(t.id)}
-                  aria-label={t.name}
-                  aria-pressed={on}
-                  className={`flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
-                    on
-                      ? "border-primary-200 bg-primary-50 text-primary-600 dark:border-primary-900/40 dark:bg-primary-900/30 dark:text-primary-300"
-                      : "border-transparent text-slate-700 hover:bg-slate-50 dark:text-dark-text dark:hover:bg-dark-surface-alt"
-                  }`}
-                >
-                  <Icon className="h-6 w-6" />
-                  <span className="text-tag font-medium leading-tight">{t.name.split(" ")[0]}</span>
-                </button>
-              );
-            })}
+          <div className="pt-1">
+            {/* Reset-to-original lives here on mobile: the top bar's Reset
+                button is desktop-only (no room in the dense right cluster), so
+                without this a phone user could only step back one undo at a
+                time. Shown only when there's something to revert. */}
+            {canReset && (
+              <button
+                type="button"
+                onClick={() => {
+                  reset();
+                  setPickerOpen(false);
+                }}
+                className="mb-3 flex w-full items-center gap-2 rounded-xl border border-slate-200 px-3 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:border-dark-border dark:text-dark-text dark:hover:bg-dark-surface-alt"
+              >
+                <RotateCcw className="h-4 w-4 shrink-0 text-slate-400" />
+                Reset to original
+              </button>
+            )}
+            {/* 3-up on ~320px phones (each cell ~85px wide — fits the longest
+                label on one line), stepping to 4-up at ≥380px where there's
+                room. Labels truncate to keep rows uniform regardless of word
+                length; full name stays available via title + aria-label. */}
+            <div className="grid grid-cols-3 min-[380px]:grid-cols-4 gap-x-1 gap-y-3">
+              {EDITOR_TOOLS.map((t: EditorTool) => {
+                const Icon = t.icon;
+                const on = t.id === activeTool;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => pick(t.id)}
+                    aria-label={t.name}
+                    aria-pressed={on}
+                    className={`flex min-w-0 flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                      on
+                        ? "border-primary-200 bg-primary-50 text-primary-600 dark:border-primary-900/40 dark:bg-primary-900/30 dark:text-primary-300"
+                        : "border-transparent text-slate-700 hover:bg-slate-50 dark:text-dark-text dark:hover:bg-dark-surface-alt"
+                    }`}
+                  >
+                    <Icon className="h-6 w-6" />
+                    <span
+                      className="block w-full truncate text-center text-tag font-medium leading-tight"
+                      title={t.name}
+                    >
+                      {t.railLabel ?? t.name.split(" ")[0]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

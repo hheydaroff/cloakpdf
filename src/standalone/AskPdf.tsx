@@ -97,6 +97,12 @@ export default function AskPdf() {
 
   const pdf = usePdfFile({
     onReset: () => {
+      // Stop any in-flight answer before dropping the session — loading/changing
+      // the PDF orphans the old chat pipeline, which would otherwise keep
+      // generating to the token cap on-device (wasted WebGPU/WASM compute on the
+      // exact low-RAM hardware this tool targets). interrupt() is a safe no-op
+      // when nothing is streaming; mirrors the tier-swap / dispose / unmount paths.
+      sessionRef.current?.interrupt();
       setTurns([]);
       setScannedHint(false);
       setIndexing(null);
@@ -111,9 +117,16 @@ export default function AskPdf() {
   // primitive so the effect re-runs both on new turns and as tokens
   // stream into the in-progress assistant turn.
   const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  const logRef = useRef<HTMLDivElement | null>(null);
   const scrollTrigger = turns.length * 1_000_000 + (turns.at(-1)?.content.length ?? 0);
   useEffect(() => {
     if (scrollTrigger === 0) return;
+    // Don't yank the user back to the bottom if they've scrolled up to re-read
+    // mid-stream — only auto-follow while they're already pinned near the
+    // bottom. This kills the "follow fights the user" problem the per-token
+    // smooth scroll caused.
+    const log = logRef.current;
+    if (log && log.scrollHeight - log.scrollTop - log.clientHeight > 64) return;
     // Honour prefers-reduced-motion: smooth token-by-token scrolling
     // is a near-continuous animation, exactly what the media query
     // asks us to suppress. Fall back to an instant jump for users who
@@ -490,6 +503,7 @@ export default function AskPdf() {
             <ChatPanel
               turns={turns}
               scrollAnchorRef={scrollAnchorRef}
+              logRef={logRef}
               composer={
                 <Composer
                   value={question}
@@ -604,7 +618,11 @@ function IndexingCard({ progress }: { progress: IndexingProgress | null }) {
   // "(3/4)" detail.
   const percent = overallIndexingPercent(progress);
   return (
-    <div className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border p-6">
+    <div
+      className="bg-white dark:bg-dark-surface rounded-2xl border border-slate-200 dark:border-dark-border p-6"
+      role="status"
+      aria-live="polite"
+    >
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
@@ -714,10 +732,12 @@ function ChatPanel({
   turns,
   composer,
   scrollAnchorRef,
+  logRef,
 }: {
   turns: ChatTurn[];
   composer: React.ReactNode;
   scrollAnchorRef: React.RefObject<HTMLDivElement | null>;
+  logRef: React.RefObject<HTMLDivElement | null>;
 }) {
   return (
     <div className="flex flex-col h-[min(58svh,520px)] min-h-80 sm:h-[min(72svh,720px)] sm:min-h-115 rounded-2xl border border-slate-200 dark:border-dark-border bg-slate-50/70 dark:bg-dark-bg/60 overflow-hidden">
@@ -733,6 +753,7 @@ function ChatPanel({
           whole conversation on every token — only the newly appended
           text is voiced. */}
       <div
+        ref={logRef}
         className="flex-1 overflow-y-auto thin-scrollbar px-4 py-4"
         role="log"
         aria-live="polite"

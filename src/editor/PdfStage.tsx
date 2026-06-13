@@ -124,6 +124,16 @@ function InlineTextEditor({
   const font = `${fontStyle} ${fontWeight} ${fontSizePx}px ${fontCss}`;
   const widthPx = Math.max(fontSizePx * 1.5, measureInlineWidth(value, font) + fontSizePx * 0.7);
 
+  // Keep the editing box inside the page so the stage's overflow-hidden doesn't
+  // clip the last characters — notably the 16px-floored, content-grown box near
+  // a right/bottom edge on a phone. VISUAL ONLY: the committed annotation anchor
+  // stays xPct/yPct, fully decoupled from the input's DOM position. When the box
+  // is wider than the page (very long text on a tiny page), Math.max(0, …) pins
+  // left at 0 and it still overflows right — the irreducible case, no worse than before.
+  const boxH = fontSizePx * 1.25;
+  const left = Math.max(0, Math.min(xPct * fit.w, fit.w - widthPx));
+  const top = Math.max(0, Math.min(yPct * fit.h, fit.h - boxH));
+
   return (
     <input
       ref={inputRef}
@@ -155,10 +165,10 @@ function InlineTextEditor({
       // suppress the caret / soft keyboard (notably on iOS Safari).
       className="absolute m-0 select-text touch-auto rounded-[3px] border border-primary-500/80 bg-white/90 p-0 leading-tight outline-none"
       style={{
-        left: `${xPct * fit.w}px`,
-        top: `${yPct * fit.h}px`,
+        left: `${left}px`,
+        top: `${top}px`,
         width: `${widthPx}px`,
-        height: `${fontSizePx * 1.25}px`,
+        height: `${boxH}px`,
         fontFamily: fontCss,
         fontWeight,
         fontStyle,

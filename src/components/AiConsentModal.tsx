@@ -401,7 +401,7 @@ function DownloadBody({
   // only one model.
   if (!showBreakdown) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-3" role="status" aria-live="polite">
         <div className="flex items-center justify-between text-sm">
           <span className="text-slate-700 dark:text-dark-text font-medium">
             {progress?.status ?? "Downloading"}
@@ -451,7 +451,7 @@ function DownloadBody({
   const downloading = models.length - completed;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" role="status" aria-live="polite">
       {/* Tinted summary panel — big percent left, totals on the right.
           Replaces the old "Overall progress" + bar combo. The
           per-model bars below already show progress in detail; a

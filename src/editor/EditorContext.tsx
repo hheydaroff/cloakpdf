@@ -105,8 +105,14 @@ interface ActionsValue {
   flushPendingApply: () => Promise<void>;
   cancelCurrentTool: () => Promise<void>;
   /** Run an async task under the busy spinner WITHOUT committing to history
-   *  (export, contact-sheet, etc. don't mutate the doc). */
-  runTask: (label: string, fn: () => Promise<void>) => Promise<void>;
+   *  (export, contact-sheet, etc. don't mutate the doc). The task receives a
+   *  `setLabel` updater so long jobs (e.g. on-device OCR during Text/Markdown
+   *  export) can report determinate progress ("Recognising page X / Y…") in the
+   *  same overlay; callers that don't need it just ignore the argument. */
+  runTask: (
+    label: string,
+    fn: (setLabel: (label: string) => void) => void | Promise<void>,
+  ) => Promise<void>;
   /** Restore the draft offered for the just-loaded file (the banner's action). */
   restoreDraft: () => Promise<void>;
   /** Discard the offered draft and keep the freshly-loaded original. */
@@ -245,32 +251,39 @@ export function EditorProvider({
     return () => revokeAllThumbs();
   }, [revokeAllThumbs]);
 
-  const runBusy = useCallback((label: string, fn: () => void | Promise<void>): Promise<void> => {
-    return new Promise<void>((resolve, reject) => {
-      setError(null); // clear any stale error from a prior operation
-      setBusyLabel(label);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(async () => {
-          try {
-            await fn();
-            resolve();
-          } catch (e) {
-            // Surface the failure in the editor's error banner. Every byte
-            // transform (Apply) and background task (Export, draft restore)
-            // funnels through here, so this is the one place to wire failure
-            // feedback — without it a thrown transform/export just made the
-            // spinner vanish with no diagnosis. Still reject so success-only
-            // `.then` chains (e.g. OCR "make searchable" clearing its preview)
-            // correctly skip on failure.
-            setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
-            reject(e);
-          } finally {
-            setBusyLabel(null);
-          }
+  const runBusy = useCallback(
+    (
+      label: string,
+      fn: (setLabel: (label: string) => void) => void | Promise<void>,
+    ): Promise<void> => {
+      return new Promise<void>((resolve, reject) => {
+        setError(null); // clear any stale error from a prior operation
+        setBusyLabel(label);
+        requestAnimationFrame(() => {
+          requestAnimationFrame(async () => {
+            try {
+              // Hand the task setBusyLabel so it can refine the overlay text mid-run.
+              await fn(setBusyLabel);
+              resolve();
+            } catch (e) {
+              // Surface the failure in the editor's error banner. Every byte
+              // transform (Apply) and background task (Export, draft restore)
+              // funnels through here, so this is the one place to wire failure
+              // feedback — without it a thrown transform/export just made the
+              // spinner vanish with no diagnosis. Still reject so success-only
+              // `.then` chains (e.g. OCR "make searchable" clearing its preview)
+              // correctly skip on failure.
+              setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+              reject(e);
+            } finally {
+              setBusyLabel(null);
+            }
+          });
         });
       });
-    });
-  }, []);
+    },
+    [],
+  );
 
   /** Set a brand-new doc as the base of a fresh history timeline. */
   const installDoc = useCallback((next: CanvasDoc) => {

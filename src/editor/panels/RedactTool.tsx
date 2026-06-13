@@ -9,7 +9,7 @@
 // here only draws the in-progress drag box. Reuses the geometry + PII pipeline
 // the standalone RedactPdf tool proved. See REDESIGN.md (destructive-drag class).
 
-import { Loader2, ScanSearch, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Loader2, ScanSearch, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   detectPiiRects,
@@ -157,7 +157,10 @@ export function Panel() {
     () => new Set(PII_TYPES.filter((t) => t !== "date")),
   );
   const [detecting, setDetecting] = useState(false);
-  const [summary, setSummary] = useState<string | null>(null);
+  // Typed status so a scan/search FAILURE reads distinctly from a normal
+  // result/no-match line — for a privacy action, an error must never look like
+  // "nothing sensitive found". `error` renders red + AlertTriangle + role=alert.
+  const [summary, setSummary] = useState<{ tone: "muted" | "error"; text: string } | null>(null);
   // Find-text-and-redact: type a name/phrase, black out every occurrence.
   const [term, setTerm] = useState("");
   const [finding, setFinding] = useState(false);
@@ -204,7 +207,10 @@ export function Panel() {
       const pages = await ensureGeometry();
       const found = detectPiiRects(pages, [...piiTypes]);
       if (found.length === 0) {
-        setSummary("No matching sensitive data found — draw boxes by hand if needed.");
+        setSummary({
+          tone: "muted",
+          text: "No matching sensitive data found — draw boxes by hand if needed.",
+        });
         return;
       }
       addObjects(
@@ -216,9 +222,12 @@ export function Panel() {
         })),
         "Detect PII",
       );
-      setSummary(`Added ${found.length} box${found.length > 1 ? "es" : ""}.`);
+      setSummary({
+        tone: "muted",
+        text: `Added ${found.length} box${found.length > 1 ? "es" : ""}.`,
+      });
     } catch {
-      setSummary("Couldn't scan this document for sensitive data.");
+      setSummary({ tone: "error", text: "Couldn't scan this document for sensitive data." });
     } finally {
       setDetecting(false);
       setOcr(null);
@@ -235,7 +244,10 @@ export function Panel() {
       const pages = await ensureGeometry();
       const rects = findTextRects(pages, [q], { caseSensitive, wholeWord });
       if (rects.length === 0) {
-        setSummary(`No text-layer matches for “${q}”. It may be an image — run OCR first.`);
+        setSummary({
+          tone: "muted",
+          text: `No text-layer matches for “${q}”. It may be an image — run OCR first.`,
+        });
         return;
       }
       addObjects(
@@ -248,14 +260,15 @@ export function Panel() {
         `Find “${q}”`,
       );
       const onPages = [...new Set(rects.map((r) => r.pageIndex + 1))].sort((a, b) => a - b);
-      setSummary(
-        `Added ${rects.length} box${rects.length === 1 ? "" : "es"} for “${q}” on page${
+      setSummary({
+        tone: "muted",
+        text: `Added ${rects.length} box${rects.length === 1 ? "" : "es"} for “${q}” on page${
           onPages.length === 1 ? "" : "s"
         } ${onPages.join(", ")}.`,
-      );
+      });
       setTerm("");
     } catch {
-      setSummary("Couldn't search this document for that text.");
+      setSummary({ tone: "error", text: "Couldn't search this document for that text." });
     } finally {
       setFinding(false);
       setOcr(null);
@@ -286,7 +299,7 @@ export function Panel() {
                 onClick={() => toggle(t)}
                 disabled={detecting}
                 aria-pressed={on}
-                className={`rounded-full px-2.5 py-1 pointer-coarse:min-h-11 text-xs font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
+                className={`rounded-full px-2.5 py-1 pointer-coarse:min-h-11 pointer-coarse:min-w-11 text-xs font-medium transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
                   on
                     ? "bg-primary-600 text-white"
                     : "border border-slate-200 dark:border-dark-border bg-slate-100 dark:bg-dark-bg text-slate-600 dark:text-dark-text-muted"
@@ -389,11 +402,20 @@ export function Panel() {
         </p>
       )}
 
-      {summary && (
-        <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">
-          {summary}
-        </p>
-      )}
+      {summary &&
+        (summary.tone === "error" ? (
+          <p
+            role="alert"
+            className="flex items-start gap-1.5 text-xs text-red-700 dark:text-red-300"
+          >
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{summary.text}</span>
+          </p>
+        ) : (
+          <p role="status" className="text-xs text-slate-500 dark:text-dark-text-muted">
+            {summary.text}
+          </p>
+        ))}
 
       <div className="flex flex-col gap-1">
         <div className="flex items-center justify-between">

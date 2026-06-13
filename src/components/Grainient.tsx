@@ -252,6 +252,17 @@ export function Grainient({
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    // Pause the render loop while the tab is hidden — there's nothing to show,
+    // and the warp + grain would otherwise keep burning GPU/CPU in the
+    // background. Tracked in a closure flag the loop ORs into its pause check,
+    // so the existing pause-time accounting keeps `iTime` continuous on return
+    // (no remount, no shader recompile — same as the `paused` prop path).
+    let hidden = typeof document !== "undefined" && document.hidden;
+    const onVisibility = () => {
+      hidden = document.hidden;
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
     let raf = 0;
     if (!reduceMotion) {
       const t0 = performance.now();
@@ -262,7 +273,7 @@ export function Grainient({
       let pausedAccum = 0;
       let pauseStartedAt = 0;
       const loop = (t: number) => {
-        if (pausedRef.current) {
+        if (pausedRef.current || hidden) {
           if (pauseStartedAt === 0) pauseStartedAt = t;
         } else {
           if (pauseStartedAt !== 0) {
@@ -280,6 +291,7 @@ export function Grainient({
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      document.removeEventListener("visibilitychange", onVisibility);
       try {
         container.removeChild(canvas);
       } catch {

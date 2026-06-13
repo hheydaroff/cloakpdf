@@ -5,6 +5,7 @@
 // selected, the panel shows a short document summary + hint.
 
 import { X } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { useActiveTool, useEditorActions, useEditorRead } from "./EditorContext.tsx";
 import { ToolControls } from "./ToolControls.tsx";
 import { findEditorTool } from "./tools.ts";
@@ -15,6 +16,17 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
   const { cancelCurrentTool } = useEditorActions();
   const tool = findEditorTool(activeTool);
 
+  // When a tool is activated (from the rail), move focus into the panel so a
+  // keyboard user lands on the tool's options instead of having to Tab past the
+  // whole rail + canvas. Focus the (pinned, non-scrolling) heading — not the
+  // scroll body — so the hidden-scrollbar surface is untouched, and pass
+  // preventScroll so the canvas never jumps. Guarded on `activeTool` so
+  // deactivating a tool doesn't yank focus to the "Document" heading.
+  const headingRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (activeTool) headingRef.current?.focus({ preventScroll: true });
+  }, [activeTool]);
+
   return (
     <aside
       className={`flex shrink-0 flex-col border-l border-slate-200/70 dark:border-dark-border bg-white/60 dark:bg-dark-surface/60 ${
@@ -23,7 +35,11 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
     >
       <div className="flex items-start justify-between gap-2 border-b border-slate-200/70 dark:border-dark-border px-4 py-3">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-slate-800 dark:text-dark-text">
+          <p
+            ref={headingRef}
+            tabIndex={-1}
+            className="truncate text-sm font-semibold text-slate-800 dark:text-dark-text focus-visible:outline-none"
+          >
             {tool ? tool.name : "Document"}
           </p>
           {tool ? (
@@ -31,7 +47,7 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
               {tool.description}
             </p>
           ) : (
-            <p className="text-tag font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-dark-text-muted">
+            <p className="text-tag font-medium uppercase tracking-[0.12em] text-slate-500 dark:text-dark-text-muted">
               {doc ? `${doc.pageCount} pages` : ""}
             </p>
           )}
@@ -55,7 +71,8 @@ export function PropertiesPanel({ collapsed = false }: { collapsed?: boolean }) 
           <div className="text-sm text-slate-500 dark:text-dark-text-muted">
             <p>Pick a tool from the left to edit this PDF.</p>
             <p className="mt-2 text-xs text-slate-500 dark:text-dark-text-muted">
-              Switch to <span className="font-medium">Overview</span> to browse and rearrange pages.
+              Pick <span className="font-medium">Organize</span> to browse and rearrange pages in a
+              grid.
             </p>
           </div>
         )}
