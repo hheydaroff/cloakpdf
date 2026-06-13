@@ -42,12 +42,14 @@
        tiles, URL chip. Replace these per brand. The viewBox stays
        1200 × 630.
 
-       The bottom-right tile is reserved for the **headline
-       differentiator** of the app — for CloakPDF that's the
-       "Local AI" tile (on-device chat over your PDFs).
-       For other Cloak apps, swap that tile to whatever distinguishes
-       them from the field; keep the other three tiles as
-       category-level call-outs.
+       Two tiles anchor the grid for CloakPDF: the top-left leads
+       with the **unified editor** — the app's primary surface, a
+       single canvas to annotate, sign, redact and organize — and the
+       bottom-right carries the **headline differentiator**, the
+       "Local AI" tile (on-device chat over your PDFs). The other two
+       are category-level call-outs (Merge & Split, Redact & OCR).
+       For other Cloak apps, swap these for whatever leads and
+       distinguishes them.
 
   Re-render with: `node scripts/build-og-image.mjs`. The output lands
   at public/icons/og-image.png, which is what each Cloak app's
@@ -215,7 +217,7 @@
             letter-spacing="-0.3"
             fill="#475569"
           >
-            PDF tools that stay on your device
+            Edit, sign &amp; redact PDFs — entirely in your browser
           </text>
         </g>
 
@@ -240,20 +242,20 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <!-- Lucide `file-stack` — three stacked pages, reads as
-                 "PDF pages you can merge or split" at a glance. -->
-            <path d="M21 7h-3a2 2 0 0 1-2-2V2" />
-            <path
-              d="M21 6v6.5c0 .8-.7 1.5-1.5 1.5h-7c-.8 0-1.5-.7-1.5-1.5v-9c0-.8.7-1.5 1.5-1.5H17Z"
-            />
-            <path d="M7 8v8.8c0 .3.2.6.4.8.2.2.5.4.8.4H15" />
-            <path d="M3 12v8.8c0 .3.2.6.4.8.2.2.5.4.8.4H11" />
+            <!-- Lucide `layout-panel-left` — a tall left rail beside two
+                 stacked panels: literally the editor's tool rail + canvas +
+                 properties layout. Reads as "a single workspace" at a glance,
+                 which is the editor-first story (drop a PDF, edit on one
+                 canvas, export). -->
+            <rect x="3" y="3" width="7" height="18" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
           </g>
           <text x="288" y="337" font-size="17" font-weight="700" fill="#1e293b">
-            Merge &amp; Split
+            Unified editor
           </text>
           <text x="288" y="358" font-size="12.5" fill="#475569">
-            Combine, extract pages, reorder, delete
+            Annotate, sign, crop &amp; organize pages
           </text>
         </g>
 
@@ -277,14 +279,20 @@
             stroke-linecap="round"
             stroke-linejoin="round"
           >
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
-            <path d="M9 12l2 2 4-4" />
+            <!-- Lucide `file-stack` — three stacked pages, reads as "PDF pages
+                 you can merge or split" at a glance. -->
+            <path d="M21 7h-3a2 2 0 0 1-2-2V2" />
+            <path
+              d="M21 6v6.5c0 .8-.7 1.5-1.5 1.5h-7c-.8 0-1.5-.7-1.5-1.5v-9c0-.8.7-1.5 1.5-1.5H17Z"
+            />
+            <path d="M7 8v8.8c0 .3.2.6.4.8.2.2.5.4.8.4H15" />
+            <path d="M3 12v8.8c0 .3.2.6.4.8.2.2.5.4.8.4H11" />
           </g>
           <text x="708" y="337" font-size="17" font-weight="700" fill="#1e293b">
-            Sign &amp; Secure
+            Merge &amp; Split
           </text>
           <text x="708" y="358" font-size="12.5" fill="#475569">
-            Signatures, watermarks, password protect
+            Combine, extract, reorder &amp; delete pages
           </text>
         </g>
 
