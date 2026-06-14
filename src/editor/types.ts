@@ -2,7 +2,7 @@
 //
 // Kept separate from src/types.ts (the app-wide tool metadata types) so the
 // editor's document / layout / tool model can evolve without churning the
-// home-grid tooling. See REDESIGN.md for the architecture these types encode.
+// home-grid tooling. See CLAUDE.md for the architecture these types encode.
 
 /** Responsive layout bucket resolved from the viewport (see breakpoints.ts). */
 export type Layout = "mobile" | "tablet" | "desktop";

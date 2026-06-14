@@ -10,7 +10,7 @@
 //   • (rotate/reorder/delete are the board's native gestures)
 // N-up stays separate — it composites pages onto new sheets, not a reorder.
 // All working state lives in the namespaced tool slice so the Board (center)
-// and Panel (right) share it and it survives re-selection. See REDESIGN.md.
+// and Panel (right) share it and it survives re-selection. See CLAUDE.md.
 
 import { ChevronDown, ChevronUp, FileX, Repeat2, RotateCw, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

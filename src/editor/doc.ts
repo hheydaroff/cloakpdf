@@ -4,7 +4,7 @@
 // through `applyTransform`. It is
 // deliberately NON-DESTRUCTIVE: `bytes` is the canonical pdf-lib-writable
 // source, and overlay edits live as `objects` (fraction-rect tagged shapes)
-// that are burned into bytes only at export. See REDESIGN.md for the rationale
+// that are burned into bytes only at export. See CLAUDE.md for the rationale
 // (history snapshots cheap bytes-by-ref + object deltas, never page rasters).
 
 import { PDFDocument } from "@pdfme/pdf-lib";

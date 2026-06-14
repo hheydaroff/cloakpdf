@@ -4,7 +4,7 @@
 // / build status). The actual Tool behaviour (canvas interaction) and Panel
 // (right-side options) are bound per id in the dispatchers, mirroring CloakIMG.
 // The roster is the single-PDF tools that live in the editor (incl. redact +
-// ocr) — see REDESIGN.md for the disposition of every CloakPDF tool. Multi-file /
+// ocr) — see CLAUDE.md for the disposition of every CloakPDF tool. Multi-file /
 // terminal / security-cert / AI tools are NOT here; they live outside the editor.
 //
 // Order is by real user priority / frequency of use — top of the rail is the

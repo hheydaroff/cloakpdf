@@ -5,7 +5,7 @@
 // not an overlay mark. On Apply, `cropPagesIndividual` sets each page's crop box
 // from the SAME fractional rect (so mixed-size pages crop consistently); the
 // trim is non-destructive (hidden content stays in the file). Reuses the crop
-// geometry the standalone Crop Pages tool proved. See REDESIGN.md.
+// geometry the standalone Crop Pages tool proved. See CLAUDE.md.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CropMargins } from "../../types.ts";

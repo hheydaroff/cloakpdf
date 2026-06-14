@@ -5,8 +5,8 @@
 // On Apply, `addSignature` embeds each placed signature as a real image (the
 // page text underneath is untouched), then the signature objects are dropped —
 // they now live in the bytes. Reuses the proven SignaturePad + addSignature
-// pipeline from the standalone Add Signature tool. See REDESIGN.md (canvas
-// placement class, sibling of the overlay-object class).
+// pipeline from the standalone Add Signature tool. See CLAUDE.md (canvas
+// placement, sibling of the overlay tools).
 
 import { Copy, Upload } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";

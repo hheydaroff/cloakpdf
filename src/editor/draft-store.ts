@@ -2,7 +2,7 @@
 //
 // The editor is non-destructive: edits live as `bytes` + overlay `objects` in
 // memory and are gone the moment the tab closes or the user navigates home —
-// REDESIGN.md risk #6. This store persists the LIVE document (current bytes +
+// the classic unsaved-work-on-unmount risk. This store persists the LIVE document (current bytes +
 // overlay objects) to IndexedDB, debounced, so an accidental unmount doesn't
 // destroy unsaved work. On reopening the same source PDF — or landing on the
 // empty editor — the draft is offered back.

@@ -15,7 +15,7 @@
 //
 // On Apply, `annotatePdf` burns the marks as real vector graphics + text
 // (selectable text underneath is untouched), then the annotation objects are
-// dropped (now in the bytes). See REDESIGN.md (overlay-object class).
+// dropped (now in the bytes). See CLAUDE.md (overlay tools).
 
 import {
   ArrowUpRight,

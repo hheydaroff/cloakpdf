@@ -7,7 +7,7 @@
 // transform — see EditorContext.applyTransform + doc.ts flattenDestructiveObjects.
 // The committed boxes paint as an always-on base layer in PdfStage; the Stage
 // here only draws the in-progress drag box. Reuses the geometry + PII pipeline
-// the standalone RedactPdf tool proved. See REDESIGN.md (destructive-drag class).
+// the standalone RedactPdf tool proved. See CLAUDE.md (redaction is destructive).
 
 import { AlertTriangle, Loader2, ScanSearch, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
