@@ -45,18 +45,18 @@ The universal slop-test gates apply, plus these editorial-specific bans:
 
 ## Voice fixtures
 
-Each macrostructure under editorial picks from these opening-line patterns. Imitate the _shape_, not the wording.
+Each macrostructure under editorial picks from these opening-line patterns. Imitate the *shape*, not the wording.
 
-- _"Type, set with care."_
-- _"Print discipline, on screen."_
-- _"A small skill that argues against the average."_
-- _"We compose the page like a broadsheet — hairlines, columns, restraint."_
-- _"Restraint, repeated, becomes a signature."_
+- *"Type, set with care."*
+- *"Print discipline, on screen."*
+- *"A small skill that argues against the average."*
+- *"We compose the page like a broadsheet — hairlines, columns, restraint."*
+- *"Restraint, repeated, becomes a signature."*
 
 ## Nav and footer voice
 
 - **Default nav:** N6 Newspaper masthead — full-width, large centred wordmark, thin issue/date row in serif small caps, double-rule below. Reads as broadsheet.
-- **Acceptable also:** N1 Wordmark + 2 links (when destinations are minimal); N9 Edge-aligned minimal (when the page is letter-shaped or atelier-quiet).
+- **Acceptable also:** N1a Wordmark + 2 links (when destinations are minimal); N9 Edge-aligned minimal (when the page is letter-shaped or atelier-quiet).
 - **Default footer:** Ft1 Mast-headed (wordmark anchors a single horizontal band, tagline + small links beside).
 - **Acceptable also:** Ft2 Inline single line; Ft4 Dense colophon (newsprint / almanac voices); Ft6 Letter close (atelier / garden / personal); Ft7 Newsletter-first (when the brand legitimately publishes).
 - **Banned for editorial:** N5 Floating pill (modern-minimal vocabulary), N7 Brutal slab (fights the restraint), Ft8 Marquee scroll (kinetic; wrong genre).

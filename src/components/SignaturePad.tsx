@@ -229,7 +229,7 @@ export function SignaturePad({ onSignature, color, width = 500, height = 200 }: 
           <button
             onClick={clear}
             aria-label="Clear signature"
-            className="flex items-center gap-1.5 text-xs text-slate-400 dark:text-dark-text-muted hover:text-red-500 dark:hover:text-red-400 motion-safe:transition-colors duration-150 rounded px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
+            className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-dark-text-muted hover:text-red-500 dark:hover:text-red-400 motion-safe:transition-colors duration-150 rounded px-1.5 py-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
           >
             <Trash2 className="w-3 h-3" aria-hidden="true" />
             Clear

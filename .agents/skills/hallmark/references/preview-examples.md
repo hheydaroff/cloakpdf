@@ -4,8 +4,7 @@ Four sample Step 5 preview blocks for the model to imitate, varied across macros
 
 ---
 
-_Long Document (editorial, motion-cut):_
-
+*Long Document (editorial, motion-cut):*
 > **Hallmark · v1.1.0**
 >
 > - **Macrostructure** · Long Document
@@ -13,11 +12,10 @@ _Long Document (editorial, motion-cut):_
 > - **Enrichment** · Tier-B hand-built SVG (a 60-line coffee bean with `@property --rise` 6 s breathing-loop)
 > - **Sections** · Masthead · Letter · Three Notes · Visit · Colophon
 > - **Motion** · breathing-loop on bean only (respects `prefers-reduced-motion`)
-> - **Slop test** · 57 / 57 ✓
+> - **Slop test** · 58 / 58 ✓
 > - **Diversification** · first run for this project
 
-_Bento Grid (SaaS, motion-on):_
-
+*Bento Grid (SaaS, motion-on):*
 > **Hallmark · v1.1.0**
 >
 > - **Macrostructure** · Bento Grid
@@ -25,11 +23,10 @@ _Bento Grid (SaaS, motion-on):_
 > - **Enrichment** · E1 Clipped-Edge Demo Video, Tier-A CSS-art trace waterfall
 > - **Sections** · Hero · 6-tile Bento (stat · sparkline · quote · code · integrations · spotlight) · Index Footer
 > - **Motion** · counter · pricing-lift · CSS marquee on integrations strip
-> - **Slop test** · 57 / 57 ✓
+> - **Slop test** · 58 / 58 ✓
 > - **Diversification** · differs from Plain on paper hue (light-cool vs pure-white) + accent (indigo vs ink-blue)
 
-_Manifesto (declarative, no enrichment):_
-
+*Manifesto (declarative, no enrichment):*
 > **Hallmark · v1.1.0**
 >
 > - **Macrostructure** · Manifesto
@@ -37,11 +34,10 @@ _Manifesto (declarative, no enrichment):_
 > - **Enrichment** · none (typography only — voice carries the brand)
 > - **Sections** · Masthead · Title · Five Declarations · Bleed Band · What We Refuse · Working Rules · Practice · Reading · Colophon
 > - **Motion** · none — typography only
-> - **Slop test** · 57 / 57 ✓
+> - **Slop test** · 58 / 58 ✓
 > - **Diversification** · differs from Newsprint on paper band (dark vs light) + display style (display-heavy vs geometric-sans)
 
-_Custom (Coffeebox archival café):_
-
+*Custom (Coffeebox archival café):*
 > **Hallmark · v1.1.0**
 >
 > - **Macrostructure** · Long Document
@@ -49,5 +45,5 @@ _Custom (Coffeebox archival café):_
 > - **Enrichment** · Tier-A pure-CSS coffee bean (60-line SVG, breathing-loop optional)
 > - **Sections** · Masthead · Letter · Three Notes · Visit · Colophon
 > - **Motion** · breathing-loop on bean (with reduced-motion fallback)
-> - **Slop test** · 57 / 57 ✓
+> - **Slop test** · 58 / 58 ✓
 > - **Diversification** · custom axes: light / italic-serif / chromatic-terracotta — differs from previous catalog Newsprint on accent hue + display style
